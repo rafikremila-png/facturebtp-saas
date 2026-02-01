@@ -65,6 +65,11 @@ Build a production-ready MVP web application for a French construction company (
 - [x] PDF generation for quotes and invoices
 - [x] Company settings with logo upload
 - [x] Dashboard statistics
+- [x] **Predefined Items System** (NEW)
+  - 8 BTP categories: Menuiserie, Plomberie, Électricité, Peinture, Maçonnerie, Carrelage, Plâtrerie/Isolation, Rénovation générale
+  - ~50 default items with description, unit, default price
+  - CRUD API for custom items management
+  - Auto-initialization on first use
 
 ### Frontend ✅
 - [x] Login/Register page with BTP theme
@@ -76,6 +81,15 @@ Build a production-ready MVP web application for a French construction company (
 - [x] Dark sidebar navigation
 - [x] French interface
 - [x] Responsive design
+- [x] **Predefined Items Selector** (NEW)
+  - Category dropdown in quote/invoice forms
+  - Item dropdown with price/unit preview
+  - Auto-populate line items on selection
+  - Manual entry option preserved
+- [x] **Items Management in Settings** (NEW)
+  - Add/Edit/Delete custom items
+  - Category tabs with item count
+  - Reset to defaults option
 
 ## Prioritized Backlog
 
