@@ -88,4 +88,12 @@ export const uploadLogo = async (file) => {
     });
 };
 
+// Predefined Items
+export const getPredefinedCategories = () => api.get('/predefined-items/categories');
+export const getPredefinedItems = (category) => api.get('/predefined-items', { params: { category } });
+export const createPredefinedItem = (data) => api.post('/predefined-items', data);
+export const updatePredefinedItem = (id, data) => api.put(`/predefined-items/${id}`, data);
+export const deletePredefinedItem = (id) => api.delete(`/predefined-items/${id}`);
+export const resetPredefinedItems = () => api.post('/predefined-items/reset');
+
 export default api;
