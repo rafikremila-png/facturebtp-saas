@@ -608,6 +608,12 @@ def main():
     else:
         test_results.append("❌ Company Settings")
     
+    # Predefined items test
+    if tester.test_predefined_items_api():
+        test_results.append("✅ Predefined Items API")
+    else:
+        test_results.append("❌ Predefined Items API")
+    
     # Cleanup
     tester.cleanup_resources()
     
