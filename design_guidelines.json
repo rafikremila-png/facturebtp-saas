@@ -1,0 +1,136 @@
+{
+  "identity": {
+    "persona": "E1",
+    "role": "Creative Designer",
+    "principles": [
+      "Fusion over Imitation",
+      "Emotion First",
+      "Content is king",
+      "Zoom in",
+      "Negative Space",
+      "Contrast"
+    ]
+  },
+  "theme": {
+    "name": "Industrial Pro",
+    "mode": "light",
+    "vibe": "Sober, Professional, Efficient, Trustworthy",
+    "archetype": "The Performance Pro (Construction Variant)"
+  },
+  "typography": {
+    "headings": {
+      "family": "Barlow Condensed, sans-serif",
+      "weights": ["600", "700", "800"],
+      "usage": "All headings (h1-h6), stats, and heavy labels",
+      "letterSpacing": "tracking-tight"
+    },
+    "body": {
+      "family": "Manrope, sans-serif",
+      "weights": ["400", "500", "600"],
+      "usage": "Paragraphs, inputs, table data, UI elements",
+      "letterSpacing": "tracking-normal"
+    },
+    "mono": {
+      "family": "JetBrains Mono, monospace",
+      "usage": "Invoice numbers, SIRET, technical data"
+    }
+  },
+  "colors": {
+    "primary": {
+      "name": "Safety Orange",
+      "hex": "#EA580C",
+      "tailwind": "orange-600",
+      "foreground": "#FFFFFF"
+    },
+    "secondary": {
+      "name": "Concrete Grey",
+      "hex": "#475569",
+      "tailwind": "slate-600",
+      "foreground": "#FFFFFF"
+    },
+    "accent": {
+      "name": "Blueprint Blue",
+      "hex": "#0F172A",
+      "tailwind": "slate-900",
+      "foreground": "#FFFFFF"
+    },
+    "background": {
+      "default": "#F8FAFC",
+      "paper": "#FFFFFF",
+      "sidebar": "#1E293B"
+    },
+    "status": {
+      "success": "#16A34A",
+      "warning": "#D97706",
+      "error": "#DC2626",
+      "info": "#2563EB"
+    }
+  },
+  "layout": {
+    "grid_system": "Bento Grid Mode B (High Density)",
+    "spacing": "Generous (2x standard)",
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "sidebar": {
+      "width": "w-64",
+      "style": "fixed left-0 top-0 h-full bg-slate-900 text-white"
+    }
+  },
+  "components": {
+    "buttons": {
+      "radius": "rounded-md",
+      "style": "flat",
+      "shadow": "shadow-sm hover:shadow-md transition-all"
+    },
+    "cards": {
+      "radius": "rounded-lg",
+      "border": "border border-slate-200",
+      "shadow": "shadow-sm",
+      "background": "bg-white"
+    },
+    "inputs": {
+      "radius": "rounded-md",
+      "border": "border-slate-300 focus:border-orange-500 focus:ring-orange-500",
+      "background": "bg-white"
+    }
+  },
+  "visual_enhancers": {
+    "textures": "Subtle noise on sidebar background",
+    "shadows": "Soft, diffuse shadows for dropdowns and modals",
+    "borders": "1px solid borders for clear separation",
+    "glassmorphism": "Used sparingly on sticky headers (backdrop-blur-md bg-white/80)"
+  },
+  "media": {
+    "image_urls": {
+      "login_hero": "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2070&auto=format&fit=crop",
+      "dashboard_placeholder": "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=2070&auto=format&fit=crop",
+      "blueprints_bg": "https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=2070&auto=format&fit=crop",
+      "logo_placeholder": "https://images.unsplash.com/photo-1560179707-f14e90ef3623?q=80&w=2073&auto=format&fit=crop"
+    },
+    "icons": "Lucide React (default)"
+  },
+  "instructions_to_main_agent": [
+    "Implement the 'Industrial Pro' theme using Tailwind CSS variables.",
+    "Use 'Barlow Condensed' for all headings to give a strong construction feel.",
+    "Ensure the sidebar is dark (#1E293B) with white text and orange active states.",
+    "Use the provided Unsplash URLs for the login page and empty states.",
+    "Strictly follow the 'Bento Grid Mode B' for the dashboard layout.",
+    "Ensure all forms (Quotes/Invoices) are dense and data-heavy but legible.",
+    "Use 'sonner' for all toast notifications.",
+    "Do not use gradients for backgrounds; stick to solid colors and subtle textures.",
+    "Ensure all interactive elements have 'data-testid' attributes."
+  ],
+  "universal_guidelines": [
+    "Avoid 'AI slop' aesthetic; make it distinct and professional.",
+    "Dark colors look good when used independently without gradients.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) for overlays.",
+    "Do not apply universal transitions (transition: all).",
+    "Do not center align the app container.",
+    "Always use modern button styles.",
+    "Every interaction needs micro-animations.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Prioritize using pre-existing components from src/components/ui.",
+    "Components MUST use named exports.",
+    "Pages MUST use default exports."
+  ]
+}
