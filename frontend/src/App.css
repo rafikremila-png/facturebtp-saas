@@ -1,5 +1,14 @@
 /* BTP Invoice App - Custom Styles */
 
+/* Prevent ResizeObserver loops with CSS containment */
+[data-radix-popper-content-wrapper] {
+    contain: layout;
+}
+
+[data-radix-select-viewport] {
+    contain: strict;
+}
+
 /* Animations */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
