@@ -710,6 +710,96 @@ async def get_dashboard(user: dict = Depends(get_current_user)):
         total_invoices=total_invoices
     )
 
+# ============== PREDEFINED ITEMS ROUTES ==============
+
+async def initialize_default_items():
+    """Initialize default BTP items if none exist"""
+    count = await db.predefined_items.count_documents({})
+    if count == 0:
+        for category, items in DEFAULT_BTP_CATEGORIES.items():
+            for item in items:
+                item_doc = {
+                    "id": str(uuid.uuid4()),
+                    "category": category,
+                    "description": item["description"],
+                    "unit": item["unit"],
+                    "default_price": item["default_price"],
+                    "default_vat_rate": 20.0
+                }
+                await db.predefined_items.insert_one(item_doc)
+
+@api_router.get("/predefined-items/categories")
+async def get_categories(user: dict = Depends(get_current_user)):
+    """Get all categories with their items"""
+    await initialize_default_items()
+    items = await db.predefined_items.find({}, {"_id": 0}).to_list(1000)
+    
+    # Group by category
+    categories = {}
+    for item in items:
+        cat = item["category"]
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(PredefinedItemResponse(**item))
+    
+    # Return as list of categories
+    result = [{"name": name, "items": items} for name, items in sorted(categories.items())]
+    return result
+
+@api_router.get("/predefined-items", response_model=List[PredefinedItemResponse])
+async def list_predefined_items(category: Optional[str] = None, user: dict = Depends(get_current_user)):
+    """List all predefined items, optionally filtered by category"""
+    await initialize_default_items()
+    query = {}
+    if category:
+        query["category"] = category
+    items = await db.predefined_items.find(query, {"_id": 0}).to_list(1000)
+    return [PredefinedItemResponse(**item) for item in items]
+
+@api_router.post("/predefined-items", response_model=PredefinedItemResponse)
+async def create_predefined_item(item_data: PredefinedItemCreate, user: dict = Depends(get_current_user)):
+    """Create a new predefined item"""
+    item_id = str(uuid.uuid4())
+    item_doc = {
+        "id": item_id,
+        "category": item_data.category,
+        "description": item_data.description,
+        "unit": item_data.unit,
+        "default_price": item_data.default_price,
+        "default_vat_rate": item_data.default_vat_rate
+    }
+    await db.predefined_items.insert_one(item_doc)
+    return PredefinedItemResponse(**item_doc)
+
+@api_router.put("/predefined-items/{item_id}", response_model=PredefinedItemResponse)
+async def update_predefined_item(item_id: str, item_data: PredefinedItemUpdate, user: dict = Depends(get_current_user)):
+    """Update a predefined item"""
+    item = await db.predefined_items.find_one({"id": item_id}, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="Article non trouvé")
+    
+    update_data = {k: v for k, v in item_data.model_dump().items() if v is not None}
+    if update_data:
+        await db.predefined_items.update_one({"id": item_id}, {"$set": update_data})
+    
+    updated_item = await db.predefined_items.find_one({"id": item_id}, {"_id": 0})
+    return PredefinedItemResponse(**updated_item)
+
+@api_router.delete("/predefined-items/{item_id}")
+async def delete_predefined_item(item_id: str, user: dict = Depends(get_current_user)):
+    """Delete a predefined item"""
+    result = await db.predefined_items.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Article non trouvé")
+    return {"message": "Article supprimé"}
+
+@api_router.post("/predefined-items/reset")
+async def reset_predefined_items(user: dict = Depends(get_current_user)):
+    """Reset predefined items to defaults"""
+    await db.predefined_items.delete_many({})
+    await initialize_default_items()
+    return {"message": "Articles réinitialisés"}
+
 # ============== PDF GENERATION ==============
 
 async def get_company_settings():
