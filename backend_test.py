@@ -419,6 +419,109 @@ class BTPInvoiceAPITester:
         
         return success
 
+    def test_predefined_items_api(self):
+        """Test predefined items API functionality"""
+        # Get categories (should auto-initialize default items)
+        success, response = self.run_test(
+            "Get Predefined Categories",
+            "GET",
+            "predefined-items/categories",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Verify we have the expected 8 BTP categories
+        expected_categories = [
+            "Menuiserie", "Plomberie", "Électricité", "Peinture", 
+            "Maçonnerie", "Carrelage", "Plâtrerie / Isolation", "Rénovation générale"
+        ]
+        
+        categories = response
+        category_names = [cat['name'] for cat in categories]
+        
+        for expected_cat in expected_categories:
+            if expected_cat not in category_names:
+                print(f"   Missing expected category: {expected_cat}")
+                return False
+        
+        print(f"   Found {len(categories)} categories with items")
+        
+        # Test getting items for a specific category
+        success, response = self.run_test(
+            "Get Items by Category",
+            "GET",
+            "predefined-items?category=Menuiserie",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Test creating a new predefined item
+        new_item_data = {
+            "category": "Menuiserie",
+            "description": "Test Custom Item",
+            "unit": "unité",
+            "default_price": 99.99,
+            "default_vat_rate": 20.0
+        }
+        
+        success, response = self.run_test(
+            "Create Predefined Item",
+            "POST",
+            "predefined-items",
+            200,
+            data=new_item_data
+        )
+        
+        if not success:
+            return False
+            
+        created_item_id = response.get('id')
+        if not created_item_id:
+            print("   No item ID returned from creation")
+            return False
+            
+        # Test updating the created item
+        update_data = {
+            "description": "Updated Test Custom Item",
+            "default_price": 149.99
+        }
+        
+        success, _ = self.run_test(
+            "Update Predefined Item",
+            "PUT",
+            f"predefined-items/{created_item_id}",
+            200,
+            data=update_data
+        )
+        
+        if not success:
+            return False
+            
+        # Test deleting the created item
+        success, _ = self.run_test(
+            "Delete Predefined Item",
+            "DELETE",
+            f"predefined-items/{created_item_id}",
+            200
+        )
+        
+        if not success:
+            return False
+            
+        # Test reset functionality (this will restore defaults)
+        success, _ = self.run_test(
+            "Reset Predefined Items",
+            "POST",
+            "predefined-items/reset",
+            200
+        )
+        
+        return success
+
     def cleanup_resources(self):
         """Clean up created test resources"""
         print("\n🧹 Cleaning up test resources...")
