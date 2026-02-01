@@ -13,7 +13,7 @@ import QuoteFormPage from "@/pages/QuoteFormPage";
 import QuoteDetailPage from "@/pages/QuoteDetailPage";
 import InvoicesPage from "@/pages/InvoicesPage";
 import InvoiceFormPage from "@/pages/InvoiceFormPage";
-import InvoiceDetailPage from "@/pages/InvoiceDetailPage";
+import InvoiceDetailPage from "@/pages/InvoiceViewPage";
 import SettingsPage from "@/pages/SettingsPage";
 import Layout from "@/components/Layout";
 
