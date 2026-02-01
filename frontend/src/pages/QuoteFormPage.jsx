@@ -1,19 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getQuote, getClients, createQuote, updateQuote, getSettings } from "@/lib/api";
+import { getQuote, getClients, createQuote, updateQuote, getSettings, getPredefinedCategories } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Save, Plus, Trash2, Package } from "lucide-react";
 import { toast } from "sonner";
 
 export default function QuoteFormPage() {
@@ -25,12 +19,15 @@ export default function QuoteFormPage() {
     const [saving, setSaving] = useState(false);
     const [clients, setClients] = useState([]);
     const [vatRates, setVatRates] = useState([20.0, 10.0, 5.5, 2.1]);
+    const [categories, setCategories] = useState([]);
+    const [selectedCategory, setSelectedCategory] = useState("");
+    const [selectedItem, setSelectedItem] = useState("");
     
     const [formData, setFormData] = useState({
         client_id: "",
         validity_days: 30,
         notes: "",
-        items: [{ description: "", quantity: 1, unit_price: 0, vat_rate: 20.0 }]
+        items: [{ description: "", quantity: 1, unit_price: 0, vat_rate: 20.0, unit: "" }]
     });
 
     useEffect(() => {
@@ -39,11 +36,13 @@ export default function QuoteFormPage() {
 
     const loadData = async () => {
         try {
-            const [clientsRes, settingsRes] = await Promise.all([
+            const [clientsRes, settingsRes, categoriesRes] = await Promise.all([
                 getClients(),
-                getSettings()
+                getSettings(),
+                getPredefinedCategories()
             ]);
             setClients(clientsRes.data);
+            setCategories(categoriesRes.data);
             
             if (settingsRes.data.default_vat_rates?.length > 0) {
                 setVatRates(settingsRes.data.default_vat_rates);
@@ -56,8 +55,8 @@ export default function QuoteFormPage() {
                     validity_days: 30,
                     notes: quoteRes.data.notes || "",
                     items: quoteRes.data.items.length > 0 
-                        ? quoteRes.data.items 
-                        : [{ description: "", quantity: 1, unit_price: 0, vat_rate: 20.0 }]
+                        ? quoteRes.data.items.map(item => ({ ...item, unit: item.unit || "" }))
+                        : [{ description: "", quantity: 1, unit_price: 0, vat_rate: 20.0, unit: "" }]
                 });
             }
         } catch (error) {
@@ -85,7 +84,12 @@ export default function QuoteFormPage() {
         try {
             const payload = {
                 ...formData,
-                items: validItems
+                items: validItems.map(item => ({
+                    description: item.unit ? `${item.description} (${item.unit})` : item.description,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    vat_rate: item.vat_rate
+                }))
             };
             
             if (isEdit) {
@@ -106,8 +110,35 @@ export default function QuoteFormPage() {
     const addItem = () => {
         setFormData(prev => ({
             ...prev,
-            items: [...prev.items, { description: "", quantity: 1, unit_price: 0, vat_rate: vatRates[0] || 20.0 }]
+            items: [...prev.items, { description: "", quantity: 1, unit_price: 0, vat_rate: vatRates[0] || 20.0, unit: "" }]
         }));
+    };
+
+    const addPredefinedItem = () => {
+        if (!selectedCategory || !selectedItem) {
+            toast.error("Sélectionnez une catégorie et un article");
+            return;
+        }
+        
+        const category = categories.find(c => c.name === selectedCategory);
+        if (!category) return;
+        
+        const item = category.items.find(i => i.id === selectedItem);
+        if (!item) return;
+        
+        setFormData(prev => ({
+            ...prev,
+            items: [...prev.items, {
+                description: item.description,
+                quantity: 1,
+                unit_price: item.default_price,
+                vat_rate: item.default_vat_rate,
+                unit: item.unit
+            }]
+        }));
+        
+        setSelectedItem("");
+        toast.success("Article ajouté");
     };
 
     const removeItem = (index) => {
@@ -146,6 +177,7 @@ export default function QuoteFormPage() {
     };
 
     const totals = calculateTotals();
+    const selectedCategoryItems = categories.find(c => c.name === selectedCategory)?.items || [];
 
     if (loading) {
         return (
@@ -157,20 +189,14 @@ export default function QuoteFormPage() {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6" data-testid="quote-form-page">
-            {/* Header */}
             <div className="flex items-center gap-4">
-                <Button 
-                    variant="ghost" 
-                    onClick={() => navigate("/devis")}
-                    data-testid="back-btn"
-                >
+                <Button variant="ghost" onClick={() => navigate("/devis")} data-testid="back-btn">
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Retour
                 </Button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Client & Info */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="font-['Barlow_Condensed'] text-2xl">
@@ -216,28 +242,72 @@ export default function QuoteFormPage() {
                     </CardContent>
                 </Card>
 
+                {/* Predefined Items Selector */}
+                <Card className="border-orange-200 bg-orange-50/50">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="font-['Barlow_Condensed'] text-lg flex items-center gap-2">
+                            <Package className="w-5 h-5 text-orange-600" />
+                            Ajouter un article prédéfini
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="space-y-1">
+                                <Label className="text-xs">Catégorie</Label>
+                                <Select value={selectedCategory} onValueChange={(v) => { setSelectedCategory(v); setSelectedItem(""); }}>
+                                    <SelectTrigger data-testid="category-select">
+                                        <SelectValue placeholder="Choisir une catégorie" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {categories.map(cat => (
+                                            <SelectItem key={cat.name} value={cat.name}>{cat.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">Article</Label>
+                                <Select value={selectedItem} onValueChange={setSelectedItem} disabled={!selectedCategory}>
+                                    <SelectTrigger data-testid="predefined-item-select">
+                                        <SelectValue placeholder="Choisir un article" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {selectedCategoryItems.map(item => (
+                                            <SelectItem key={item.id} value={item.id}>
+                                                {item.description} ({item.default_price}€/{item.unit})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex items-end">
+                                <Button 
+                                    type="button" 
+                                    onClick={addPredefinedItem}
+                                    className="bg-orange-600 hover:bg-orange-700 w-full"
+                                    disabled={!selectedCategory || !selectedItem}
+                                    data-testid="add-predefined-btn"
+                                >
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Ajouter
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 {/* Line Items */}
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="font-['Barlow_Condensed']">Lignes du devis</CardTitle>
-                        <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm"
-                            onClick={addItem}
-                            data-testid="add-item-btn"
-                        >
+                        <Button type="button" variant="outline" size="sm" onClick={addItem} data-testid="add-item-btn">
                             <Plus className="w-4 h-4 mr-2" />
-                            Ajouter une ligne
+                            Ligne manuelle
                         </Button>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {formData.items.map((item, index) => (
-                            <div 
-                                key={index} 
-                                className="grid grid-cols-12 gap-3 items-end p-4 bg-slate-50 rounded-lg"
-                                data-testid={`item-row-${index}`}
-                            >
+                            <div key={index} className="grid grid-cols-12 gap-2 items-end p-4 bg-slate-50 rounded-lg" data-testid={`item-row-${index}`}>
                                 <div className="col-span-12 md:col-span-4 space-y-1">
                                     <Label className="text-xs">Description</Label>
                                     <Input
@@ -247,7 +317,16 @@ export default function QuoteFormPage() {
                                         data-testid={`item-description-${index}`}
                                     />
                                 </div>
-                                <div className="col-span-4 md:col-span-2 space-y-1">
+                                <div className="col-span-3 md:col-span-1 space-y-1">
+                                    <Label className="text-xs">Unité</Label>
+                                    <Input
+                                        placeholder="m², h..."
+                                        value={item.unit || ""}
+                                        onChange={(e) => updateItem(index, "unit", e.target.value)}
+                                        className="text-center"
+                                    />
+                                </div>
+                                <div className="col-span-3 md:col-span-2 space-y-1">
                                     <Label className="text-xs">Quantité</Label>
                                     <Input
                                         type="number"
@@ -258,7 +337,7 @@ export default function QuoteFormPage() {
                                         data-testid={`item-quantity-${index}`}
                                     />
                                 </div>
-                                <div className="col-span-4 md:col-span-2 space-y-1">
+                                <div className="col-span-3 md:col-span-2 space-y-1">
                                     <Label className="text-xs">Prix unit. HT</Label>
                                     <Input
                                         type="number"
@@ -269,25 +348,20 @@ export default function QuoteFormPage() {
                                         data-testid={`item-price-${index}`}
                                     />
                                 </div>
-                                <div className="col-span-3 md:col-span-2 space-y-1">
-                                    <Label className="text-xs">TVA %</Label>
-                                    <Select 
-                                        value={String(item.vat_rate)} 
-                                        onValueChange={(v) => updateItem(index, "vat_rate", parseFloat(v))}
-                                    >
+                                <div className="col-span-2 md:col-span-1 space-y-1">
+                                    <Label className="text-xs">TVA</Label>
+                                    <Select value={String(item.vat_rate)} onValueChange={(v) => updateItem(index, "vat_rate", parseFloat(v))}>
                                         <SelectTrigger data-testid={`item-vat-${index}`}>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {vatRates.map(rate => (
-                                                <SelectItem key={rate} value={String(rate)}>
-                                                    {rate}%
-                                                </SelectItem>
+                                                <SelectItem key={rate} value={String(rate)}>{rate}%</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="col-span-1 md:col-span-1 space-y-1">
+                                <div className="col-span-1 space-y-1">
                                     <Label className="text-xs opacity-0">X</Label>
                                     <Button
                                         type="button"
@@ -309,7 +383,6 @@ export default function QuoteFormPage() {
                             </div>
                         ))}
 
-                        {/* Totals */}
                         <div className="border-t pt-4 mt-4 space-y-2">
                             <div className="flex justify-end gap-8 text-sm">
                                 <span className="text-slate-500">Total HT:</span>
@@ -327,7 +400,6 @@ export default function QuoteFormPage() {
                     </CardContent>
                 </Card>
 
-                {/* Notes */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="font-['Barlow_Condensed']">Notes</CardTitle>
@@ -343,21 +415,11 @@ export default function QuoteFormPage() {
                     </CardContent>
                 </Card>
 
-                {/* Actions */}
                 <div className="flex gap-3">
-                    <Button 
-                        type="button" 
-                        variant="outline"
-                        onClick={() => navigate("/devis")}
-                    >
+                    <Button type="button" variant="outline" onClick={() => navigate("/devis")}>
                         Annuler
                     </Button>
-                    <Button 
-                        type="submit"
-                        className="bg-orange-600 hover:bg-orange-700"
-                        disabled={saving}
-                        data-testid="submit-btn"
-                    >
+                    <Button type="submit" className="bg-orange-600 hover:bg-orange-700" disabled={saving} data-testid="submit-btn">
                         {saving ? (
                             <span className="flex items-center gap-2">
                                 <span className="spinner w-4 h-4"></span>
