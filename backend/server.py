@@ -169,6 +169,106 @@ class DashboardStats(BaseModel):
     total_quotes: int
     total_invoices: int
 
+# ============== PREDEFINED ITEMS MODELS ==============
+
+class PredefinedItemCreate(BaseModel):
+    category: str
+    description: str
+    unit: str = "unité"
+    default_price: float = 0.0
+    default_vat_rate: float = 20.0
+
+class PredefinedItemUpdate(BaseModel):
+    category: Optional[str] = None
+    description: Optional[str] = None
+    unit: Optional[str] = None
+    default_price: Optional[float] = None
+    default_vat_rate: Optional[float] = None
+
+class PredefinedItemResponse(BaseModel):
+    id: str
+    category: str
+    description: str
+    unit: str
+    default_price: float
+    default_vat_rate: float
+
+class CategoryResponse(BaseModel):
+    name: str
+    items: List[PredefinedItemResponse]
+
+# Default BTP categories and items
+DEFAULT_BTP_CATEGORIES = {
+    "Menuiserie": [
+        {"description": "Pose de porte intérieure", "unit": "unité", "default_price": 250.0},
+        {"description": "Pose de fenêtre PVC", "unit": "unité", "default_price": 350.0},
+        {"description": "Pose de porte-fenêtre", "unit": "unité", "default_price": 450.0},
+        {"description": "Pose de volet roulant", "unit": "unité", "default_price": 300.0},
+        {"description": "Pose de parquet flottant", "unit": "m²", "default_price": 35.0},
+        {"description": "Pose de parquet massif", "unit": "m²", "default_price": 55.0},
+        {"description": "Pose de plinthes", "unit": "ml", "default_price": 12.0},
+    ],
+    "Plomberie": [
+        {"description": "Installation WC complet", "unit": "unité", "default_price": 450.0},
+        {"description": "Installation lavabo", "unit": "unité", "default_price": 280.0},
+        {"description": "Installation douche complète", "unit": "unité", "default_price": 850.0},
+        {"description": "Installation baignoire", "unit": "unité", "default_price": 650.0},
+        {"description": "Pose de chauffe-eau", "unit": "unité", "default_price": 380.0},
+        {"description": "Remplacement robinetterie", "unit": "unité", "default_price": 120.0},
+        {"description": "Création point d'eau", "unit": "unité", "default_price": 350.0},
+    ],
+    "Électricité": [
+        {"description": "Pose de prise électrique", "unit": "unité", "default_price": 65.0},
+        {"description": "Pose d'interrupteur", "unit": "unité", "default_price": 55.0},
+        {"description": "Pose de spot encastré", "unit": "unité", "default_price": 45.0},
+        {"description": "Pose de tableau électrique", "unit": "unité", "default_price": 850.0},
+        {"description": "Tirage de câble", "unit": "ml", "default_price": 15.0},
+        {"description": "Mise aux normes électriques", "unit": "forfait", "default_price": 1200.0},
+        {"description": "Pose de VMC", "unit": "unité", "default_price": 450.0},
+    ],
+    "Peinture": [
+        {"description": "Peinture mur (2 couches)", "unit": "m²", "default_price": 18.0},
+        {"description": "Peinture plafond (2 couches)", "unit": "m²", "default_price": 22.0},
+        {"description": "Peinture boiseries", "unit": "ml", "default_price": 15.0},
+        {"description": "Pose de papier peint", "unit": "m²", "default_price": 25.0},
+        {"description": "Préparation des surfaces", "unit": "m²", "default_price": 8.0},
+        {"description": "Lessivage des murs", "unit": "m²", "default_price": 5.0},
+    ],
+    "Maçonnerie": [
+        {"description": "Création de mur en parpaings", "unit": "m²", "default_price": 85.0},
+        {"description": "Création d'ouverture", "unit": "unité", "default_price": 650.0},
+        {"description": "Coulage de dalle béton", "unit": "m²", "default_price": 75.0},
+        {"description": "Ragréage sol", "unit": "m²", "default_price": 25.0},
+        {"description": "Chape traditionnelle", "unit": "m²", "default_price": 35.0},
+        {"description": "Démolition de cloison", "unit": "m²", "default_price": 45.0},
+    ],
+    "Carrelage": [
+        {"description": "Pose de carrelage sol", "unit": "m²", "default_price": 45.0},
+        {"description": "Pose de carrelage mural", "unit": "m²", "default_price": 55.0},
+        {"description": "Pose de faïence", "unit": "m²", "default_price": 50.0},
+        {"description": "Pose de mosaïque", "unit": "m²", "default_price": 75.0},
+        {"description": "Pose de plinthes carrelage", "unit": "ml", "default_price": 15.0},
+        {"description": "Jointage carrelage", "unit": "m²", "default_price": 12.0},
+    ],
+    "Plâtrerie / Isolation": [
+        {"description": "Pose de placo BA13", "unit": "m²", "default_price": 28.0},
+        {"description": "Pose de placo hydrofuge", "unit": "m²", "default_price": 35.0},
+        {"description": "Création faux plafond", "unit": "m²", "default_price": 45.0},
+        {"description": "Isolation laine de verre", "unit": "m²", "default_price": 25.0},
+        {"description": "Isolation laine de roche", "unit": "m²", "default_price": 30.0},
+        {"description": "Bandes et joints placo", "unit": "m²", "default_price": 12.0},
+        {"description": "Doublage isolant", "unit": "m²", "default_price": 40.0},
+    ],
+    "Rénovation générale": [
+        {"description": "Main d'œuvre qualifiée", "unit": "heure", "default_price": 45.0},
+        {"description": "Main d'œuvre aide", "unit": "heure", "default_price": 30.0},
+        {"description": "Déplacement", "unit": "forfait", "default_price": 50.0},
+        {"description": "Évacuation gravats", "unit": "m³", "default_price": 85.0},
+        {"description": "Nettoyage fin de chantier", "unit": "forfait", "default_price": 150.0},
+        {"description": "Location benne", "unit": "jour", "default_price": 120.0},
+    ],
+}
+
 # ============== AUTH HELPERS ==============
 
 def hash_password(password: str) -> str:
