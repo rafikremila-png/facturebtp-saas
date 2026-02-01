@@ -1,0 +1,110 @@
+# BTP Facture - Product Requirements Document
+
+## Original Problem Statement
+Build a production-ready MVP web application for a French construction company (BTP) to manage quotes (devis) and invoices (factures). The application must be simple, fast, and legally compliant in France.
+
+## User Persona
+- **Primary User**: French construction company owner/administrator
+- **Technical Level**: Non-technical users who need simple, efficient quote and invoice management
+- **Use Case**: Create professional quotes, convert to invoices, track payments
+
+## User Choices
+- **Authentication**: JWT custom auth (email/password)
+- **PDF Generation**: ReportLab
+- **Design Theme**: Construction/BTP (orange/industrial tones), sober and professional
+- **Language**: French interface
+- **Logo**: Placeholder with optional upload
+
+## Core Requirements (Static)
+
+### Scope
+- Single company
+- Single admin user
+- No public signup
+
+### Features
+1. Client management (CRUD)
+2. Quotes (Devis) with automatic numbering, status management, conversion to invoice
+3. Invoices (Factures) with legal numbering, payment status tracking
+4. PDF generation with company details, legal mentions (SIRET, VAT)
+5. Company settings (logo, SIRET, VAT, default VAT rates)
+6. Dashboard with KPIs
+
+## Architecture
+
+### Backend (FastAPI)
+- `/app/backend/server.py` - Main API with all endpoints
+- MongoDB for data persistence
+- JWT authentication
+- ReportLab for PDF generation
+
+### Frontend (React)
+- `/app/frontend/src/` - React application
+- Shadcn UI components
+- Industrial Pro theme (orange/slate colors)
+- Barlow Condensed + Manrope fonts
+
+### API Endpoints
+- Auth: `/api/auth/register`, `/api/auth/login`, `/api/auth/me`
+- Clients: `/api/clients` (CRUD)
+- Quotes: `/api/quotes` (CRUD), `/api/quotes/{id}/convert`, `/api/quotes/{id}/pdf`
+- Invoices: `/api/invoices` (CRUD), `/api/invoices/{id}/pdf`
+- Settings: `/api/settings`, `/api/settings/logo`
+- Dashboard: `/api/dashboard`
+
+## What's Been Implemented (Jan 2026)
+
+### Backend ✅
+- [x] JWT Authentication (register, login, token validation)
+- [x] Client CRUD API
+- [x] Quote CRUD with line items, automatic numbering (DEV-YYYY-XXXX)
+- [x] Quote status management (brouillon, envoyé, accepté, refusé, facturé)
+- [x] Quote to Invoice conversion
+- [x] Invoice CRUD with payment status (impayé, payé, partiel)
+- [x] Invoice automatic numbering (FAC-YYYY-XXXX)
+- [x] PDF generation for quotes and invoices
+- [x] Company settings with logo upload
+- [x] Dashboard statistics
+
+### Frontend ✅
+- [x] Login/Register page with BTP theme
+- [x] Dashboard with KPIs and quick actions
+- [x] Client management (list, create, edit, delete)
+- [x] Quote management (list, create, view, status change, PDF download)
+- [x] Invoice management (list, create, view, payment tracking, PDF download)
+- [x] Settings page (company info, logo, VAT rates)
+- [x] Dark sidebar navigation
+- [x] French interface
+- [x] Responsive design
+
+## Prioritized Backlog
+
+### P0 (Critical) - All Complete ✅
+- User authentication
+- Client management
+- Quote/Invoice creation with calculations
+- PDF generation
+- Dashboard
+
+### P1 (Important) - Complete ✅
+- Quote to invoice conversion
+- Payment status tracking
+- Company settings
+
+### P2 (Nice to Have) - Deferred
+- Multi-user support
+- Email notifications
+- Accounting export
+- Online payments
+- Client portal
+
+## Out of Scope
+- No accounting export
+- No online payments
+- No client portal
+
+## Next Action Items
+1. Add email notifications for quote/invoice sending
+2. Multi-user support with roles
+3. Monthly/yearly reports
+4. Bank details in PDF for payments
