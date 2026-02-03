@@ -1,12 +1,15 @@
 /* BTP Invoice App - Custom Styles */
 
+/* Fix Select dropdown viewport visibility issue */
+[data-radix-select-viewport] {
+    max-height: 340px !important;
+    overflow-y: auto !important;
+    display: block !important;
+}
+
 /* Prevent ResizeObserver loops with CSS containment */
 [data-radix-popper-content-wrapper] {
     contain: layout;
-}
-
-[data-radix-select-viewport] {
-    contain: strict;
 }
 
 /* Animations */
