@@ -3,24 +3,37 @@ import ReactDOM from "react-dom/client";
 import "@/index.css";
 import App from "@/App";
 
-// Suppress ResizeObserver loop error (common with Radix UI dropdowns)
-// This error is benign and doesn't affect functionality
-const resizeObserverErr = window.onerror;
-window.onerror = (message, source, lineno, colno, error) => {
-  if (message && message.toString().includes('ResizeObserver loop')) {
-    return true;
+// Patch ResizeObserver to prevent "loop completed" errors
+// This is a known issue with Radix UI components
+const RO = window.ResizeObserver;
+window.ResizeObserver = class ResizeObserver extends RO {
+  constructor(callback) {
+    super((entries, observer) => {
+      // Use requestAnimationFrame to batch observations
+      window.requestAnimationFrame(() => {
+        try {
+          callback(entries, observer);
+        } catch (e) {
+          // Silently ignore ResizeObserver callback errors
+        }
+      });
+    });
   }
-  if (resizeObserverErr) {
-    return resizeObserverErr(message, source, lineno, colno, error);
-  }
-  return false;
 };
 
-// Also suppress in error event
-window.addEventListener('error', (e) => {
-  if (e.message && e.message.includes('ResizeObserver loop')) {
-    e.stopPropagation();
-    e.preventDefault();
+// Suppress ResizeObserver error messages globally
+const errorHandler = (event) => {
+  if (event.message && event.message.includes('ResizeObserver')) {
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    return true;
+  }
+};
+
+window.addEventListener('error', errorHandler, true);
+window.addEventListener('unhandledrejection', (event) => {
+  if (event.reason && event.reason.message && event.reason.message.includes('ResizeObserver')) {
+    event.preventDefault();
   }
 });
 
