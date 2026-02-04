@@ -61,6 +61,12 @@ export default function QuoteDetailPage() {
         loadQuote();
     }, [id]);
 
+    useEffect(() => {
+        if (quote && quote.status !== 'brouillon') {
+            loadAcomptesSummary();
+        }
+    }, [quote]);
+
     const loadQuote = async () => {
         try {
             const response = await getQuote(id);
@@ -70,6 +76,15 @@ export default function QuoteDetailPage() {
             navigate("/devis");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadAcomptesSummary = async () => {
+        try {
+            const response = await getAcomptesSummary(id);
+            setAcomptesSummary(response.data);
+        } catch (error) {
+            console.error("Error loading acomptes summary:", error);
         }
     };
 
@@ -94,6 +109,47 @@ export default function QuoteDetailPage() {
             toast.error(message);
         } finally {
             setConverting(false);
+        }
+    };
+
+    const handleCreateAcompte = async () => {
+        if (acompteData.value <= 0) {
+            toast.error("Veuillez saisir une valeur positive");
+            return;
+        }
+        
+        setCreatingAcompte(true);
+        try {
+            const response = await createAcompte(id, {
+                quote_id: id,
+                acompte_type: acompteData.acompte_type,
+                value: parseFloat(acompteData.value),
+                notes: acompteData.notes
+            });
+            toast.success(`Facture d'acompte ${response.data.invoice_number} créée`);
+            setShowAcompteModal(false);
+            setAcompteData({ acompte_type: "percentage", value: 30, notes: "" });
+            loadAcomptesSummary();
+            navigate(`/factures/${response.data.id}`);
+        } catch (error) {
+            const message = error.response?.data?.detail || "Erreur lors de la création de l'acompte";
+            toast.error(message);
+        } finally {
+            setCreatingAcompte(false);
+        }
+    };
+
+    const handleCreateFinalInvoice = async () => {
+        setCreatingFinal(true);
+        try {
+            const response = await createFinalInvoice(id);
+            toast.success("Facture de solde créée avec succès");
+            navigate(`/factures/${response.data.id}`);
+        } catch (error) {
+            const message = error.response?.data?.detail || "Erreur lors de la création de la facture";
+            toast.error(message);
+        } finally {
+            setCreatingFinal(false);
         }
     };
 
