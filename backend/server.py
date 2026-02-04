@@ -1372,6 +1372,198 @@ async def get_public_invoice_pdf(share_token: str):
         headers={"Content-Disposition": f"attachment; filename=facture_{invoice['invoice_number']}.pdf"}
     )
 
+# ============== EMAIL SENDING ==============
+
+class SendDocumentEmailRequest(BaseModel):
+    recipient_email: EmailStr
+    recipient_name: str = ""
+    custom_message: str = ""
+
+def generate_email_html(doc_type: str, doc_data: dict, company, client, share_url: str, custom_message: str = ""):
+    """Generate professional French email HTML"""
+    
+    doc_label = "Devis" if doc_type == "quote" else "Facture"
+    doc_number = doc_data.get("quote_number") if doc_type == "quote" else doc_data.get("invoice_number")
+    
+    email_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #f97316; padding: 20px; text-align: center;">
+            <h1 style="color: white; margin: 0;">{company.company_name}</h1>
+        </div>
+        
+        <div style="padding: 30px; background-color: #ffffff;">
+            <p>Bonjour{' ' + client.get('name', '') if client.get('name') else ''},</p>
+            
+            <p>Veuillez trouver ci-joint votre <strong>{doc_label.lower()} n° {doc_number}</strong>.</p>
+            
+            {f'<p>{custom_message}</p>' if custom_message else ''}
+            
+            <table style="width: 100%; margin: 20px 0; border-collapse: collapse;">
+                <tr style="background-color: #f8fafc;">
+                    <td style="padding: 15px; border: 1px solid #e2e8f0;"><strong>N° {doc_label}</strong></td>
+                    <td style="padding: 15px; border: 1px solid #e2e8f0;">{doc_number}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 15px; border: 1px solid #e2e8f0;"><strong>Date</strong></td>
+                    <td style="padding: 15px; border: 1px solid #e2e8f0;">{doc_data.get('issue_date', '')[:10]}</td>
+                </tr>
+                <tr style="background-color: #f8fafc;">
+                    <td style="padding: 15px; border: 1px solid #e2e8f0;"><strong>Montant TTC</strong></td>
+                    <td style="padding: 15px; border: 1px solid #e2e8f0; font-size: 18px; color: #f97316;"><strong>{doc_data.get('total_ttc', 0):.2f} €</strong></td>
+                </tr>
+            </table>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{share_url}" style="background-color: #f97316; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                    Consulter le {doc_label.lower()}
+                </a>
+            </div>
+            
+            <p>Vous pouvez également télécharger le PDF depuis ce lien.</p>
+            
+            <p>Cordialement,<br><strong>{company.company_name}</strong></p>
+        </div>
+        
+        <div style="background-color: #1e293b; color: #94a3b8; padding: 20px; font-size: 12px; text-align: center;">
+            <p style="margin: 5px 0;"><strong>{company.company_name}</strong></p>
+            <p style="margin: 5px 0;">{company.address}</p>
+            <p style="margin: 5px 0;">Tél: {company.phone} | Email: {company.email}</p>
+            {f'<p style="margin: 5px 0;">SIRET: {company.siret}</p>' if company.siret else ''}
+            {f'<p style="margin: 5px 0;">N° TVA: {company.vat_number}</p>' if company.vat_number else ''}
+        </div>
+    </body>
+    </html>
+    """
+    return email_html
+
+@api_router.post("/quotes/{quote_id}/send-email")
+async def send_quote_email(quote_id: str, request: SendDocumentEmailRequest, user: dict = Depends(get_current_user)):
+    """Send quote by email to client"""
+    if not RESEND_API_KEY:
+        raise HTTPException(status_code=500, detail="Service email non configuré. Ajoutez RESEND_API_KEY dans les paramètres.")
+    
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    client = await db.clients.find_one({"id": quote["client_id"]}, {"_id": 0})
+    company = await get_company_settings()
+    
+    # Generate or get share token
+    share_token = quote.get("share_token")
+    if not share_token:
+        share_token = generate_share_token()
+        await db.quotes.update_one({"id": quote_id}, {"$set": {"share_token": share_token}})
+    
+    # Get base URL from environment
+    base_url = os.environ.get("FRONTEND_URL", "https://btp-invoice-1.preview.emergentagent.com")
+    share_url = f"{base_url}/client/devis/{share_token}"
+    
+    # Generate email HTML
+    email_html = generate_email_html("quote", quote, company, client or {}, share_url, request.custom_message)
+    
+    # Generate PDF attachment
+    pdf_buffer = create_pdf("quote", quote, company, client or {"name": quote["client_name"], "address": ""})
+    pdf_data = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
+    
+    try:
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [request.recipient_email],
+            "subject": f"Devis n° {quote['quote_number']} - {company.company_name}",
+            "html": email_html,
+            "attachments": [
+                {
+                    "filename": f"devis_{quote['quote_number']}.pdf",
+                    "content": pdf_data,
+                }
+            ]
+        }
+        
+        # Send email asynchronously
+        email_result = await asyncio.to_thread(resend.Emails.send, params)
+        
+        # Update quote status to sent
+        await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "envoye"}})
+        
+        return {
+            "status": "success",
+            "message": f"Devis envoyé à {request.recipient_email}",
+            "email_id": email_result.get("id")
+        }
+    except Exception as e:
+        logging.error(f"Email send error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'envoi: {str(e)}")
+
+@api_router.post("/invoices/{invoice_id}/send-email")
+async def send_invoice_email(invoice_id: str, request: SendDocumentEmailRequest, user: dict = Depends(get_current_user)):
+    """Send invoice by email to client"""
+    if not RESEND_API_KEY:
+        raise HTTPException(status_code=500, detail="Service email non configuré. Ajoutez RESEND_API_KEY dans les paramètres.")
+    
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+    
+    client = await db.clients.find_one({"id": invoice["client_id"]}, {"_id": 0})
+    company = await get_company_settings()
+    
+    # Generate or get share token
+    share_token = invoice.get("share_token")
+    if not share_token:
+        share_token = generate_share_token()
+        await db.invoices.update_one({"id": invoice_id}, {"$set": {"share_token": share_token}})
+    
+    # Get base URL from environment
+    base_url = os.environ.get("FRONTEND_URL", "https://btp-invoice-1.preview.emergentagent.com")
+    share_url = f"{base_url}/client/facture/{share_token}"
+    
+    # Generate email HTML
+    email_html = generate_email_html("invoice", invoice, company, client or {}, share_url, request.custom_message)
+    
+    # Generate PDF attachment
+    pdf_buffer = create_pdf("invoice", invoice, company, client or {"name": invoice["client_name"], "address": ""})
+    pdf_data = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
+    
+    try:
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [request.recipient_email],
+            "subject": f"Facture n° {invoice['invoice_number']} - {company.company_name}",
+            "html": email_html,
+            "attachments": [
+                {
+                    "filename": f"facture_{invoice['invoice_number']}.pdf",
+                    "content": pdf_data,
+                }
+            ]
+        }
+        
+        # Send email asynchronously
+        email_result = await asyncio.to_thread(resend.Emails.send, params)
+        
+        return {
+            "status": "success",
+            "message": f"Facture envoyée à {request.recipient_email}",
+            "email_id": email_result.get("id")
+        }
+    except Exception as e:
+        logging.error(f"Email send error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'envoi: {str(e)}")
+
+@api_router.get("/email/status")
+async def get_email_status(user: dict = Depends(get_current_user)):
+    """Check if email service is configured"""
+    return {
+        "configured": bool(RESEND_API_KEY),
+        "sender": SENDER_EMAIL if RESEND_API_KEY else None
+    }
+
 # ============== MAIN APP ==============
 
 app.include_router(api_router)
