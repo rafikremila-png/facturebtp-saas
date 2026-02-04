@@ -1890,25 +1890,16 @@ async def get_project_financial_summary(quote_id: str, user: dict = Depends(get_
 @api_router.get("/public/quote/{share_token}/financial-summary")
 async def get_public_project_financial_summary(share_token: str):
     """Get complete financial summary for a project/quote (public access)"""
-    # Find the share token
-    token_doc = await db.share_tokens.find_one({"token": share_token}, {"_id": 0})
-    if not token_doc:
-        raise HTTPException(status_code=404, detail="Lien invalide ou expiré")
+    # First, try to find a quote with this share token
+    quote = await db.quotes.find_one({"share_token": share_token}, {"_id": 0})
     
-    # Check expiration
-    if token_doc.get("expires_at"):
-        expires = datetime.fromisoformat(token_doc["expires_at"].replace("Z", "+00:00"))
-        if datetime.now(timezone.utc) > expires:
-            raise HTTPException(status_code=404, detail="Lien expiré")
-    
-    # Get quote ID from token
-    if token_doc.get("doc_type") == "quote":
-        quote_id = token_doc.get("doc_id")
+    if quote:
+        quote_id = quote["id"]
     else:
-        # If it's an invoice token, get the parent quote
-        invoice = await db.invoices.find_one({"id": token_doc.get("doc_id")}, {"_id": 0})
+        # If not found in quotes, try to find an invoice with this share token
+        invoice = await db.invoices.find_one({"share_token": share_token}, {"_id": 0})
         if not invoice or not invoice.get("parent_quote_id"):
-            raise HTTPException(status_code=404, detail="Devis non trouvé")
+            raise HTTPException(status_code=404, detail="Lien invalide ou expiré")
         quote_id = invoice.get("parent_quote_id")
     
     summary = await calculate_project_financial_summary(quote_id)
