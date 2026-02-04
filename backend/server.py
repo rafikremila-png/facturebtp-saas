@@ -810,6 +810,265 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Facture non trouvée")
     return {"message": "Facture supprimée"}
 
+# ============== ACOMPTES (ADVANCE PAYMENTS) ==============
+
+@api_router.post("/quotes/{quote_id}/acompte", response_model=AcompteResponse)
+async def create_acompte(quote_id: str, acompte_data: AcompteCreate, user: dict = Depends(get_current_user)):
+    """Create an acompte (advance payment invoice) from a quote"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    if quote["status"] not in ["accepte", "envoye"]:
+        raise HTTPException(status_code=400, detail="Le devis doit être accepté ou envoyé pour créer un acompte")
+    
+    # Get company settings
+    settings = await get_company_settings()
+    
+    # Calculate acompte amounts
+    if acompte_data.acompte_type == "percentage":
+        acompte_ht = quote["total_ht"] * (acompte_data.value / 100)
+        acompte_vat = quote["total_vat"] * (acompte_data.value / 100) if not settings.is_auto_entrepreneur else 0
+    else:  # amount
+        # If amount, we need to calculate proportional VAT
+        proportion = acompte_data.value / quote["total_ttc"] if quote["total_ttc"] > 0 else 0
+        acompte_ht = quote["total_ht"] * proportion
+        acompte_vat = quote["total_vat"] * proportion if not settings.is_auto_entrepreneur else 0
+    
+    acompte_ttc = acompte_ht + acompte_vat
+    
+    # Get existing acomptes for this quote to determine the number
+    existing_acomptes = await db.invoices.count_documents({"parent_quote_id": quote_id, "is_acompte": True})
+    acompte_number = existing_acomptes + 1
+    
+    # Generate invoice number
+    invoice_number = await get_next_invoice_number()
+    
+    # Calculate payment due date
+    issue_date = datetime.now(timezone.utc)
+    payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
+    
+    # Create acompte items (simplified - shows as single line)
+    acompte_items = [{
+        "description": f"Acompte n°{acompte_number} - {acompte_data.value}{'%' if acompte_data.acompte_type == 'percentage' else '€'} sur devis {quote['quote_number']}",
+        "quantity": 1,
+        "unit_price": acompte_ht,
+        "vat_rate": (acompte_vat / acompte_ht * 100) if acompte_ht > 0 else 0,
+        "unit": "forfait"
+    }]
+    
+    acompte_doc = {
+        "id": str(uuid.uuid4()),
+        "invoice_number": invoice_number,
+        "client_id": quote["client_id"],
+        "client_name": quote["client_name"],
+        "quote_id": quote_id,
+        "parent_quote_id": quote_id,
+        "issue_date": issue_date.isoformat(),
+        "payment_due_date": payment_due_date.isoformat(),
+        "items": acompte_items,
+        "total_ht": round(acompte_ht, 2),
+        "total_vat": round(acompte_vat, 2),
+        "total_ttc": round(acompte_ttc, 2),
+        "payment_status": "impaye",
+        "payment_method": acompte_data.payment_method,
+        "paid_amount": 0,
+        "notes": acompte_data.notes,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        # Acompte specific fields
+        "is_acompte": True,
+        "acompte_type": acompte_data.acompte_type,
+        "acompte_value": acompte_data.value,
+        "acompte_number": acompte_number
+    }
+    
+    await db.invoices.insert_one(acompte_doc)
+    
+    return AcompteResponse(
+        id=acompte_doc["id"],
+        invoice_number=acompte_doc["invoice_number"],
+        quote_id=quote_id,
+        quote_number=quote["quote_number"],
+        client_id=acompte_doc["client_id"],
+        client_name=acompte_doc["client_name"],
+        issue_date=acompte_doc["issue_date"],
+        payment_due_date=acompte_doc["payment_due_date"],
+        acompte_type=acompte_doc["acompte_type"],
+        acompte_value=acompte_doc["acompte_value"],
+        acompte_number=acompte_doc["acompte_number"],
+        total_ht=acompte_doc["total_ht"],
+        total_vat=acompte_doc["total_vat"],
+        total_ttc=acompte_doc["total_ttc"],
+        payment_status=acompte_doc["payment_status"],
+        payment_method=acompte_doc["payment_method"],
+        paid_amount=acompte_doc["paid_amount"],
+        notes=acompte_doc["notes"],
+        created_at=acompte_doc["created_at"]
+    )
+
+@api_router.get("/quotes/{quote_id}/acomptes", response_model=List[AcompteResponse])
+async def list_quote_acomptes(quote_id: str, user: dict = Depends(get_current_user)):
+    """List all acomptes for a quote"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    acomptes = await db.invoices.find(
+        {"parent_quote_id": quote_id, "is_acompte": True},
+        {"_id": 0}
+    ).sort("acompte_number", 1).to_list(100)
+    
+    return [
+        AcompteResponse(
+            id=a["id"],
+            invoice_number=a["invoice_number"],
+            quote_id=quote_id,
+            quote_number=quote["quote_number"],
+            client_id=a["client_id"],
+            client_name=a["client_name"],
+            issue_date=a["issue_date"],
+            payment_due_date=a.get("payment_due_date", a["issue_date"]),
+            acompte_type=a["acompte_type"],
+            acompte_value=a["acompte_value"],
+            acompte_number=a["acompte_number"],
+            total_ht=a["total_ht"],
+            total_vat=a["total_vat"],
+            total_ttc=a["total_ttc"],
+            payment_status=a["payment_status"],
+            payment_method=a["payment_method"],
+            paid_amount=a.get("paid_amount", 0),
+            notes=a.get("notes", ""),
+            created_at=a["created_at"]
+        )
+        for a in acomptes
+    ]
+
+@api_router.get("/quotes/{quote_id}/acomptes/summary")
+async def get_acomptes_summary(quote_id: str, user: dict = Depends(get_current_user)):
+    """Get summary of acomptes for a quote (total paid, remaining)"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    acomptes = await db.invoices.find(
+        {"parent_quote_id": quote_id, "is_acompte": True},
+        {"_id": 0}
+    ).to_list(100)
+    
+    total_acomptes_ht = sum(a["total_ht"] for a in acomptes)
+    total_acomptes_vat = sum(a["total_vat"] for a in acomptes)
+    total_acomptes_ttc = sum(a["total_ttc"] for a in acomptes)
+    total_paid = sum(a.get("paid_amount", 0) for a in acomptes if a["payment_status"] == "paye")
+    
+    remaining_ht = quote["total_ht"] - total_acomptes_ht
+    remaining_vat = quote["total_vat"] - total_acomptes_vat
+    remaining_ttc = quote["total_ttc"] - total_acomptes_ttc
+    
+    return {
+        "quote_total_ht": quote["total_ht"],
+        "quote_total_vat": quote["total_vat"],
+        "quote_total_ttc": quote["total_ttc"],
+        "acomptes_count": len(acomptes),
+        "total_acomptes_ht": round(total_acomptes_ht, 2),
+        "total_acomptes_vat": round(total_acomptes_vat, 2),
+        "total_acomptes_ttc": round(total_acomptes_ttc, 2),
+        "total_paid": round(total_paid, 2),
+        "remaining_ht": round(max(0, remaining_ht), 2),
+        "remaining_vat": round(max(0, remaining_vat), 2),
+        "remaining_ttc": round(max(0, remaining_ttc), 2),
+        "percentage_invoiced": round((total_acomptes_ttc / quote["total_ttc"] * 100) if quote["total_ttc"] > 0 else 0, 1),
+        "percentage_paid": round((total_paid / quote["total_ttc"] * 100) if quote["total_ttc"] > 0 else 0, 1),
+        "acomptes": [
+            {
+                "id": a["id"],
+                "invoice_number": a["invoice_number"],
+                "acompte_number": a["acompte_number"],
+                "acompte_type": a["acompte_type"],
+                "acompte_value": a["acompte_value"],
+                "total_ttc": a["total_ttc"],
+                "payment_status": a["payment_status"],
+                "paid_amount": a.get("paid_amount", 0)
+            }
+            for a in acomptes
+        ]
+    }
+
+@api_router.post("/quotes/{quote_id}/final-invoice", response_model=InvoiceResponse)
+async def create_final_invoice(quote_id: str, user: dict = Depends(get_current_user)):
+    """Create final invoice from quote, deducting all acomptes"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    if quote["status"] != "accepte":
+        raise HTTPException(status_code=400, detail="Le devis doit être accepté pour créer la facture finale")
+    
+    # Get company settings
+    settings = await get_company_settings()
+    
+    # Get all paid acomptes
+    acomptes = await db.invoices.find(
+        {"parent_quote_id": quote_id, "is_acompte": True},
+        {"_id": 0}
+    ).to_list(100)
+    
+    total_acomptes_ttc = sum(a["total_ttc"] for a in acomptes if a["payment_status"] == "paye")
+    
+    invoice_id = str(uuid.uuid4())
+    invoice_number = await get_next_invoice_number()
+    
+    issue_date = datetime.now(timezone.utc)
+    payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
+    
+    # Handle auto-entrepreneur mode
+    items = quote["items"]
+    if settings.is_auto_entrepreneur:
+        items = [{**item, "vat_rate": 0.0} for item in items]
+        total_ht = sum(item["quantity"] * item["unit_price"] for item in items)
+        total_vat = 0.0
+        total_ttc = total_ht
+    else:
+        total_ht = quote["total_ht"]
+        total_vat = quote["total_vat"]
+        total_ttc = quote["total_ttc"]
+    
+    invoice_doc = {
+        "id": invoice_id,
+        "invoice_number": invoice_number,
+        "client_id": quote["client_id"],
+        "client_name": quote["client_name"],
+        "quote_id": quote_id,
+        "parent_quote_id": quote_id,
+        "issue_date": issue_date.isoformat(),
+        "payment_due_date": payment_due_date.isoformat(),
+        "items": items,
+        "total_ht": total_ht,
+        "total_vat": total_vat,
+        "total_ttc": total_ttc,
+        "payment_status": "impaye",
+        "payment_method": "virement",
+        "paid_amount": 0,
+        "notes": quote.get("notes", ""),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        # Final invoice specific
+        "is_acompte": False,
+        "is_final_invoice": True,
+        "acomptes_deducted": total_acomptes_ttc,
+        "net_to_pay": round(total_ttc - total_acomptes_ttc, 2)
+    }
+    
+    await db.invoices.insert_one(invoice_doc)
+    
+    # Update quote status
+    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "facture"}})
+    
+    # Add default values for missing fields
+    invoice_doc["acompte_type"] = None
+    invoice_doc["acompte_value"] = None
+    invoice_doc["acompte_number"] = None
+    
+    return InvoiceResponse(**invoice_doc)
+
 # ============== COMPANY SETTINGS ==============
 
 @api_router.get("/settings", response_model=CompanySettings)
