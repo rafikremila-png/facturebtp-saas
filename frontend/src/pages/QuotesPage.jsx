@@ -128,8 +128,7 @@ export default function QuotesPage() {
         const matchesSearch = 
             quote.quote_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
             quote.client_name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesStatus = statusFilter === "all" || quote.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return matchesSearch;
     });
 
     const handleSelectAll = (checked) => {
