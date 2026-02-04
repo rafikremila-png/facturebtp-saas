@@ -150,6 +150,7 @@ class InvoiceResponse(BaseModel):
     paid_amount: float
     notes: str
     created_at: str
+    share_token: Optional[str] = None
 
 class CompanySettings(BaseModel):
     company_name: str = ""
