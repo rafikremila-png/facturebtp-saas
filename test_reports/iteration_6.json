@@ -1,0 +1,103 @@
+{
+  "summary": "Completed comprehensive testing of Retenue de Garantie (Retention Guarantee) feature for French BTP invoicing. All 21 backend API tests passed. Frontend UI verified with modal, slider, warranty duration selector, and legal mentions working correctly.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "test_report_links": [
+    "/app/backend/tests/test_retenue_garantie.py",
+    "/app/test_reports/pytest/pytest_results_retenue.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [],
+  
+  "updated_files": [
+    "/app/backend/tests/test_retenue_garantie.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% - 21/21 tests passed",
+    "frontend": "100% - All UI features verified"
+  },
+  
+  "test_credentials": {
+    "email": "test_sit@btp.fr",
+    "password": "test123"
+  },
+  
+  "seed_data_creation": "Created test invoices with retenue de garantie during pytest execution",
+  
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  
+  "context_for_next_testing_agent": "Retenue de garantie feature fully tested. Max rate is 5% per French law n°75-1334. Warranty durations available: 6, 12, 24 months. Invoices with retenue: FAC-2026-0016 (active), FAC-2026-0013 (released), FAC-2026-0012 (released). Settings page has default retenue configuration section.",
+  
+  "features_tested": {
+    "backend_api_retenue_garantie": {
+      "status": "PASS",
+      "tests": [
+        "✓ POST /api/invoices/{id}/retenue-garantie - applies retention correctly",
+        "✓ DELETE /api/invoices/{id}/retenue-garantie - removes retention",
+        "✓ POST /api/invoices/{id}/retenue-garantie/release - releases retention",
+        "✓ GET /api/quotes/{id}/retenues-garantie/summary - returns summary",
+        "✓ Validation: rate > 5% rejected (French law compliance)",
+        "✓ Validation: rate <= 0 rejected",
+        "✓ Validation: cannot release already released retention",
+        "✓ Validation: cannot remove released retention",
+        "✓ Validation: cannot release without retention applied",
+        "✓ 404 returned for non-existent invoice",
+        "✓ 401/403 returned without authentication",
+        "✓ Different warranty durations (6, 12, 24 months) work correctly",
+        "✓ Different rates (0.5% - 5%) work correctly",
+        "✓ Net à payer calculated correctly (TTC - retention amount)",
+        "✓ Release date calculated based on warranty months"
+      ]
+    },
+    "frontend_invoice_detail": {
+      "status": "PASS",
+      "tests": [
+        "✓ 'Appliquer' button visible on invoice without retenue",
+        "✓ 'Retenue de garantie' section with 'Max 5% - Libérable après garantie' text",
+        "✓ Modal opens with correct title 'Appliquer une retenue de garantie'",
+        "✓ Legal mention 'Réglementation française (Loi n°75-1334)' displayed",
+        "✓ Rate slider (0.5% - 5%) with input field",
+        "✓ Warranty duration dropdown (6/12/24 mois)",
+        "✓ Preview calculation shows TTC, retention amount, net à payer",
+        "✓ 'Annuler' and 'Appliquer la retenue' buttons"
+      ]
+    },
+    "frontend_settings": {
+      "status": "PASS",
+      "tests": [
+        "✓ 'Retenue de garantie (BTP)' section in Settings page",
+        "✓ Toggle to enable/disable default retenue",
+        "✓ Default rate input (max 5%)",
+        "✓ Default warranty duration dropdown",
+        "✓ Legal mention preview for invoices"
+      ]
+    },
+    "pdf_generation": {
+      "status": "PASS",
+      "tests": [
+        "✓ PDF includes retenue de garantie line in totals section",
+        "✓ PDF includes legal mention (Loi n°75-1334)",
+        "✓ PDF shows net à payer after retention"
+      ]
+    }
+  },
+  
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Email sending (Resend API - test key re_123_test)"]
+  }
+}
