@@ -606,8 +606,26 @@ async def convert_quote_to_invoice(quote_id: str, user: dict = Depends(get_curre
     if quote["status"] != "accepte":
         raise HTTPException(status_code=400, detail="Seuls les devis acceptés peuvent être convertis en facture")
     
+    # Get company settings for payment delay
+    settings = await get_company_settings()
+    
     invoice_id = str(uuid.uuid4())
     invoice_number = await get_next_invoice_number()
+    
+    issue_date = datetime.now(timezone.utc)
+    payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
+    
+    # Handle auto-entrepreneur mode
+    items = quote["items"]
+    if settings.is_auto_entrepreneur:
+        items = [{**item, "vat_rate": 0.0} for item in items]
+        total_ht = sum(item["quantity"] * item["unit_price"] for item in items)
+        total_vat = 0.0
+        total_ttc = total_ht
+    else:
+        total_ht = quote["total_ht"]
+        total_vat = quote["total_vat"]
+        total_ttc = quote["total_ttc"]
     
     invoice_doc = {
         "id": invoice_id,
@@ -615,11 +633,12 @@ async def convert_quote_to_invoice(quote_id: str, user: dict = Depends(get_curre
         "client_id": quote["client_id"],
         "client_name": quote["client_name"],
         "quote_id": quote_id,
-        "issue_date": datetime.now(timezone.utc).isoformat(),
-        "items": quote["items"],
-        "total_ht": quote["total_ht"],
-        "total_vat": quote["total_vat"],
-        "total_ttc": quote["total_ttc"],
+        "issue_date": issue_date.isoformat(),
+        "payment_due_date": payment_due_date.isoformat(),
+        "items": items,
+        "total_ht": total_ht,
+        "total_vat": total_vat,
+        "total_ttc": total_ttc,
         "payment_status": "impaye",
         "payment_method": "virement",
         "paid_amount": 0,
