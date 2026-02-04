@@ -2728,7 +2728,36 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
     
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=22, textColor=colors.HexColor('#EA580C'), spaceAfter=8)
+    
+    # Custom styles for professional layout
+    company_name_style = ParagraphStyle(
+        'CompanyName', 
+        parent=styles['Heading1'], 
+        fontSize=16, 
+        fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#0F172A'), 
+        alignment=TA_CENTER,
+        spaceAfter=4
+    )
+    company_info_style = ParagraphStyle(
+        'CompanyInfo', 
+        parent=styles['Normal'], 
+        fontSize=9, 
+        textColor=colors.HexColor('#475569'), 
+        alignment=TA_CENTER,
+        leading=12
+    )
+    company_legal_style = ParagraphStyle(
+        'CompanyLegal', 
+        parent=styles['Normal'], 
+        fontSize=9, 
+        fontName='Helvetica-Bold',
+        textColor=colors.HexColor('#1E293B'), 
+        alignment=TA_CENTER,
+        leading=12
+    )
+    
+    # Other styles
     header_style = ParagraphStyle('Header', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#475569'), leading=12)
     normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=9, leading=12)
     bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold', leading=12)
@@ -2737,107 +2766,102 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     
     elements = []
     
-    # ========== HEADER: Logo + Company Info ==========
+    # ========== HEADER: Centered Company Block ==========
     company_name = company.company_name or "Votre Entreprise BTP"
     
-    # Try to add logo if available
+    # Try to load logo if available
     logo_image = None
     if company.logo_base64:
         try:
-            # Extract base64 data (remove data:image/xxx;base64, prefix)
             logo_data = company.logo_base64
             if ',' in logo_data:
                 logo_data = logo_data.split(',')[1]
-            
-            # Decode base64 to bytes
             logo_bytes = base64.b64decode(logo_data)
             logo_buffer = BytesIO(logo_bytes)
-            
-            # Create ReportLab Image with max dimensions
             logo_image = Image(logo_buffer)
-            # Scale logo to fit (max 50mm width, 25mm height)
-            max_width = 50 * mm
-            max_height = 25 * mm
-            
-            # Calculate aspect ratio and scale
+            # Scale logo (max 45mm width, 22mm height)
+            max_width = 45 * mm
+            max_height = 22 * mm
             aspect = logo_image.imageWidth / logo_image.imageHeight
             if logo_image.imageWidth > max_width or logo_image.imageHeight > max_height:
                 if aspect > (max_width / max_height):
-                    # Width is limiting factor
                     logo_image.drawWidth = max_width
                     logo_image.drawHeight = max_width / aspect
                 else:
-                    # Height is limiting factor
                     logo_image.drawHeight = max_height
                     logo_image.drawWidth = max_height * aspect
             else:
-                # Scale up small logos proportionally
                 logo_image.drawWidth = min(logo_image.imageWidth, max_width)
                 logo_image.drawHeight = logo_image.drawWidth / aspect
         except Exception as e:
-            # If logo fails to load, continue without it
             logging.warning(f"Failed to load logo for PDF: {str(e)}")
             logo_image = None
     
-    # Build company info lines
-    company_lines = []
-    if company.address:
-        company_lines.append(company.address)
+    # Build centered header block
+    header_elements = []
     
+    # Logo (centered)
+    if logo_image:
+        logo_table = Table([[logo_image]], colWidths=[180*mm])
+        logo_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3*mm),
+        ]))
+        header_elements.append(logo_table)
+    
+    # Company name (bold, centered)
+    header_elements.append(Paragraph(company_name, company_name_style))
+    header_elements.append(Spacer(1, 2*mm))
+    
+    # Address (normal weight, centered)
+    if company.address:
+        header_elements.append(Paragraph(company.address, company_info_style))
+    
+    # Contact info (normal weight, centered)
     contact_parts = []
     if company.phone:
         contact_parts.append(f"Tél: {company.phone}")
     if company.email:
         contact_parts.append(f"Email: {company.email}")
     if contact_parts:
-        company_lines.append(" | ".join(contact_parts))
+        header_elements.append(Paragraph(" | ".join(contact_parts), company_info_style))
     
-    legal_parts = []
+    header_elements.append(Spacer(1, 2*mm))
+    
+    # Legal information (bold, centered) - SIRET, RCS/RM, Code APE
+    legal_line_parts = []
     if company.siret:
-        legal_parts.append(f"SIRET: {company.siret}")
+        legal_line_parts.append(f"SIRET: {company.siret}")
     if company.rcs_rm:
-        legal_parts.append(company.rcs_rm)
+        legal_line_parts.append(company.rcs_rm)
     if company.code_ape:
-        legal_parts.append(f"Code APE: {company.code_ape}")
-    if legal_parts:
-        company_lines.append(" | ".join(legal_parts))
+        legal_line_parts.append(f"Code APE: {company.code_ape}")
+    if legal_line_parts:
+        header_elements.append(Paragraph(" | ".join(legal_line_parts), company_legal_style))
     
+    # Capital social (bold)
     if company.capital_social:
-        company_lines.append(f"Capital social: {company.capital_social}")
+        header_elements.append(Paragraph(f"Capital social: {company.capital_social}", company_legal_style))
     
-    # VAT number or auto-entrepreneur mention
+    # VAT number or auto-entrepreneur mention (bold)
     if company.is_auto_entrepreneur:
-        company_lines.append(company.auto_entrepreneur_mention)
+        header_elements.append(Paragraph(company.auto_entrepreneur_mention, company_legal_style))
     elif company.vat_number:
-        company_lines.append(f"N° TVA Intracommunautaire: {company.vat_number}")
+        header_elements.append(Paragraph(f"N° TVA Intracommunautaire: {company.vat_number}", company_legal_style))
     
-    # Create header with logo and company info side by side
-    if logo_image:
-        # Create a table with logo on left, company info on right
-        company_info_elements = [Paragraph(company_name, title_style)]
-        for line in company_lines:
-            company_info_elements.append(Paragraph(line, header_style))
-        
-        # Combine company info into a single cell
-        header_table_data = [[logo_image, company_info_elements]]
-        header_table = Table(header_table_data, colWidths=[55*mm, 120*mm])
-        header_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-            ('ALIGN', (1, 0), (1, 0), 'LEFT'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        elements.append(header_table)
-    else:
-        # No logo - just display company name and info
-        elements.append(Paragraph(company_name, title_style))
-        for line in company_lines:
-            elements.append(Paragraph(line, header_style))
+    # Add all header elements
+    for elem in header_elements:
+        elements.append(elem)
     
-    elements.append(Spacer(1, 12*mm))
+    # Separator line
+    elements.append(Spacer(1, 4*mm))
+    separator_table = Table([['']],  colWidths=[180*mm], rowHeights=[0.5])
+    separator_table.setStyle(TableStyle([
+        ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+    ]))
+    elements.append(separator_table)
+    elements.append(Spacer(1, 8*mm))
     
     # ========== DOCUMENT TITLE ==========
     if doc_type == "quote":
