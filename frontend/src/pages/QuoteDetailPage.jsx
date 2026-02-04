@@ -45,6 +45,9 @@ export default function QuoteDetailPage() {
     const [showShareModal, setShowShareModal] = useState(false);
     const [shareUrl, setShareUrl] = useState("");
     const [copied, setCopied] = useState(false);
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [emailData, setEmailData] = useState({ recipient_email: "", custom_message: "" });
+    const [sendingEmail, setSendingEmail] = useState(false);
 
     useEffect(() => {
         loadQuote();
