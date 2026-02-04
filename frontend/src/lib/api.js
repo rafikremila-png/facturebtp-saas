@@ -112,6 +112,12 @@ export const revokeQuoteShareLink = (quoteId) => api.delete(`/quotes/${quoteId}/
 export const createInvoiceShareLink = (invoiceId) => api.post(`/invoices/${invoiceId}/share`);
 export const revokeInvoiceShareLink = (invoiceId) => api.delete(`/invoices/${invoiceId}/share`);
 
+// Acomptes (Advance Payments)
+export const createAcompte = (quoteId, data) => api.post(`/quotes/${quoteId}/acompte`, data);
+export const getQuoteAcomptes = (quoteId) => api.get(`/quotes/${quoteId}/acomptes`);
+export const getAcomptesSummary = (quoteId) => api.get(`/quotes/${quoteId}/acomptes/summary`);
+export const createFinalInvoice = (quoteId) => api.post(`/quotes/${quoteId}/final-invoice`);
+
 // Public endpoints (no auth)
 export const getPublicQuote = (token) => axios.get(`${API}/public/quote/${token}`);
 export const getPublicInvoice = (token) => axios.get(`${API}/public/invoice/${token}`);
