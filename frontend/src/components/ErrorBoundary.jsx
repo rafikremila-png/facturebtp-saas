@@ -60,7 +60,7 @@ class ErrorBoundary extends React.Component {
               }}
               className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
             >
-              Retour à l'accueil
+              Retour à l&apos;accueil
             </button>
           </div>
         </div>
