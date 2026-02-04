@@ -2065,15 +2065,27 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
             ["Total:", f"{doc_data['total_ht']:.2f} €"],
         ]
     else:
-        # Group VAT by rate
-        vat_by_rate = {}
-        for item in doc_data['items']:
-            rate = item['vat_rate']
-            line_ht = item['quantity'] * item['unit_price']
-            line_vat = line_ht * rate / 100
-            if rate not in vat_by_rate:
-                vat_by_rate[rate] = 0
-            vat_by_rate[rate] += line_vat
+        # For situations, use situation_amount_ht from items
+        if is_situation:
+            total_ht = sum(item.get('situation_amount_ht', 0) for item in doc_data['items'])
+            vat_by_rate = {}
+            for item in doc_data['items']:
+                rate = item.get('vat_rate', 0)
+                sit_amount = item.get('situation_amount_ht', 0)
+                line_vat = sit_amount * rate / 100 if rate > 0 else 0
+                if rate not in vat_by_rate:
+                    vat_by_rate[rate] = 0
+                vat_by_rate[rate] += line_vat
+        else:
+            # Group VAT by rate
+            vat_by_rate = {}
+            for item in doc_data['items']:
+                rate = item['vat_rate']
+                line_ht = item['quantity'] * item['unit_price']
+                line_vat = line_ht * rate / 100
+                if rate not in vat_by_rate:
+                    vat_by_rate[rate] = 0
+                vat_by_rate[rate] += line_vat
         
         totals_data = [
             ["Total HT:", f"{doc_data['total_ht']:.2f} €"],
@@ -2090,9 +2102,41 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     if doc_type == "invoice":
         # For final invoice with acomptes deducted
         is_final = doc_data.get('is_final_invoice', False)
+        is_situation_final = doc_data.get('is_situation_final', False)
         acomptes_deducted = doc_data.get('acomptes_deducted', 0)
+        situations_deducted = doc_data.get('situations_deducted', 0)
         
-        if is_final and acomptes_deducted > 0:
+        if is_situation_final and situations_deducted > 0:
+            # Add recap of all previous situations
+            situations_recap = doc_data.get('situations_recap', [])
+            if situations_recap:
+                elements.append(Spacer(1, 4*mm))
+                elements.append(Paragraph("<b>Récapitulatif des situations précédentes :</b>", bold_style))
+                recap_data = [["N°", "Facture", "Avancement", "Montant TTC"]]
+                for sit in situations_recap:
+                    recap_data.append([
+                        f"Sit. {sit.get('situation_number', '?')}",
+                        sit.get('invoice_number', ''),
+                        f"{sit.get('percentage', 0):.1f}%",
+                        f"{sit.get('total_ttc', 0):.2f} €"
+                    ])
+                recap_table = Table(recap_data, colWidths=[25*mm, 45*mm, 35*mm, 40*mm])
+                recap_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#059669')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ]))
+                elements.append(recap_table)
+                elements.append(Spacer(1, 4*mm))
+            
+            totals_data.append(["Situations précédentes:", f"-{situations_deducted:.2f} €"])
+            net_to_pay = doc_data.get('net_to_pay', doc_data['total_ttc'] - situations_deducted)
+            totals_data.append(["NET À PAYER:", f"{net_to_pay:.2f} €"])
+        elif is_final and acomptes_deducted > 0:
             totals_data.append(["Acomptes versés:", f"-{acomptes_deducted:.2f} €"])
             net_to_pay = doc_data.get('net_to_pay', doc_data['total_ttc'] - acomptes_deducted)
             totals_data.append(["NET À PAYER:", f"{net_to_pay:.2f} €"])
@@ -2100,7 +2144,7 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
         payment_status_map = {"impaye": "Impayé", "paye": "Payé", "partiel": "Partiellement payé"}
         totals_data.append(["Statut:", payment_status_map.get(doc_data['payment_status'], doc_data['payment_status'])])
         
-        if not is_final:
+        if not is_final and not is_situation_final:
             if doc_data.get('paid_amount', 0) > 0:
                 totals_data.append(["Montant payé:", f"{doc_data['paid_amount']:.2f} €"])
                 remaining = doc_data['total_ttc'] - doc_data['paid_amount']
