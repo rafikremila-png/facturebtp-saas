@@ -406,73 +406,309 @@ class CategoryResponse(BaseModel):
 
 # Default BTP categories and items
 DEFAULT_BTP_CATEGORIES = {
-    "Menuiserie": [
-        {"description": "Pose de porte intérieure", "unit": "unité", "default_price": 250.0},
-        {"description": "Pose de fenêtre PVC", "unit": "unité", "default_price": 350.0},
-        {"description": "Pose de porte-fenêtre", "unit": "unité", "default_price": 450.0},
-        {"description": "Pose de volet roulant", "unit": "unité", "default_price": 300.0},
-        {"description": "Pose de parquet flottant", "unit": "m²", "default_price": 35.0},
-        {"description": "Pose de parquet massif", "unit": "m²", "default_price": 55.0},
-        {"description": "Pose de plinthes", "unit": "ml", "default_price": 12.0},
-    ],
-    "Plomberie": [
-        {"description": "Installation WC complet", "unit": "unité", "default_price": 450.0},
-        {"description": "Installation lavabo", "unit": "unité", "default_price": 280.0},
-        {"description": "Installation douche complète", "unit": "unité", "default_price": 850.0},
-        {"description": "Installation baignoire", "unit": "unité", "default_price": 650.0},
-        {"description": "Pose de chauffe-eau", "unit": "unité", "default_price": 380.0},
-        {"description": "Remplacement robinetterie", "unit": "unité", "default_price": 120.0},
-        {"description": "Création point d'eau", "unit": "unité", "default_price": 350.0},
-    ],
-    "Électricité": [
-        {"description": "Pose de prise électrique", "unit": "unité", "default_price": 65.0},
-        {"description": "Pose d'interrupteur", "unit": "unité", "default_price": 55.0},
-        {"description": "Pose de spot encastré", "unit": "unité", "default_price": 45.0},
-        {"description": "Pose de tableau électrique", "unit": "unité", "default_price": 850.0},
-        {"description": "Tirage de câble", "unit": "ml", "default_price": 15.0},
-        {"description": "Mise aux normes électriques", "unit": "forfait", "default_price": 1200.0},
-        {"description": "Pose de VMC", "unit": "unité", "default_price": 450.0},
-    ],
-    "Peinture": [
-        {"description": "Peinture mur (2 couches)", "unit": "m²", "default_price": 18.0},
-        {"description": "Peinture plafond (2 couches)", "unit": "m²", "default_price": 22.0},
-        {"description": "Peinture boiseries", "unit": "ml", "default_price": 15.0},
-        {"description": "Pose de papier peint", "unit": "m²", "default_price": 25.0},
-        {"description": "Préparation des surfaces", "unit": "m²", "default_price": 8.0},
-        {"description": "Lessivage des murs", "unit": "m²", "default_price": 5.0},
-    ],
+    # ==================== MAÇONNERIE ====================
     "Maçonnerie": [
-        {"description": "Création de mur en parpaings", "unit": "m²", "default_price": 85.0},
-        {"description": "Création d'ouverture", "unit": "unité", "default_price": 650.0},
-        {"description": "Coulage de dalle béton", "unit": "m²", "default_price": 75.0},
-        {"description": "Ragréage sol", "unit": "m²", "default_price": 25.0},
-        {"description": "Chape traditionnelle", "unit": "m²", "default_price": 35.0},
-        {"description": "Démolition de cloison", "unit": "m²", "default_price": 45.0},
+        # Démolitions
+        {"description": "Démolition cloison légère", "unit": "m²", "default_price": 25.0, "default_vat_rate": 10.0},
+        {"description": "Démolition cloison en briques/parpaings", "unit": "m²", "default_price": 45.0, "default_vat_rate": 10.0},
+        {"description": "Démolition mur porteur (avec étaiement)", "unit": "forfait", "default_price": 1500.0, "default_vat_rate": 10.0},
+        {"description": "Création ouverture dans mur porteur", "unit": "forfait", "default_price": 2200.0, "default_vat_rate": 10.0},
+        {"description": "Création ouverture dans cloison", "unit": "unité", "default_price": 350.0, "default_vat_rate": 10.0},
+        {"description": "Dépose de carrelage existant", "unit": "m²", "default_price": 18.0, "default_vat_rate": 10.0},
+        {"description": "Évacuation gravats", "unit": "m³", "default_price": 85.0, "default_vat_rate": 10.0},
+        # Construction
+        {"description": "Montage mur en parpaings (20cm)", "unit": "m²", "default_price": 85.0, "default_vat_rate": 10.0},
+        {"description": "Montage mur en parpaings (15cm)", "unit": "m²", "default_price": 75.0, "default_vat_rate": 10.0},
+        {"description": "Montage mur en briques", "unit": "m²", "default_price": 95.0, "default_vat_rate": 10.0},
+        {"description": "Montage cloison en carreaux de plâtre", "unit": "m²", "default_price": 55.0, "default_vat_rate": 10.0},
+        # Béton et chapes
+        {"description": "Coffrage béton", "unit": "m²", "default_price": 45.0, "default_vat_rate": 10.0},
+        {"description": "Coulage dalle béton armé (10cm)", "unit": "m²", "default_price": 75.0, "default_vat_rate": 10.0},
+        {"description": "Coulage dalle béton armé (15cm)", "unit": "m²", "default_price": 95.0, "default_vat_rate": 10.0},
+        {"description": "Chape traditionnelle (5cm)", "unit": "m²", "default_price": 35.0, "default_vat_rate": 10.0},
+        {"description": "Chape liquide autonivelante", "unit": "m²", "default_price": 28.0, "default_vat_rate": 10.0},
+        {"description": "Ragréage sol (P3)", "unit": "m²", "default_price": 22.0, "default_vat_rate": 10.0},
+        # Enduits
+        {"description": "Enduit intérieur plâtre", "unit": "m²", "default_price": 28.0, "default_vat_rate": 10.0},
+        {"description": "Enduit intérieur ciment", "unit": "m²", "default_price": 25.0, "default_vat_rate": 10.0},
+        {"description": "Enduit extérieur monocouche", "unit": "m²", "default_price": 45.0, "default_vat_rate": 10.0},
+        {"description": "Ravalement façade complet", "unit": "m²", "default_price": 65.0, "default_vat_rate": 10.0},
+        {"description": "Réparation fissures façade", "unit": "ml", "default_price": 35.0, "default_vat_rate": 10.0},
+        # Seuils et appuis
+        {"description": "Pose appui de fenêtre béton", "unit": "ml", "default_price": 55.0, "default_vat_rate": 10.0},
+        {"description": "Pose seuil de porte", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
     ],
+    
+    # ==================== CARRELAGE ====================
     "Carrelage": [
-        {"description": "Pose de carrelage sol", "unit": "m²", "default_price": 45.0},
-        {"description": "Pose de carrelage mural", "unit": "m²", "default_price": 55.0},
-        {"description": "Pose de faïence", "unit": "m²", "default_price": 50.0},
-        {"description": "Pose de mosaïque", "unit": "m²", "default_price": 75.0},
-        {"description": "Pose de plinthes carrelage", "unit": "ml", "default_price": 15.0},
-        {"description": "Jointage carrelage", "unit": "m²", "default_price": 12.0},
+        # Dépose
+        {"description": "Dépose carrelage existant", "unit": "m²", "default_price": 18.0, "default_vat_rate": 10.0},
+        {"description": "Dépose faïence murale", "unit": "m²", "default_price": 15.0, "default_vat_rate": 10.0},
+        # Préparation
+        {"description": "Ragréage sol avant carrelage", "unit": "m²", "default_price": 22.0, "default_vat_rate": 10.0},
+        {"description": "Primaire d'accrochage", "unit": "m²", "default_price": 6.0, "default_vat_rate": 10.0},
+        {"description": "Étanchéité SPEC sous carrelage", "unit": "m²", "default_price": 25.0, "default_vat_rate": 10.0},
+        # Pose sol
+        {"description": "Pose carrelage sol (petit format <30x30)", "unit": "m²", "default_price": 42.0, "default_vat_rate": 10.0},
+        {"description": "Pose carrelage sol (format standard 30x30 à 60x60)", "unit": "m²", "default_price": 48.0, "default_vat_rate": 10.0},
+        {"description": "Pose carrelage sol (grand format >60x60)", "unit": "m²", "default_price": 58.0, "default_vat_rate": 10.0},
+        {"description": "Pose carrelage imitation parquet", "unit": "m²", "default_price": 55.0, "default_vat_rate": 10.0},
+        {"description": "Pose mosaïque sol", "unit": "m²", "default_price": 75.0, "default_vat_rate": 10.0},
+        # Pose murale
+        {"description": "Pose faïence murale (format standard)", "unit": "m²", "default_price": 52.0, "default_vat_rate": 10.0},
+        {"description": "Pose faïence murale métro", "unit": "m²", "default_price": 58.0, "default_vat_rate": 10.0},
+        {"description": "Pose mosaïque murale", "unit": "m²", "default_price": 78.0, "default_vat_rate": 10.0},
+        {"description": "Pose crédence cuisine", "unit": "ml", "default_price": 85.0, "default_vat_rate": 10.0},
+        # Finitions
+        {"description": "Joints carrelage (pose comprise)", "unit": "m²", "default_price": 12.0, "default_vat_rate": 10.0},
+        {"description": "Joints époxy (pièces humides)", "unit": "m²", "default_price": 18.0, "default_vat_rate": 10.0},
+        {"description": "Pose plinthes carrelées", "unit": "ml", "default_price": 15.0, "default_vat_rate": 10.0},
+        {"description": "Barre de seuil", "unit": "unité", "default_price": 25.0, "default_vat_rate": 10.0},
+        {"description": "Nez de marche carrelé", "unit": "ml", "default_price": 45.0, "default_vat_rate": 10.0},
     ],
+    
+    # ==================== PLÂTRERIE / ISOLATION ====================
     "Plâtrerie / Isolation": [
-        {"description": "Pose de placo BA13", "unit": "m²", "default_price": 28.0},
-        {"description": "Pose de placo hydrofuge", "unit": "m²", "default_price": 35.0},
-        {"description": "Création faux plafond", "unit": "m²", "default_price": 45.0},
-        {"description": "Isolation laine de verre", "unit": "m²", "default_price": 25.0},
-        {"description": "Isolation laine de roche", "unit": "m²", "default_price": 30.0},
-        {"description": "Bandes et joints placo", "unit": "m²", "default_price": 12.0},
-        {"description": "Doublage isolant", "unit": "m²", "default_price": 40.0},
+        # Cloisons
+        {"description": "Cloison placo BA13 simple (72mm)", "unit": "m²", "default_price": 38.0, "default_vat_rate": 10.0},
+        {"description": "Cloison placo BA13 double (98mm)", "unit": "m²", "default_price": 52.0, "default_vat_rate": 10.0},
+        {"description": "Cloison placo hydrofuge (pièces humides)", "unit": "m²", "default_price": 48.0, "default_vat_rate": 10.0},
+        {"description": "Cloison placo phonique", "unit": "m²", "default_price": 55.0, "default_vat_rate": 10.0},
+        {"description": "Cloison placo coupe-feu", "unit": "m²", "default_price": 62.0, "default_vat_rate": 10.0},
+        # Plafonds
+        {"description": "Faux plafond placo BA13", "unit": "m²", "default_price": 45.0, "default_vat_rate": 10.0},
+        {"description": "Faux plafond placo suspendu", "unit": "m²", "default_price": 55.0, "default_vat_rate": 10.0},
+        {"description": "Faux plafond dalles 60x60", "unit": "m²", "default_price": 42.0, "default_vat_rate": 10.0},
+        {"description": "Faux plafond acoustique", "unit": "m²", "default_price": 65.0, "default_vat_rate": 10.0},
+        {"description": "Création coffrage technique", "unit": "ml", "default_price": 55.0, "default_vat_rate": 10.0},
+        # Doublages
+        {"description": "Doublage murs placo + isolant (10+40)", "unit": "m²", "default_price": 42.0, "default_vat_rate": 10.0},
+        {"description": "Doublage murs placo + isolant (10+80)", "unit": "m²", "default_price": 52.0, "default_vat_rate": 10.0},
+        {"description": "Doublage murs placo + isolant (13+100)", "unit": "m²", "default_price": 58.0, "default_vat_rate": 10.0},
+        # Isolation
+        {"description": "Isolation laine de verre (100mm)", "unit": "m²", "default_price": 18.0, "default_vat_rate": 5.5},
+        {"description": "Isolation laine de verre (200mm)", "unit": "m²", "default_price": 28.0, "default_vat_rate": 5.5},
+        {"description": "Isolation laine de roche (100mm)", "unit": "m²", "default_price": 22.0, "default_vat_rate": 5.5},
+        {"description": "Isolation laine de roche (200mm)", "unit": "m²", "default_price": 35.0, "default_vat_rate": 5.5},
+        {"description": "Isolation polystyrène expansé (80mm)", "unit": "m²", "default_price": 25.0, "default_vat_rate": 5.5},
+        {"description": "Isolation combles perdus soufflée", "unit": "m²", "default_price": 22.0, "default_vat_rate": 5.5},
+        {"description": "Isolation rampants sous toiture", "unit": "m²", "default_price": 45.0, "default_vat_rate": 5.5},
+        # Finitions
+        {"description": "Bandes et joints placo", "unit": "m²", "default_price": 12.0, "default_vat_rate": 10.0},
+        {"description": "Enduit de lissage placo", "unit": "m²", "default_price": 8.0, "default_vat_rate": 10.0},
+        {"description": "Pose corniche décorative", "unit": "ml", "default_price": 25.0, "default_vat_rate": 10.0},
+        {"description": "Trappe de visite plafond", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
     ],
+    
+    # ==================== PEINTURE ====================
+    "Peinture": [
+        # Préparation
+        {"description": "Lessivage murs/plafonds", "unit": "m²", "default_price": 5.0, "default_vat_rate": 10.0},
+        {"description": "Décapage peinture ancienne", "unit": "m²", "default_price": 15.0, "default_vat_rate": 10.0},
+        {"description": "Ponçage et dépoussiérage", "unit": "m²", "default_price": 6.0, "default_vat_rate": 10.0},
+        {"description": "Rebouchage trous et fissures", "unit": "forfait", "default_price": 120.0, "default_vat_rate": 10.0},
+        {"description": "Enduit de rebouchage (par m²)", "unit": "m²", "default_price": 12.0, "default_vat_rate": 10.0},
+        {"description": "Enduit de lissage complet", "unit": "m²", "default_price": 18.0, "default_vat_rate": 10.0},
+        {"description": "Application impression/sous-couche", "unit": "m²", "default_price": 8.0, "default_vat_rate": 10.0},
+        # Peinture murs
+        {"description": "Peinture murs (2 couches acrylique)", "unit": "m²", "default_price": 18.0, "default_vat_rate": 10.0},
+        {"description": "Peinture murs (2 couches glycéro)", "unit": "m²", "default_price": 22.0, "default_vat_rate": 10.0},
+        {"description": "Peinture murs lessivable cuisine/SDB", "unit": "m²", "default_price": 24.0, "default_vat_rate": 10.0},
+        {"description": "Peinture décorative (effet béton, velours...)", "unit": "m²", "default_price": 35.0, "default_vat_rate": 10.0},
+        # Peinture plafonds
+        {"description": "Peinture plafond (2 couches mat)", "unit": "m²", "default_price": 22.0, "default_vat_rate": 10.0},
+        {"description": "Peinture plafond salle de bain (anti-humidité)", "unit": "m²", "default_price": 28.0, "default_vat_rate": 10.0},
+        # Boiseries
+        {"description": "Peinture portes (2 faces)", "unit": "unité", "default_price": 95.0, "default_vat_rate": 10.0},
+        {"description": "Peinture fenêtres bois", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
+        {"description": "Peinture plinthes bois", "unit": "ml", "default_price": 12.0, "default_vat_rate": 10.0},
+        {"description": "Peinture radiateurs (fonte)", "unit": "unité", "default_price": 65.0, "default_vat_rate": 10.0},
+        {"description": "Peinture escalier bois", "unit": "forfait", "default_price": 450.0, "default_vat_rate": 10.0},
+        # Forfaits
+        {"description": "Rénovation peinture complète pièce (jusqu'à 12m²)", "unit": "forfait", "default_price": 650.0, "default_vat_rate": 10.0},
+        {"description": "Rénovation peinture complète pièce (12 à 20m²)", "unit": "forfait", "default_price": 950.0, "default_vat_rate": 10.0},
+        {"description": "Rénovation peinture appartement T2", "unit": "forfait", "default_price": 2800.0, "default_vat_rate": 10.0},
+        {"description": "Rénovation peinture appartement T3", "unit": "forfait", "default_price": 3800.0, "default_vat_rate": 10.0},
+    ],
+    
+    # ==================== PLOMBERIE ====================
+    "Plomberie": [
+        # Dépose
+        {"description": "Dépose installation sanitaire complète", "unit": "forfait", "default_price": 350.0, "default_vat_rate": 10.0},
+        {"description": "Dépose WC", "unit": "unité", "default_price": 80.0, "default_vat_rate": 10.0},
+        {"description": "Dépose lavabo/vasque", "unit": "unité", "default_price": 65.0, "default_vat_rate": 10.0},
+        {"description": "Dépose baignoire", "unit": "unité", "default_price": 150.0, "default_vat_rate": 10.0},
+        {"description": "Dépose douche/receveur", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
+        # WC
+        {"description": "Pose WC à poser (fourni par client)", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
+        {"description": "Pose WC complet (fourniture incluse)", "unit": "unité", "default_price": 450.0, "default_vat_rate": 10.0},
+        {"description": "Pose WC suspendu avec bâti-support", "unit": "unité", "default_price": 750.0, "default_vat_rate": 10.0},
+        {"description": "Pose lave-mains", "unit": "unité", "default_price": 220.0, "default_vat_rate": 10.0},
+        # Lavabos et vasques
+        {"description": "Pose lavabo sur colonne", "unit": "unité", "default_price": 280.0, "default_vat_rate": 10.0},
+        {"description": "Pose vasque à poser", "unit": "unité", "default_price": 320.0, "default_vat_rate": 10.0},
+        {"description": "Pose meuble vasque complet", "unit": "unité", "default_price": 450.0, "default_vat_rate": 10.0},
+        {"description": "Pose double vasque", "unit": "unité", "default_price": 650.0, "default_vat_rate": 10.0},
+        # Douches
+        {"description": "Pose receveur de douche", "unit": "unité", "default_price": 350.0, "default_vat_rate": 10.0},
+        {"description": "Pose douche italienne complète", "unit": "unité", "default_price": 1200.0, "default_vat_rate": 10.0},
+        {"description": "Pose cabine de douche intégrale", "unit": "unité", "default_price": 550.0, "default_vat_rate": 10.0},
+        {"description": "Pose colonne de douche", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
+        {"description": "Pose paroi de douche fixe", "unit": "unité", "default_price": 250.0, "default_vat_rate": 10.0},
+        # Baignoires
+        {"description": "Pose baignoire acrylique", "unit": "unité", "default_price": 450.0, "default_vat_rate": 10.0},
+        {"description": "Pose baignoire fonte", "unit": "unité", "default_price": 650.0, "default_vat_rate": 10.0},
+        {"description": "Pose baignoire balnéo", "unit": "unité", "default_price": 850.0, "default_vat_rate": 10.0},
+        {"description": "Habillage baignoire (tablier)", "unit": "unité", "default_price": 280.0, "default_vat_rate": 10.0},
+        # Réseaux
+        {"description": "Création alimentation eau froide", "unit": "point", "default_price": 180.0, "default_vat_rate": 10.0},
+        {"description": "Création alimentation eau chaude", "unit": "point", "default_price": 220.0, "default_vat_rate": 10.0},
+        {"description": "Création évacuation eaux usées", "unit": "point", "default_price": 250.0, "default_vat_rate": 10.0},
+        {"description": "Réseau PER multicouche (fourniture + pose)", "unit": "ml", "default_price": 28.0, "default_vat_rate": 10.0},
+        {"description": "Réseau cuivre (fourniture + pose)", "unit": "ml", "default_price": 45.0, "default_vat_rate": 10.0},
+        {"description": "Réseau PVC évacuation (fourniture + pose)", "unit": "ml", "default_price": 35.0, "default_vat_rate": 10.0},
+        # Eau chaude sanitaire
+        {"description": "Remplacement ballon ECS électrique (jusqu'à 150L)", "unit": "unité", "default_price": 650.0, "default_vat_rate": 10.0},
+        {"description": "Remplacement ballon ECS électrique (200L)", "unit": "unité", "default_price": 850.0, "default_vat_rate": 10.0},
+        {"description": "Pose chauffe-eau thermodynamique", "unit": "unité", "default_price": 2500.0, "default_vat_rate": 5.5},
+        {"description": "Remplacement groupe de sécurité", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
+        # Robinetterie
+        {"description": "Remplacement robinet lavabo/vasque", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
+        {"description": "Remplacement mitigeur douche", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
+        {"description": "Remplacement mitigeur baignoire", "unit": "unité", "default_price": 220.0, "default_vat_rate": 10.0},
+        {"description": "Pose robinet machine à laver", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
+    ],
+    
+    # ==================== ÉLECTRICITÉ ====================
+    "Électricité": [
+        # Dépose
+        {"description": "Dépose ancienne installation électrique", "unit": "forfait", "default_price": 450.0, "default_vat_rate": 10.0},
+        {"description": "Dépose tableau électrique", "unit": "unité", "default_price": 150.0, "default_vat_rate": 10.0},
+        # Tableau électrique
+        {"description": "Tableau électrique 1 rangée (jusqu'à 13 modules)", "unit": "unité", "default_price": 650.0, "default_vat_rate": 10.0},
+        {"description": "Tableau électrique 2 rangées", "unit": "unité", "default_price": 950.0, "default_vat_rate": 10.0},
+        {"description": "Tableau électrique 3 rangées", "unit": "unité", "default_price": 1250.0, "default_vat_rate": 10.0},
+        {"description": "Tableau électrique 4 rangées", "unit": "unité", "default_price": 1550.0, "default_vat_rate": 10.0},
+        {"description": "Remplacement disjoncteur de branchement", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
+        {"description": "Ajout disjoncteur divisionnaire", "unit": "unité", "default_price": 65.0, "default_vat_rate": 10.0},
+        {"description": "Ajout interrupteur différentiel 30mA", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
+        # Mise aux normes
+        {"description": "Mise aux normes NFC 15-100 studio/T1", "unit": "forfait", "default_price": 1800.0, "default_vat_rate": 10.0},
+        {"description": "Mise aux normes NFC 15-100 T2/T3", "unit": "forfait", "default_price": 2800.0, "default_vat_rate": 10.0},
+        {"description": "Mise aux normes NFC 15-100 T4/T5", "unit": "forfait", "default_price": 3800.0, "default_vat_rate": 10.0},
+        {"description": "Mise en sécurité électrique", "unit": "forfait", "default_price": 850.0, "default_vat_rate": 10.0},
+        {"description": "Diagnostic électrique", "unit": "forfait", "default_price": 150.0, "default_vat_rate": 10.0},
+        # Prises et interrupteurs
+        {"description": "Pose prise électrique 16A", "unit": "unité", "default_price": 65.0, "default_vat_rate": 10.0},
+        {"description": "Pose prise électrique 32A (cuisinière)", "unit": "unité", "default_price": 95.0, "default_vat_rate": 10.0},
+        {"description": "Pose prise RJ45 (réseau)", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
+        {"description": "Pose prise TV/SAT", "unit": "unité", "default_price": 75.0, "default_vat_rate": 10.0},
+        {"description": "Pose interrupteur simple allumage", "unit": "unité", "default_price": 55.0, "default_vat_rate": 10.0},
+        {"description": "Pose interrupteur va-et-vient", "unit": "unité", "default_price": 75.0, "default_vat_rate": 10.0},
+        {"description": "Pose interrupteur variateur", "unit": "unité", "default_price": 95.0, "default_vat_rate": 10.0},
+        {"description": "Pose détecteur de mouvement", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
+        # Éclairage
+        {"description": "Pose point lumineux simple", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
+        {"description": "Pose spot encastré LED", "unit": "unité", "default_price": 55.0, "default_vat_rate": 10.0},
+        {"description": "Pose applique murale", "unit": "unité", "default_price": 75.0, "default_vat_rate": 10.0},
+        {"description": "Pose plafonnier", "unit": "unité", "default_price": 95.0, "default_vat_rate": 10.0},
+        {"description": "Pose bandeau LED", "unit": "ml", "default_price": 45.0, "default_vat_rate": 10.0},
+        # Câblage
+        {"description": "Tirage de câble électrique (gaine existante)", "unit": "ml", "default_price": 12.0, "default_vat_rate": 10.0},
+        {"description": "Tirage de câble avec saignée", "unit": "ml", "default_price": 28.0, "default_vat_rate": 10.0},
+        {"description": "Câblage complet pièce (prises + éclairage)", "unit": "pièce", "default_price": 450.0, "default_vat_rate": 10.0},
+        {"description": "Câblage complet logement T2", "unit": "forfait", "default_price": 2200.0, "default_vat_rate": 10.0},
+        {"description": "Câblage complet logement T3", "unit": "forfait", "default_price": 3200.0, "default_vat_rate": 10.0},
+        # VMC
+        {"description": "Pose VMC simple flux", "unit": "unité", "default_price": 450.0, "default_vat_rate": 10.0},
+        {"description": "Pose VMC double flux", "unit": "unité", "default_price": 2500.0, "default_vat_rate": 5.5},
+        {"description": "Pose extracteur salle de bain", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
+        {"description": "Remplacement bouches VMC", "unit": "unité", "default_price": 45.0, "default_vat_rate": 10.0},
+    ],
+    
+    # ==================== MENUISERIE ====================
+    "Menuiserie": [
+        # Portes intérieures
+        {"description": "Dépose porte intérieure", "unit": "unité", "default_price": 45.0, "default_vat_rate": 10.0},
+        {"description": "Pose porte intérieure (fournie par client)", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
+        {"description": "Pose porte intérieure (fourniture incluse standard)", "unit": "unité", "default_price": 350.0, "default_vat_rate": 10.0},
+        {"description": "Pose porte intérieure (fourniture incluse qualité)", "unit": "unité", "default_price": 550.0, "default_vat_rate": 10.0},
+        {"description": "Pose bloc-porte acoustique", "unit": "unité", "default_price": 750.0, "default_vat_rate": 10.0},
+        {"description": "Pose porte coulissante à galandage", "unit": "unité", "default_price": 950.0, "default_vat_rate": 10.0},
+        {"description": "Pose porte coulissante en applique", "unit": "unité", "default_price": 650.0, "default_vat_rate": 10.0},
+        # Portes d'entrée
+        {"description": "Dépose porte d'entrée", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
+        {"description": "Pose porte d'entrée (fournie par client)", "unit": "unité", "default_price": 350.0, "default_vat_rate": 10.0},
+        {"description": "Pose porte d'entrée bois (fourniture incluse)", "unit": "unité", "default_price": 1500.0, "default_vat_rate": 10.0},
+        {"description": "Pose porte d'entrée aluminium (fourniture incluse)", "unit": "unité", "default_price": 2200.0, "default_vat_rate": 10.0},
+        {"description": "Pose porte blindée", "unit": "unité", "default_price": 2800.0, "default_vat_rate": 10.0},
+        # Fenêtres
+        {"description": "Dépose fenêtre", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
+        {"description": "Pose fenêtre PVC (fournie par client)", "unit": "unité", "default_price": 250.0, "default_vat_rate": 10.0},
+        {"description": "Pose fenêtre PVC double vitrage (fourniture incluse)", "unit": "unité", "default_price": 550.0, "default_vat_rate": 5.5},
+        {"description": "Pose fenêtre aluminium (fourniture incluse)", "unit": "unité", "default_price": 750.0, "default_vat_rate": 5.5},
+        {"description": "Pose fenêtre bois (fourniture incluse)", "unit": "unité", "default_price": 850.0, "default_vat_rate": 5.5},
+        {"description": "Pose porte-fenêtre PVC", "unit": "unité", "default_price": 750.0, "default_vat_rate": 5.5},
+        {"description": "Pose baie vitrée coulissante", "unit": "unité", "default_price": 1200.0, "default_vat_rate": 5.5},
+        {"description": "Pose velux/fenêtre de toit", "unit": "unité", "default_price": 850.0, "default_vat_rate": 5.5},
+        {"description": "Pose volet roulant électrique", "unit": "unité", "default_price": 550.0, "default_vat_rate": 5.5},
+        {"description": "Pose volet roulant manuel", "unit": "unité", "default_price": 380.0, "default_vat_rate": 5.5},
+        # Parquets et sols
+        {"description": "Dépose parquet/sol existant", "unit": "m²", "default_price": 12.0, "default_vat_rate": 10.0},
+        {"description": "Pose parquet flottant (fourni par client)", "unit": "m²", "default_price": 25.0, "default_vat_rate": 10.0},
+        {"description": "Pose parquet flottant (fourniture incluse standard)", "unit": "m²", "default_price": 45.0, "default_vat_rate": 10.0},
+        {"description": "Pose parquet flottant (fourniture incluse qualité)", "unit": "m²", "default_price": 65.0, "default_vat_rate": 10.0},
+        {"description": "Pose parquet massif collé", "unit": "m²", "default_price": 75.0, "default_vat_rate": 10.0},
+        {"description": "Pose parquet massif cloué", "unit": "m²", "default_price": 85.0, "default_vat_rate": 10.0},
+        {"description": "Pose sol stratifié", "unit": "m²", "default_price": 35.0, "default_vat_rate": 10.0},
+        {"description": "Pose sol PVC/vinyle", "unit": "m²", "default_price": 28.0, "default_vat_rate": 10.0},
+        {"description": "Pose moquette", "unit": "m²", "default_price": 22.0, "default_vat_rate": 10.0},
+        {"description": "Pose plinthes bois", "unit": "ml", "default_price": 12.0, "default_vat_rate": 10.0},
+        {"description": "Pose plinthes MDF", "unit": "ml", "default_price": 8.0, "default_vat_rate": 10.0},
+        # Rangements
+        {"description": "Pose placard sur mesure (sans fourniture)", "unit": "ml", "default_price": 250.0, "default_vat_rate": 10.0},
+        {"description": "Pose placard sur mesure (fourniture incluse)", "unit": "ml", "default_price": 550.0, "default_vat_rate": 10.0},
+        {"description": "Pose penderie/dressing", "unit": "forfait", "default_price": 850.0, "default_vat_rate": 10.0},
+        {"description": "Pose étagères", "unit": "ml", "default_price": 45.0, "default_vat_rate": 10.0},
+        # Divers
+        {"description": "Ajustement porte (rabot, serrure)", "unit": "unité", "default_price": 65.0, "default_vat_rate": 10.0},
+        {"description": "Remplacement serrure", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
+        {"description": "Pose de vitrage (simple)", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
+    ],
+    
+    # ==================== RÉNOVATION GÉNÉRALE ====================
     "Rénovation générale": [
-        {"description": "Main d'œuvre qualifiée", "unit": "heure", "default_price": 45.0},
-        {"description": "Main d'œuvre aide", "unit": "heure", "default_price": 30.0},
-        {"description": "Déplacement", "unit": "forfait", "default_price": 50.0},
-        {"description": "Évacuation gravats", "unit": "m³", "default_price": 85.0},
-        {"description": "Nettoyage fin de chantier", "unit": "forfait", "default_price": 150.0},
-        {"description": "Location benne", "unit": "jour", "default_price": 120.0},
+        # Protection et préparation
+        {"description": "Protection de chantier (bâches, cartons)", "unit": "forfait", "default_price": 150.0, "default_vat_rate": 10.0},
+        {"description": "Protection sols lourde", "unit": "m²", "default_price": 5.0, "default_vat_rate": 10.0},
+        {"description": "Installation base vie chantier", "unit": "forfait", "default_price": 250.0, "default_vat_rate": 10.0},
+        {"description": "Déménagement mobilier (par pièce)", "unit": "pièce", "default_price": 80.0, "default_vat_rate": 10.0},
+        # Main d'œuvre
+        {"description": "Main d'œuvre qualifiée", "unit": "heure", "default_price": 45.0, "default_vat_rate": 10.0},
+        {"description": "Main d'œuvre spécialisée", "unit": "heure", "default_price": 55.0, "default_vat_rate": 10.0},
+        {"description": "Main d'œuvre aide", "unit": "heure", "default_price": 32.0, "default_vat_rate": 10.0},
+        # Déplacements et transports
+        {"description": "Déplacement (zone urbaine)", "unit": "forfait", "default_price": 45.0, "default_vat_rate": 10.0},
+        {"description": "Déplacement (hors zone)", "unit": "km", "default_price": 0.85, "default_vat_rate": 10.0},
+        {"description": "Approvisionnement matériaux", "unit": "forfait", "default_price": 120.0, "default_vat_rate": 10.0},
+        # Évacuation et nettoyage
+        {"description": "Évacuation gravats en déchetterie", "unit": "m³", "default_price": 85.0, "default_vat_rate": 10.0},
+        {"description": "Location benne 8m³ (1 semaine)", "unit": "unité", "default_price": 350.0, "default_vat_rate": 20.0},
+        {"description": "Location benne 15m³ (1 semaine)", "unit": "unité", "default_price": 450.0, "default_vat_rate": 20.0},
+        {"description": "Nettoyage fin de chantier sommaire", "unit": "forfait", "default_price": 150.0, "default_vat_rate": 10.0},
+        {"description": "Nettoyage fin de chantier complet", "unit": "forfait", "default_price": 350.0, "default_vat_rate": 10.0},
+        {"description": "Nettoyage après travaux (par m²)", "unit": "m²", "default_price": 8.0, "default_vat_rate": 10.0},
+        # Coordination
+        {"description": "Coordination de travaux", "unit": "jour", "default_price": 350.0, "default_vat_rate": 10.0},
+        {"description": "Gestion de chantier (maîtrise d'œuvre)", "unit": "%", "default_price": 8.0, "default_vat_rate": 20.0},
+        {"description": "Études techniques préalables", "unit": "forfait", "default_price": 450.0, "default_vat_rate": 20.0},
+        # Forfaits rénovation
+        {"description": "Rénovation complète salle de bain (jusqu'à 5m²)", "unit": "forfait", "default_price": 8500.0, "default_vat_rate": 10.0},
+        {"description": "Rénovation complète salle de bain (5 à 8m²)", "unit": "forfait", "default_price": 12000.0, "default_vat_rate": 10.0},
+        {"description": "Rénovation complète cuisine (hors meubles)", "unit": "forfait", "default_price": 6500.0, "default_vat_rate": 10.0},
+        {"description": "Rénovation complète studio/T1", "unit": "forfait", "default_price": 18000.0, "default_vat_rate": 10.0},
+        {"description": "Rénovation complète T2", "unit": "forfait", "default_price": 28000.0, "default_vat_rate": 10.0},
+        {"description": "Rénovation complète T3", "unit": "forfait", "default_price": 38000.0, "default_vat_rate": 10.0},
     ],
 }
 
