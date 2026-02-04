@@ -148,6 +148,48 @@ export default function ClientViewPage() {
                     )}
                 </div>
 
+                {/* Tabs if financial summary available */}
+                {financialSummary ? (
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                        <TabsList className="grid w-full grid-cols-2 mb-6">
+                            <TabsTrigger value="document" className="flex items-center gap-2">
+                                <FileText className="w-4 h-4" />
+                                {type === "devis" ? "Devis" : "Facture"}
+                            </TabsTrigger>
+                            <TabsTrigger value="summary" className="flex items-center gap-2">
+                                <BarChart3 className="w-4 h-4" />
+                                Récapitulatif projet
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="document" className="space-y-6">
+                            {renderDocumentContent()}
+                        </TabsContent>
+
+                        <TabsContent value="summary">
+                            <ProjectFinancialSummary summary={financialSummary} isPublic={true} />
+                        </TabsContent>
+                    </Tabs>
+                ) : (
+                    <div className="space-y-6">
+                        {renderDocumentContent()}
+                    </div>
+                )}
+
+                {/* Legal Footer */}
+                <div className="text-center text-xs text-slate-400 pt-8 border-t">
+                    {document.company?.siret && <p>SIRET : {document.company.siret}</p>}
+                    {document.company?.vat_number && <p>N° TVA : {document.company.vat_number}</p>}
+                    {document.company?.phone && <p>Tél : {document.company.phone}</p>}
+                    {document.company?.email && <p>Email : {document.company.email}</p>}
+                </div>
+            </div>
+        </div>
+    );
+
+    function renderDocumentContent() {
+        return (
+            <>
                 {/* Document Info */}
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-4">
@@ -193,7 +235,7 @@ export default function ClientViewPage() {
                                         <th className="text-left py-3 px-4 font-semibold">Description</th>
                                         <th className="text-right py-3 px-4 font-semibold">Qté</th>
                                         <th className="text-right py-3 px-4 font-semibold">Prix unit. HT</th>
-                                        <th className="text-right py-3 px-4 font-semibold">TVA</th>
+                                        {document.total_vat > 0 && <th className="text-right py-3 px-4 font-semibold">TVA</th>}
                                         <th className="text-right py-3 px-4 font-semibold">Total HT</th>
                                     </tr>
                                 </thead>
@@ -203,7 +245,7 @@ export default function ClientViewPage() {
                                             <td className="py-3 px-4">{item.description}</td>
                                             <td className="py-3 px-4 text-right">{item.quantity}</td>
                                             <td className="py-3 px-4 text-right">{item.unit_price?.toFixed(2)} €</td>
-                                            <td className="py-3 px-4 text-right">{item.vat_rate}%</td>
+                                            {document.total_vat > 0 && <td className="py-3 px-4 text-right">{item.vat_rate}%</td>}
                                             <td className="py-3 px-4 text-right font-medium">
                                                 {(item.quantity * item.unit_price).toFixed(2)} €
                                             </td>
@@ -215,18 +257,30 @@ export default function ClientViewPage() {
 
                         {/* Totals */}
                         <div className="mt-6 border-t pt-4 space-y-2">
-                            <div className="flex justify-end gap-8 text-sm">
-                                <span className="text-slate-500">Total HT :</span>
-                                <span className="font-medium w-28 text-right">{document.total_ht?.toFixed(2)} €</span>
-                            </div>
-                            <div className="flex justify-end gap-8 text-sm">
-                                <span className="text-slate-500">Total TVA :</span>
-                                <span className="font-medium w-28 text-right">{document.total_vat?.toFixed(2)} €</span>
-                            </div>
-                            <div className="flex justify-end gap-8 text-lg font-bold border-t pt-2 mt-2">
-                                <span>Total TTC :</span>
-                                <span className="text-orange-600 w-28 text-right">{document.total_ttc?.toFixed(2)} €</span>
-                            </div>
+                            {document.total_vat > 0 ? (
+                                <>
+                                    <div className="flex justify-end gap-8 text-sm">
+                                        <span className="text-slate-500">Total HT :</span>
+                                        <span className="font-medium w-28 text-right">{document.total_ht?.toFixed(2)} €</span>
+                                    </div>
+                                    <div className="flex justify-end gap-8 text-sm">
+                                        <span className="text-slate-500">Total TVA :</span>
+                                        <span className="font-medium w-28 text-right">{document.total_vat?.toFixed(2)} €</span>
+                                    </div>
+                                    <div className="flex justify-end gap-8 text-lg font-bold border-t pt-2 mt-2">
+                                        <span>Total TTC :</span>
+                                        <span className="text-orange-600 w-28 text-right">{document.total_ttc?.toFixed(2)} €</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="flex justify-end gap-8 text-lg font-bold">
+                                        <span>Total :</span>
+                                        <span className="text-orange-600 w-28 text-right">{document.total_ht?.toFixed(2)} €</span>
+                                    </div>
+                                    <p className="text-right text-xs text-slate-500 italic">TVA non applicable, art. 293B du CGI</p>
+                                </>
+                            )}
                             {type === "facture" && document.paid_amount > 0 && (
                                 <>
                                     <div className="flex justify-end gap-8 text-sm text-green-600">
@@ -275,15 +329,7 @@ export default function ClientViewPage() {
                         )}
                     </Button>
                 </div>
-
-                {/* Legal Footer */}
-                <div className="text-center text-xs text-slate-400 pt-8 border-t">
-                    {document.company?.siret && <p>SIRET : {document.company.siret}</p>}
-                    {document.company?.vat_number && <p>N° TVA : {document.company.vat_number}</p>}
-                    {document.company?.phone && <p>Tél : {document.company.phone}</p>}
-                    {document.company?.email && <p>Email : {document.company.email}</p>}
-                </div>
-            </div>
-        </div>
-    );
+            </>
+        );
+    }
 }
