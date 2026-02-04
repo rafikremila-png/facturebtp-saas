@@ -434,9 +434,117 @@ export default function SettingsPage() {
                                         <Input id="siret" placeholder="123 456 789 00012" value={formData.siret} onChange={handleChange("siret")} className="font-mono" data-testid="siret-input" />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="vat_number">Numéro de TVA</Label>
-                                        <Input id="vat_number" placeholder="FR12 345678901" value={formData.vat_number} onChange={handleChange("vat_number")} className="font-mono" data-testid="vat-number-input" />
+                                        <Label htmlFor="vat_number">Numéro de TVA intracommunautaire</Label>
+                                        <Input id="vat_number" placeholder="FR12 345678901" value={formData.vat_number} onChange={handleChange("vat_number")} className="font-mono" data-testid="vat-number-input" disabled={formData.is_auto_entrepreneur} />
                                     </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="rcs_rm">RCS ou RM</Label>
+                                        <Input id="rcs_rm" placeholder="RCS Paris B 123456789" value={formData.rcs_rm} onChange={handleChange("rcs_rm")} data-testid="rcs-input" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="code_ape">Code APE/NAF</Label>
+                                        <Input id="code_ape" placeholder="4332A" value={formData.code_ape} onChange={handleChange("code_ape")} className="font-mono" data-testid="code-ape-input" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="capital_social">Capital social</Label>
+                                        <Input id="capital_social" placeholder="10 000 €" value={formData.capital_social} onChange={handleChange("capital_social")} data-testid="capital-input" />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Auto-entrepreneur Mode */}
+                        <Card className={formData.is_auto_entrepreneur ? "border-amber-300 bg-amber-50/50" : ""}>
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle className="font-['Barlow_Condensed'] flex items-center gap-2">
+                                            <FileText className="w-5 h-5" />
+                                            Mode Auto-entrepreneur
+                                        </CardTitle>
+                                        <CardDescription>Activez si vous êtes auto-entrepreneur (TVA non applicable)</CardDescription>
+                                    </div>
+                                    <Switch 
+                                        checked={formData.is_auto_entrepreneur} 
+                                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_auto_entrepreneur: checked }))}
+                                        data-testid="auto-entrepreneur-toggle"
+                                    />
+                                </div>
+                            </CardHeader>
+                            {formData.is_auto_entrepreneur && (
+                                <CardContent>
+                                    <div className="bg-amber-100 border border-amber-300 rounded-lg p-4">
+                                        <div className="flex items-start gap-3">
+                                            <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
+                                            <div>
+                                                <p className="font-medium text-amber-800">TVA non applicable</p>
+                                                <p className="text-sm text-amber-700 mt-1">La mention suivante sera ajoutée automatiquement sur tous vos documents :</p>
+                                                <p className="text-sm font-mono bg-white px-2 py-1 rounded mt-2 text-amber-900">
+                                                    {formData.auto_entrepreneur_mention}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            )}
+                        </Card>
+
+                        {/* Bank Details */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="font-['Barlow_Condensed'] flex items-center gap-2">
+                                    <CreditCard className="w-5 h-5" />
+                                    Coordonnées bancaires
+                                </CardTitle>
+                                <CardDescription>Affichées sur vos factures pour le règlement par virement</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="iban">IBAN</Label>
+                                        <Input id="iban" placeholder="FR76 1234 5678 9012 3456 7890 123" value={formData.iban} onChange={handleChange("iban")} className="font-mono" data-testid="iban-input" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="bic">BIC / SWIFT</Label>
+                                        <Input id="bic" placeholder="BNPAFRPP" value={formData.bic} onChange={handleChange("bic")} className="font-mono" data-testid="bic-input" />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Payment Settings */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="font-['Barlow_Condensed']">Conditions de paiement</CardTitle>
+                                <CardDescription>Paramètres par défaut pour vos factures</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="payment_delay">Délai de paiement par défaut</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input 
+                                                id="payment_delay" 
+                                                type="number" 
+                                                min="0" 
+                                                max="90" 
+                                                value={formData.default_payment_delay_days} 
+                                                onChange={(e) => setFormData(prev => ({ ...prev, default_payment_delay_days: parseInt(e.target.value) || 30 }))}
+                                                className="w-24"
+                                                data-testid="payment-delay-input"
+                                            />
+                                            <span className="text-slate-500">jours</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-600">
+                                    <p><strong>Mentions légales automatiques sur les factures :</strong></p>
+                                    <ul className="list-disc list-inside mt-1 text-xs">
+                                        <li>Pénalités de retard au taux légal (3x le taux d'intérêt légal)</li>
+                                        <li>Indemnité forfaitaire de recouvrement de 40 €</li>
+                                    </ul>
                                 </div>
                             </CardContent>
                         </Card>
