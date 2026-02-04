@@ -2175,7 +2175,7 @@ def generate_financial_summary_pdf(summary: dict, company: CompanySettings):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
     
     buffer = BytesIO()
@@ -2190,7 +2190,44 @@ def generate_financial_summary_pdf(summary: dict, company: CompanySettings):
     normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#334155'))
     bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#0F172A'), fontName='Helvetica-Bold')
     
-    # ========== HEADER ==========
+    # ========== HEADER WITH LOGO ==========
+    logo_image = None
+    if company.logo_base64:
+        try:
+            logo_data = company.logo_base64
+            if ',' in logo_data:
+                logo_data = logo_data.split(',')[1]
+            logo_bytes = base64.b64decode(logo_data)
+            logo_buffer = BytesIO(logo_bytes)
+            logo_image = Image(logo_buffer)
+            # Scale logo (max 40mm width, 20mm height for summary PDF)
+            max_width = 40 * mm
+            max_height = 20 * mm
+            aspect = logo_image.imageWidth / logo_image.imageHeight
+            if logo_image.imageWidth > max_width or logo_image.imageHeight > max_height:
+                if aspect > (max_width / max_height):
+                    logo_image.drawWidth = max_width
+                    logo_image.drawHeight = max_width / aspect
+                else:
+                    logo_image.drawHeight = max_height
+                    logo_image.drawWidth = max_height * aspect
+            else:
+                logo_image.drawWidth = min(logo_image.imageWidth, max_width)
+                logo_image.drawHeight = logo_image.drawWidth / aspect
+        except Exception as e:
+            logging.warning(f"Failed to load logo for financial summary PDF: {str(e)}")
+            logo_image = None
+    
+    if logo_image:
+        # Center the logo above the title
+        logo_table = Table([[logo_image]], colWidths=[180*mm])
+        logo_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        elements.append(logo_table)
+        elements.append(Spacer(1, 5*mm))
+    
     elements.append(Paragraph("RÉCAPITULATIF FINANCIER", title_style))
     elements.append(Paragraph(f"Projet {summary['quote_number']}", subtitle_style))
     elements.append(Spacer(1, 5*mm))
