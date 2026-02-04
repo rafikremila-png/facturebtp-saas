@@ -325,6 +325,41 @@ export default function QuoteDetailPage() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Share Modal */}
+            <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Share2 className="w-5 h-5 text-orange-600" />
+                            Partager le devis
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <p className="text-sm text-slate-600">
+                            Envoyez ce lien à votre client. Il pourra consulter et télécharger le devis sans créer de compte.
+                        </p>
+                        <div className="flex gap-2">
+                            <Input 
+                                value={shareUrl} 
+                                readOnly 
+                                className="flex-1 font-mono text-sm"
+                                data-testid="share-url-input"
+                            />
+                            <Button onClick={copyToClipboard} variant="outline" data-testid="copy-btn">
+                                {copied ? (
+                                    <Check className="w-4 h-4 text-green-600" />
+                                ) : (
+                                    <Copy className="w-4 h-4" />
+                                )}
+                            </Button>
+                        </div>
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                            <strong>Note :</strong> Ce lien reste valide tant que vous ne le révoquez pas.
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
