@@ -135,6 +135,7 @@ class InvoiceCreate(BaseModel):
     items: List[LineItem]
     notes: str = ""
     payment_method: str = "virement"
+    payment_delay_days: Optional[int] = None  # If None, use company default
 
 class InvoiceUpdate(BaseModel):
     payment_status: Optional[str] = None
