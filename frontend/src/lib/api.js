@@ -106,4 +106,36 @@ export const createKitFromQuote = (quoteId, name, description = "") =>
     api.post(`/kits/from-quote/${quoteId}`, null, { params: { kit_name: name, kit_description: description } });
 export const resetKits = () => api.post('/kits/reset');
 
+// Share Links
+export const createQuoteShareLink = (quoteId) => api.post(`/quotes/${quoteId}/share`);
+export const revokeQuoteShareLink = (quoteId) => api.delete(`/quotes/${quoteId}/share`);
+export const createInvoiceShareLink = (invoiceId) => api.post(`/invoices/${invoiceId}/share`);
+export const revokeInvoiceShareLink = (invoiceId) => api.delete(`/invoices/${invoiceId}/share`);
+
+// Public endpoints (no auth)
+export const getPublicQuote = (token) => axios.get(`${API}/public/quote/${token}`);
+export const getPublicInvoice = (token) => axios.get(`${API}/public/invoice/${token}`);
+export const downloadPublicQuotePdf = async (token) => {
+    const response = await axios.get(`${API}/public/quote/${token}/pdf`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `devis.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+};
+export const downloadPublicInvoicePdf = async (token) => {
+    const response = await axios.get(`${API}/public/invoice/${token}/pdf`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `facture.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+};
+
 export default api;
