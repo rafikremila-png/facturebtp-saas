@@ -1871,15 +1871,30 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     if doc_type == "quote":
         doc_title = f"DEVIS N° {doc_data['quote_number']}"
     else:
-        # Check if it's an acompte or final invoice
+        # Check if it's an acompte, situation or final invoice
         is_acompte = doc_data.get('is_acompte', False)
+        is_situation = doc_data.get('is_situation', False)
         is_final = doc_data.get('is_final_invoice', False)
+        is_situation_final = doc_data.get('is_situation_final', False)
         
-        if is_acompte:
+        if is_situation:
+            situation_num = doc_data.get('situation_number', 1)
+            current_pct = doc_data.get('situation_percentage', 0)
+            chantier_ref = doc_data.get('chantier_ref', '')
+            doc_title = f"SITUATION DE TRAVAUX N° {doc_data['invoice_number']}"
+            elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
+            elements.append(Paragraph(f"Situation n°{situation_num} - Avancement {current_pct}%", ParagraphStyle('SubTitle', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#059669'))))
+            if chantier_ref:
+                elements.append(Paragraph(f"Réf. chantier: {chantier_ref}", ParagraphStyle('RefStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#6B7280'))))
+        elif is_acompte:
             acompte_num = doc_data.get('acompte_number', 1)
             doc_title = f"FACTURE D'ACOMPTE N° {doc_data['invoice_number']}"
             elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
             elements.append(Paragraph(f"Acompte n°{acompte_num}", ParagraphStyle('SubTitle', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#6366F1'))))
+        elif is_situation_final:
+            doc_title = f"DÉCOMPTE FINAL N° {doc_data['invoice_number']}"
+            elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
+            elements.append(Paragraph("Facture de solde après situations", ParagraphStyle('SubTitle', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#059669'))))
         elif is_final:
             doc_title = f"FACTURE DE SOLDE N° {doc_data['invoice_number']}"
             elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
