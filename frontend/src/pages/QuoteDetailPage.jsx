@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { getQuote, updateQuote, convertQuoteToInvoice, downloadQuotePdf, createQuoteShareLink, sendQuoteEmail } from "@/lib/api";
+import { getQuote, updateQuote, convertQuoteToInvoice, downloadQuotePdf, createQuoteShareLink, sendQuoteEmail, createAcompte, getAcomptesSummary, createFinalInvoice } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
     Select,
     SelectContent,
@@ -22,7 +23,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Download, Pencil, FileCheck, Calendar, User, Euro, Share2, Copy, Check, Mail, Send } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ArrowLeft, Download, Pencil, FileCheck, Calendar, User, Euro, Share2, Copy, Check, Mail, Send, CreditCard, Receipt, Percent, PiggyBank, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 const statusLabels = {
@@ -48,6 +50,12 @@ export default function QuoteDetailPage() {
     const [showEmailModal, setShowEmailModal] = useState(false);
     const [emailData, setEmailData] = useState({ recipient_email: "", custom_message: "" });
     const [sendingEmail, setSendingEmail] = useState(false);
+    // Acompte state
+    const [acomptesSummary, setAcomptesSummary] = useState(null);
+    const [showAcompteModal, setShowAcompteModal] = useState(false);
+    const [acompteData, setAcompteData] = useState({ acompte_type: "percentage", value: 30, notes: "" });
+    const [creatingAcompte, setCreatingAcompte] = useState(false);
+    const [creatingFinal, setCreatingFinal] = useState(false);
 
     useEffect(() => {
         loadQuote();
