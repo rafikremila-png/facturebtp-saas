@@ -654,11 +654,27 @@ async def create_invoice(invoice_data: InvoiceCreate, user: dict = Depends(get_c
     if not client:
         raise HTTPException(status_code=404, detail="Client non trouvé")
     
+    # Get company settings for default payment delay
+    settings = await get_company_settings()
+    payment_delay = invoice_data.payment_delay_days or settings.default_payment_delay_days
+    
     invoice_id = str(uuid.uuid4())
     invoice_number = await get_next_invoice_number()
     
     items = [item.model_dump() for item in invoice_data.items]
-    total_ht, total_vat, total_ttc = calculate_totals(items)
+    
+    # Handle auto-entrepreneur mode (no VAT)
+    if settings.is_auto_entrepreneur:
+        for item in items:
+            item["vat_rate"] = 0.0
+        total_ht = sum(item["quantity"] * item["unit_price"] for item in items)
+        total_vat = 0.0
+        total_ttc = total_ht
+    else:
+        total_ht, total_vat, total_ttc = calculate_totals(items)
+    
+    issue_date = datetime.now(timezone.utc)
+    payment_due_date = issue_date + timedelta(days=payment_delay)
     
     invoice_doc = {
         "id": invoice_id,
@@ -666,7 +682,8 @@ async def create_invoice(invoice_data: InvoiceCreate, user: dict = Depends(get_c
         "client_id": invoice_data.client_id,
         "client_name": client["name"],
         "quote_id": invoice_data.quote_id,
-        "issue_date": datetime.now(timezone.utc).isoformat(),
+        "issue_date": issue_date.isoformat(),
+        "payment_due_date": payment_due_date.isoformat(),
         "items": items,
         "total_ht": total_ht,
         "total_vat": total_vat,
