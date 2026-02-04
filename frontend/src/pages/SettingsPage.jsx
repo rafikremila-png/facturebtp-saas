@@ -106,7 +106,17 @@ export default function SettingsPage() {
                     default_vat_rates: settingsRes.data.default_vat_rates?.length > 0 
                         ? settingsRes.data.default_vat_rates 
                         : [20.0, 10.0, 5.5, 2.1],
-                    logo_base64: settingsRes.data.logo_base64 || null
+                    logo_base64: settingsRes.data.logo_base64 || null,
+                    // New French legal fields
+                    rcs_rm: settingsRes.data.rcs_rm || "",
+                    code_ape: settingsRes.data.code_ape || "",
+                    capital_social: settingsRes.data.capital_social || "",
+                    iban: settingsRes.data.iban || "",
+                    bic: settingsRes.data.bic || "",
+                    is_auto_entrepreneur: settingsRes.data.is_auto_entrepreneur || false,
+                    auto_entrepreneur_mention: settingsRes.data.auto_entrepreneur_mention || "TVA non applicable, art. 293B du CGI",
+                    default_payment_delay_days: settingsRes.data.default_payment_delay_days || 30,
+                    late_payment_rate: settingsRes.data.late_payment_rate || 3.0
                 });
             }
             
