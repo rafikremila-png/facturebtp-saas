@@ -695,8 +695,13 @@ async def update_quote(quote_id: str, quote_data: QuoteUpdate, user: dict = Depe
         update_data["validity_date"] = validity_date.isoformat()
     
     if quote_data.items:
+        # Get company settings to check auto-entrepreneur mode
+        settings = await get_company_settings()
         items = [item.model_dump() for item in quote_data.items]
-        total_ht, total_vat, total_ttc = calculate_totals(items)
+        # Apply auto-entrepreneur mode: set vat_rate to 0 for all items
+        if settings.is_auto_entrepreneur:
+            items = [{**item, "vat_rate": 0.0} for item in items]
+        total_ht, total_vat, total_ttc = calculate_totals(items, settings.is_auto_entrepreneur)
         update_data["items"] = items
         update_data["total_ht"] = total_ht
         update_data["total_vat"] = total_vat
