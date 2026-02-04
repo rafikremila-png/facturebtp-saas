@@ -4,7 +4,7 @@
 Build a production-ready MVP web application for a French construction company (BTP) to manage quotes (devis) and invoices (factures). The application must be simple, fast, and legally compliant in France.
 
 ## User Persona
-- **Primary User**: French construction company owner/administrator
+- **Primary User**: French construction company owner/administrator (artisans, auto-entrepreneurs, PME)
 - **Technical Level**: Non-technical users who need simple, efficient quote and invoice management
 - **Use Case**: Create professional quotes, convert to invoices, track payments
 
@@ -32,6 +32,9 @@ Build a production-ready MVP web application for a French construction company (
 7. **Kits de rénovation** - Predefined line item bundles
 8. **Vue client publique** - Share documents via secure link
 9. **Envoi email** - Send quotes/invoices by email with PDF attachment
+10. **Mode auto-entrepreneur** - TVA non applicable (art. 293B du CGI)
+11. **Informations légales étendues** - RCS/RM, Code APE, Capital social, IBAN/BIC
+12. **Délai de paiement configurable** - Défaut 30 jours, mentions légales automatiques
 
 ## Architecture
 
