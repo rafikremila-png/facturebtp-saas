@@ -169,6 +169,73 @@ class DashboardStats(BaseModel):
     total_quotes: int
     total_invoices: int
 
+# ============== RENOVATION KITS MODELS ==============
+
+class KitItem(BaseModel):
+    description: str
+    unit: str = "unité"
+    quantity: float = 1.0
+    unit_price: float = 0.0
+    vat_rate: float = 20.0
+
+class KitCreate(BaseModel):
+    name: str
+    description: str = ""
+    items: List[KitItem]
+    is_default: bool = False
+
+class KitUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    items: Optional[List[KitItem]] = None
+
+class KitResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    items: List[dict]
+    is_default: bool
+    created_at: str
+
+# Default renovation kits
+DEFAULT_RENOVATION_KITS = [
+    {
+        "name": "Rénovation salle de bain",
+        "description": "Kit complet pour la rénovation d'une salle de bain standard",
+        "items": [
+            {"description": "Démolition / Dépose sanitaires existants", "unit": "forfait", "quantity": 1, "unit_price": 450.0, "vat_rate": 20.0},
+            {"description": "Plomberie - Alimentation et évacuation", "unit": "forfait", "quantity": 1, "unit_price": 850.0, "vat_rate": 20.0},
+            {"description": "Carrelage sol", "unit": "m²", "quantity": 8, "unit_price": 55.0, "vat_rate": 20.0},
+            {"description": "Carrelage mural / Faïence", "unit": "m²", "quantity": 15, "unit_price": 60.0, "vat_rate": 20.0},
+            {"description": "Peinture plafond (2 couches)", "unit": "m²", "quantity": 8, "unit_price": 22.0, "vat_rate": 20.0},
+            {"description": "Installation sanitaires (WC, lavabo, douche)", "unit": "forfait", "quantity": 1, "unit_price": 650.0, "vat_rate": 20.0},
+        ]
+    },
+    {
+        "name": "Installation cuisine",
+        "description": "Kit pour l'installation complète d'une cuisine équipée",
+        "items": [
+            {"description": "Dépose ancienne cuisine", "unit": "forfait", "quantity": 1, "unit_price": 350.0, "vat_rate": 20.0},
+            {"description": "Installation meubles de cuisine", "unit": "ml", "quantity": 5, "unit_price": 180.0, "vat_rate": 20.0},
+            {"description": "Installation électroménager", "unit": "unité", "quantity": 4, "unit_price": 85.0, "vat_rate": 20.0},
+            {"description": "Plomberie - Évier et lave-vaisselle", "unit": "forfait", "quantity": 1, "unit_price": 380.0, "vat_rate": 20.0},
+            {"description": "Électricité - Prises et raccordements", "unit": "forfait", "quantity": 1, "unit_price": 450.0, "vat_rate": 20.0},
+            {"description": "Crédence et finitions", "unit": "ml", "quantity": 3, "unit_price": 120.0, "vat_rate": 20.0},
+        ]
+    },
+    {
+        "name": "Rénovation électrique complète",
+        "description": "Mise aux normes et rénovation complète de l'installation électrique",
+        "items": [
+            {"description": "Tableau électrique avec disjoncteurs", "unit": "unité", "quantity": 1, "unit_price": 950.0, "vat_rate": 20.0},
+            {"description": "Tirage de câbles", "unit": "ml", "quantity": 80, "unit_price": 12.0, "vat_rate": 20.0},
+            {"description": "Pose prises électriques", "unit": "unité", "quantity": 15, "unit_price": 65.0, "vat_rate": 20.0},
+            {"description": "Pose interrupteurs", "unit": "unité", "quantity": 8, "unit_price": 55.0, "vat_rate": 20.0},
+            {"description": "Mise en conformité NF C 15-100", "unit": "forfait", "quantity": 1, "unit_price": 350.0, "vat_rate": 20.0},
+        ]
+    }
+]
+
 # ============== PREDEFINED ITEMS MODELS ==============
 
 class PredefinedItemCreate(BaseModel):
