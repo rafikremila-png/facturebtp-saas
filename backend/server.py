@@ -161,6 +161,42 @@ class InvoiceResponse(BaseModel):
     notes: str
     created_at: str
     share_token: Optional[str] = None
+    # Acompte fields
+    is_acompte: bool = False
+    acompte_type: Optional[str] = None  # "percentage" or "amount"
+    acompte_value: Optional[float] = None  # percentage value or amount
+    parent_quote_id: Optional[str] = None  # For acompte invoices
+    acompte_number: Optional[int] = None  # 1, 2, 3... for ordering
+
+# ============== ACOMPTE MODELS ==============
+
+class AcompteCreate(BaseModel):
+    quote_id: str
+    acompte_type: str  # "percentage" or "amount"
+    value: float  # percentage (e.g., 30) or amount (e.g., 1000)
+    notes: str = ""
+    payment_method: str = "virement"
+
+class AcompteResponse(BaseModel):
+    id: str
+    invoice_number: str
+    quote_id: str
+    quote_number: str
+    client_id: str
+    client_name: str
+    issue_date: str
+    payment_due_date: str
+    acompte_type: str
+    acompte_value: float
+    acompte_number: int
+    total_ht: float
+    total_vat: float
+    total_ttc: float
+    payment_status: str
+    payment_method: str
+    paid_amount: float
+    notes: str
+    created_at: str
 
 class CompanySettings(BaseModel):
     company_name: str = ""
