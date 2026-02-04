@@ -204,6 +204,50 @@ class AcompteResponse(BaseModel):
     notes: str
     created_at: str
 
+# ============== SITUATION MODELS ==============
+
+class SituationLineItem(BaseModel):
+    """Line item with progress percentage for per-line situation"""
+    description: str
+    quantity: float
+    unit_price: float
+    vat_rate: float = 20.0
+    progress_percent: float  # % of this line completed in this situation
+
+class SituationCreate(BaseModel):
+    quote_id: str
+    situation_type: str  # "global" or "per_line"
+    global_percentage: Optional[float] = None  # For global type: cumulative %
+    line_items: Optional[List[SituationLineItem]] = None  # For per_line type
+    notes: str = ""
+    payment_method: str = "virement"
+    chantier_ref: str = ""  # Optional site reference
+
+class SituationResponse(BaseModel):
+    id: str
+    invoice_number: str
+    quote_id: str
+    quote_number: str
+    client_id: str
+    client_name: str
+    issue_date: str
+    payment_due_date: str
+    situation_type: str
+    situation_number: int
+    current_percentage: float  # Current cumulative %
+    previous_percentage: float  # Previous cumulative %
+    situation_percentage: float  # % for this situation only (current - previous)
+    items: List[dict]
+    total_ht: float
+    total_vat: float
+    total_ttc: float
+    payment_status: str
+    payment_method: str
+    paid_amount: float
+    notes: str
+    chantier_ref: str
+    created_at: str
+
 class CompanySettings(BaseModel):
     company_name: str = ""
     address: str = ""
