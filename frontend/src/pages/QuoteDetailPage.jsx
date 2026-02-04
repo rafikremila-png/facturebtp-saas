@@ -532,7 +532,7 @@ export default function QuoteDetailPage() {
                                 <TableHead className="text-white font-semibold">Description</TableHead>
                                 <TableHead className="text-white font-semibold text-right">Qté</TableHead>
                                 <TableHead className="text-white font-semibold text-right">Prix unit. HT</TableHead>
-                                <TableHead className="text-white font-semibold text-right">TVA</TableHead>
+                                {quote.total_vat > 0 && <TableHead className="text-white font-semibold text-right">TVA</TableHead>}
                                 <TableHead className="text-white font-semibold text-right">Total HT</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -542,7 +542,7 @@ export default function QuoteDetailPage() {
                                     <TableCell className="font-medium">{item.description}</TableCell>
                                     <TableCell className="text-right">{item.quantity}</TableCell>
                                     <TableCell className="text-right">{formatCurrency(item.unit_price)}</TableCell>
-                                    <TableCell className="text-right">{item.vat_rate}%</TableCell>
+                                    {quote.total_vat > 0 && <TableCell className="text-right">{item.vat_rate}%</TableCell>}
                                     <TableCell className="text-right font-medium">
                                         {formatCurrency(item.quantity * item.unit_price)}
                                     </TableCell>
