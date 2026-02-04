@@ -138,4 +138,9 @@ export const downloadPublicInvoicePdf = async (token) => {
     window.URL.revokeObjectURL(url);
 };
 
+// Email
+export const sendQuoteEmail = (quoteId, data) => api.post(`/quotes/${quoteId}/send-email`, data);
+export const sendInvoiceEmail = (invoiceId, data) => api.post(`/invoices/${invoiceId}/send-email`, data);
+export const getEmailStatus = () => api.get('/email/status');
+
 export default api;
