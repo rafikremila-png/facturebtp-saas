@@ -127,6 +127,15 @@ export default function QuoteDetailPage() {
         }
     };
 
+    const loadSituationsSummary = async () => {
+        try {
+            const response = await getSituationsSummary(id);
+            setSituationsSummary(response.data);
+        } catch (error) {
+            console.error("Error loading situations summary:", error);
+        }
+    };
+
     const handleStatusChange = async (newStatus) => {
         try {
             await updateQuote(id, { status: newStatus });
@@ -177,6 +186,82 @@ export default function QuoteDetailPage() {
             setCreatingAcompte(false);
         }
     };
+    
+    const handleCreateSituation = async () => {
+        const currentProgress = situationsSummary?.current_progress_percentage || 0;
+        
+        if (situationData.situation_type === 'global') {
+            if (situationData.global_percentage <= currentProgress) {
+                toast.error(`Le % doit être supérieur au cumul actuel (${currentProgress}%)`);
+                return;
+            }
+            if (situationData.global_percentage > 100) {
+                toast.error("Le pourcentage ne peut pas dépasser 100%");
+                return;
+            }
+        }
+        
+        setCreatingSituation(true);
+        try {
+            const payload = {
+                quote_id: id,
+                situation_type: situationData.situation_type,
+                notes: situationData.notes,
+                chantier_ref: situationData.chantier_ref || `Chantier ${quote?.quote_number}`
+            };
+            
+            if (situationData.situation_type === 'global') {
+                payload.global_percentage = parseFloat(situationData.global_percentage);
+            } else {
+                payload.line_items = situationData.line_items.map(item => ({
+                    description: item.description,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    vat_rate: item.vat_rate,
+                    progress_percent: item.progress_percent
+                }));
+            }
+            
+            const response = await createSituation(id, payload);
+            toast.success(`Situation n°${response.data.situation_number} créée`);
+            setShowSituationModal(false);
+            setSituationData({ 
+                situation_type: "global", 
+                global_percentage: 30, 
+                line_items: [],
+                notes: "",
+                chantier_ref: ""
+            });
+            loadSituationsSummary();
+            navigate(`/factures/${response.data.id}`);
+        } catch (error) {
+            const message = error.response?.data?.detail || "Erreur lors de la création de la situation";
+            toast.error(message);
+        } finally {
+            setCreatingSituation(false);
+        }
+    };
+    
+    const handleCreateSituationFinalInvoice = async () => {
+        setCreatingSituationFinal(true);
+        try {
+            const response = await createSituationFinalInvoice(id);
+            toast.success("Décompte final créé avec succès");
+            navigate(`/factures/${response.data.id}`);
+        } catch (error) {
+            const message = error.response?.data?.detail || "Erreur lors de la création du décompte final";
+            toast.error(message);
+        } finally {
+            setCreatingSituationFinal(false);
+        }
+    };
+    
+    const updateLineItemProgress = (index, newValue) => {
+        const newLineItems = [...situationData.line_items];
+        newLineItems[index] = { ...newLineItems[index], progress_percent: newValue };
+        setSituationData(prev => ({ ...prev, line_items: newLineItems }));
+    };
+
 
     const handleCreateFinalInvoice = async () => {
         setCreatingFinal(true);
