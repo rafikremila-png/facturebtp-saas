@@ -107,6 +107,7 @@ function InvoiceViewPage() {
             <div className="flex justify-between">
                 <Button variant="ghost" onClick={function() { navigate("/factures"); }} data-testid="back-btn"><ArrowLeft className="w-4 h-4 mr-2" />Retour</Button>
                 <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setShowEmailModal(true)} className="bg-blue-50 hover:bg-blue-100 border-blue-200" data-testid="send-email-btn"><Mail className="w-4 h-4 mr-2 text-blue-600" />Envoyer par email</Button>
                     <Button variant="outline" onClick={handleShare} data-testid="share-btn"><Share2 className="w-4 h-4 mr-2" />Partager</Button>
                     <Button variant="outline" onClick={downloadPdf} data-testid="download-pdf-btn"><Download className="w-4 h-4 mr-2" />PDF</Button>
                     {invoice.payment_status !== "paye" && <Button className="bg-green-600" onClick={markPaid} data-testid="mark-paid-btn"><CheckCircle className="w-4 h-4 mr-2" />Payée</Button>}
