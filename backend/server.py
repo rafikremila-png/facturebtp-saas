@@ -904,10 +904,12 @@ async def create_quote(quote_data: QuoteCreate, user: dict = Depends(get_current
     return QuoteResponse(**quote_doc)
 
 @api_router.get("/quotes", response_model=List[QuoteResponse])
-async def list_quotes(status: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def list_quotes(status: Optional[str] = None, client_id: Optional[str] = None, user: dict = Depends(get_current_user)):
     query = {}
     if status:
         query["status"] = status
+    if client_id:
+        query["client_id"] = client_id
     quotes = await db.quotes.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [QuoteResponse(**q) for q in quotes]
 
