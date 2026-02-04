@@ -29,6 +29,9 @@ Build a production-ready MVP web application for a French construction company (
 4. PDF generation with company details, legal mentions (SIRET, VAT)
 5. Company settings (logo, SIRET, VAT, default VAT rates)
 6. Dashboard with KPIs
+7. **Kits de rénovation** - Predefined line item bundles
+8. **Vue client publique** - Share documents via secure link
+9. **Envoi email** - Send quotes/invoices by email with PDF attachment
 
 ## Architecture
 
@@ -37,6 +40,7 @@ Build a production-ready MVP web application for a French construction company (
 - MongoDB for data persistence
 - JWT authentication
 - ReportLab for PDF generation
+- Resend for email sending (MOCKED - needs real API key)
 
 ### Frontend (React)
 - `/app/frontend/src/` - React application
@@ -47,12 +51,14 @@ Build a production-ready MVP web application for a French construction company (
 ### API Endpoints
 - Auth: `/api/auth/register`, `/api/auth/login`, `/api/auth/me`
 - Clients: `/api/clients` (CRUD)
-- Quotes: `/api/quotes` (CRUD), `/api/quotes/{id}/convert`, `/api/quotes/{id}/pdf`
-- Invoices: `/api/invoices` (CRUD), `/api/invoices/{id}/pdf`
+- Quotes: `/api/quotes` (CRUD), `/api/quotes/{id}/convert`, `/api/quotes/{id}/pdf`, `/api/quotes/{id}/share`, `/api/quotes/{id}/send-email`
+- Invoices: `/api/invoices` (CRUD), `/api/invoices/{id}/pdf`, `/api/invoices/{id}/share`, `/api/invoices/{id}/send-email`
 - Settings: `/api/settings`, `/api/settings/logo`
 - Dashboard: `/api/dashboard`
+- Kits: `/api/kits` (CRUD), `/api/kits/from-quote/{id}`, `/api/kits/reset`
+- Public: `/api/public/quote/{token}`, `/api/public/invoice/{token}` (no auth required)
 
-## What's Been Implemented (Jan 2026)
+## What's Been Implemented (Feb 2026)
 
 ### Backend ✅
 - [x] JWT Authentication (register, login, token validation)
