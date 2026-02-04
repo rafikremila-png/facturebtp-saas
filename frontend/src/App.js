@@ -57,6 +57,9 @@ const PublicRoute = ({ children }) => {
 function AppRoutes() {
     return (
         <Routes>
+            {/* Public client view - no auth required */}
+            <Route path="/client/:type/:token" element={<ClientViewPage />} />
+            
             <Route path="/login" element={
                 <PublicRoute>
                     <LoginPage />
