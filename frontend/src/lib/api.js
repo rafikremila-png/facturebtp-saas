@@ -65,6 +65,13 @@ export const getInvoice = (id) => api.get(`/invoices/${id}`);
 export const createInvoice = (data) => api.post('/invoices', data);
 export const updateInvoice = (id, data) => api.put(`/invoices/${id}`, data);
 export const deleteInvoice = (id) => api.delete(`/invoices/${id}`);
+
+// Retenue de garantie (Retention Guarantee)
+export const applyRetenueGarantie = (invoiceId, data) => api.post(`/invoices/${invoiceId}/retenue-garantie`, data);
+export const removeRetenueGarantie = (invoiceId) => api.delete(`/invoices/${invoiceId}/retenue-garantie`);
+export const releaseRetenueGarantie = (invoiceId) => api.post(`/invoices/${invoiceId}/retenue-garantie/release`);
+export const getQuoteRetenuesSummary = (quoteId) => api.get(`/quotes/${quoteId}/retenues-garantie/summary`);
+
 export const downloadInvoicePdf = async (id, invoiceNumber) => {
     const response = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
     const url = window.URL.createObjectURL(new Blob([response.data]));
