@@ -1,13 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { 
     Euro, TrendingUp, Receipt, Shield, FileText, 
     CheckCircle, Clock, AlertCircle, Calendar,
-    PiggyBank, HardHat, Building2, ArrowRight
+    PiggyBank, HardHat, Building2, ArrowRight, Download, Loader2
 } from "lucide-react";
+import { downloadFinancialSummaryPdf } from "@/lib/api";
+import { toast } from "sonner";
 
 const formatCurrency = (amount) => {
     return new Intl.NumberFormat('fr-FR', { 
