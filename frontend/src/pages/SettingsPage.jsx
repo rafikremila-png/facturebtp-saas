@@ -59,6 +59,19 @@ export default function SettingsPage() {
         default_vat_rate: 20
     });
 
+    // Kits state
+    const [kits, setKits] = useState([]);
+    const [editingKit, setEditingKit] = useState(null);
+    const [showDeleteKitDialog, setShowDeleteKitDialog] = useState(null);
+    const [showResetKitsDialog, setShowResetKitsDialog] = useState(false);
+    const [expandedKit, setExpandedKit] = useState(null);
+    const [showNewKitModal, setShowNewKitModal] = useState(false);
+    const [newKit, setNewKit] = useState({
+        name: "",
+        description: "",
+        items: [{ description: "", unit: "unité", quantity: 1, unit_price: 0, vat_rate: 20 }]
+    });
+
     useEffect(() => {
         loadData();
     }, []);
