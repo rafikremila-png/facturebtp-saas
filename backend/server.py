@@ -627,13 +627,20 @@ async def create_quote(quote_data: QuoteCreate, user: dict = Depends(get_current
     if not client:
         raise HTTPException(status_code=404, detail="Client non trouvé")
     
+    # Get company settings to check auto-entrepreneur mode
+    settings = await get_company_settings()
+    
     quote_id = str(uuid.uuid4())
     quote_number = await get_next_quote_number()
     issue_date = datetime.now(timezone.utc)
     validity_date = issue_date + timedelta(days=quote_data.validity_days)
     
     items = [item.model_dump() for item in quote_data.items]
-    total_ht, total_vat, total_ttc = calculate_totals(items)
+    # Apply auto-entrepreneur mode: set vat_rate to 0 for all items
+    if settings.is_auto_entrepreneur:
+        items = [{**item, "vat_rate": 0.0} for item in items]
+    
+    total_ht, total_vat, total_ttc = calculate_totals(items, settings.is_auto_entrepreneur)
     
     quote_doc = {
         "id": quote_id,
