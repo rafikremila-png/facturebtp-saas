@@ -120,7 +120,11 @@ export default function SettingsPage() {
                     is_auto_entrepreneur: settingsRes.data.is_auto_entrepreneur || false,
                     auto_entrepreneur_mention: settingsRes.data.auto_entrepreneur_mention || "TVA non applicable, art. 293B du CGI",
                     default_payment_delay_days: settingsRes.data.default_payment_delay_days || 30,
-                    late_payment_rate: settingsRes.data.late_payment_rate || 3.0
+                    late_payment_rate: settingsRes.data.late_payment_rate || 3.0,
+                    // Retenue de garantie settings
+                    default_retenue_garantie_enabled: settingsRes.data.default_retenue_garantie_enabled || false,
+                    default_retenue_garantie_rate: settingsRes.data.default_retenue_garantie_rate || 5.0,
+                    default_retenue_garantie_duration_months: settingsRes.data.default_retenue_garantie_duration_months || 12
                 });
             }
             
