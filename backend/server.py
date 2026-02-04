@@ -2482,7 +2482,7 @@ async def initialize_default_items():
                     "description": item["description"],
                     "unit": item["unit"],
                     "default_price": item["default_price"],
-                    "default_vat_rate": 20.0
+                    "default_vat_rate": item.get("default_vat_rate", 20.0)
                 }
                 await db.predefined_items.insert_one(item_doc)
 
