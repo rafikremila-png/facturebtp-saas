@@ -425,7 +425,7 @@ export default function QuoteDetailPage() {
                     {(quote.status === "accepte" || quote.status === "envoye") && (
                         <Button 
                             className="bg-emerald-600 hover:bg-emerald-700"
-                            onClick={() => setShowSituationModal(true)}
+                            onClick={openSituationModal}
                             data-testid="create-situation-btn"
                         >
                             <HardHat className="w-4 h-4 mr-2" />
