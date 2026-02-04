@@ -299,8 +299,19 @@ Build a production-ready MVP web application for a French construction company (
 3. **P2: Multi-utilisateurs** avec rôles (Admin, Commercial, Comptable)
 4. **P3: Relances automatiques** pour factures impayées
 
+### Bug Select - Placeholder + Valeur concaténés ✅ (Feb 4, 2026)
+- **Problème** : Les composants Select affichaient le placeholder ET la valeur sélectionnée concaténés (ex: "Choisir une catégorieMaçonnerie")
+- **Cause** : Structure du composant Radix SelectTrigger où les spans enfants ne remplaçaient pas correctement le placeholder
+- **Solution** : Modification de `SelectTrigger` dans `frontend/src/components/ui/select.jsx` :
+  - Enveloppe les children dans un span avec classe `[&>span]:contents`
+  - Force `display: contents` sur les spans enfants de Radix
+  - Empêche la concaténation placeholder + valeur
+- **Pages corrigées** : `/devis/new`, `/factures/new`, `/parametres`
+- **Tests** : Tous les Selects vérifié - 100% de réussite
+
 ## Test Reports Created
 - `/app/test_reports/iteration_5.json` - Situations testing
 - `/app/test_reports/iteration_6.json` - Retenue de garantie testing
 - `/app/test_reports/iteration_7.json` - Financial summary testing
 - `/app/test_reports/iteration_8.json` - PDF export testing (Feb 4, 2026)
+- `/app/test_reports/iteration_9.json` - Select bug fix testing (Feb 4, 2026)
