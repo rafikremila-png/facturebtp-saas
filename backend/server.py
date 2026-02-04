@@ -150,6 +150,7 @@ class InvoiceResponse(BaseModel):
     client_name: str
     quote_id: Optional[str]
     issue_date: str
+    payment_due_date: str  # New field
     items: List[dict]
     total_ht: float
     total_vat: float
