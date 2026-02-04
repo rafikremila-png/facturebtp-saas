@@ -96,4 +96,14 @@ export const updatePredefinedItem = (id, data) => api.put(`/predefined-items/${i
 export const deletePredefinedItem = (id) => api.delete(`/predefined-items/${id}`);
 export const resetPredefinedItems = () => api.post('/predefined-items/reset');
 
+// Renovation Kits
+export const getKits = () => api.get('/kits');
+export const getKit = (id) => api.get(`/kits/${id}`);
+export const createKit = (data) => api.post('/kits', data);
+export const updateKit = (id, data) => api.put(`/kits/${id}`, data);
+export const deleteKit = (id) => api.delete(`/kits/${id}`);
+export const createKitFromQuote = (quoteId, name, description = "") => 
+    api.post(`/kits/from-quote/${quoteId}`, null, { params: { kit_name: name, kit_description: description } });
+export const resetKits = () => api.post('/kits/reset');
+
 export default api;
