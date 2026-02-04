@@ -236,7 +236,8 @@ export default function QuoteFormPage() {
         
         formData.items.forEach(item => {
             const lineHT = (parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0);
-            const lineVAT = lineHT * ((parseFloat(item.vat_rate) || 0) / 100);
+            // In auto-entrepreneur mode, no VAT
+            const lineVAT = isAutoEntrepreneur ? 0 : lineHT * ((parseFloat(item.vat_rate) || 0) / 100);
             totalHT += lineHT;
             totalVAT += lineVAT;
         });
