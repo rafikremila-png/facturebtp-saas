@@ -150,7 +150,7 @@ class InvoiceResponse(BaseModel):
     client_name: str
     quote_id: Optional[str]
     issue_date: str
-    payment_due_date: str  # New field
+    payment_due_date: str
     items: List[dict]
     total_ht: float
     total_vat: float
@@ -163,10 +163,16 @@ class InvoiceResponse(BaseModel):
     share_token: Optional[str] = None
     # Acompte fields
     is_acompte: bool = False
-    acompte_type: Optional[str] = None  # "percentage" or "amount"
-    acompte_value: Optional[float] = None  # percentage value or amount
-    parent_quote_id: Optional[str] = None  # For acompte invoices
-    acompte_number: Optional[int] = None  # 1, 2, 3... for ordering
+    acompte_type: Optional[str] = None
+    acompte_value: Optional[float] = None
+    parent_quote_id: Optional[str] = None
+    acompte_number: Optional[int] = None
+    # Situation fields
+    is_situation: bool = False
+    situation_number: Optional[int] = None
+    situation_percentage: Optional[float] = None  # Current cumulative %
+    previous_percentage: Optional[float] = None  # Previous cumulative %
+    chantier_ref: Optional[str] = None
 
 # ============== ACOMPTE MODELS ==============
 
