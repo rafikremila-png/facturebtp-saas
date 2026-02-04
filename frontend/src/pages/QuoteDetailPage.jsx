@@ -1017,6 +1017,223 @@ export default function QuoteDetailPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Situation Modal */}
+            <Dialog open={showSituationModal} onOpenChange={setShowSituationModal}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <HardHat className="w-5 h-5 text-emerald-600" />
+                            Créer une situation de travaux
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        {/* Summary */}
+                        <div className="bg-emerald-50 rounded-lg p-4 space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span>Total du devis:</span>
+                                <span className="font-bold">{formatCurrency(quote?.total_ttc || 0)}</span>
+                            </div>
+                            {situationsSummary && situationsSummary.situations_count > 0 && (
+                                <>
+                                    <div className="flex justify-between text-sm">
+                                        <span>Avancement actuel:</span>
+                                        <span className="font-medium text-emerald-600">{situationsSummary.current_progress_percentage}%</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span>Déjà facturé:</span>
+                                        <span className="font-medium">-{formatCurrency(situationsSummary.total_situations_ttc)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm font-bold border-t pt-2">
+                                        <span>Restant:</span>
+                                        <span>{formatCurrency(situationsSummary.remaining_ttc)}</span>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Type selection */}
+                        <div className="space-y-3">
+                            <Label>Type de situation</Label>
+                            <Tabs 
+                                value={situationData.situation_type} 
+                                onValueChange={(v) => {
+                                    setSituationData(prev => ({ ...prev, situation_type: v }));
+                                    if (v === 'per_line') {
+                                        initializeLineItems();
+                                    }
+                                }}
+                            >
+                                <TabsList className="grid w-full grid-cols-2">
+                                    <TabsTrigger value="global" className="flex items-center gap-2">
+                                        <Percent className="w-4 h-4" />
+                                        % Global
+                                    </TabsTrigger>
+                                    <TabsTrigger value="per_line" className="flex items-center gap-2">
+                                        <ClipboardList className="w-4 h-4" />
+                                        Par ligne
+                                    </TabsTrigger>
+                                </TabsList>
+
+                                <TabsContent value="global" className="mt-4 space-y-4">
+                                    <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-600">
+                                        <strong>Mode global :</strong> Appliquer un pourcentage d'avancement identique sur l'ensemble du devis.
+                                    </div>
+                                    
+                                    <div className="space-y-3">
+                                        <Label>Avancement cumulé (%)</Label>
+                                        <div className="flex items-center gap-4">
+                                            <Slider
+                                                value={[situationData.global_percentage]}
+                                                onValueChange={(v) => setSituationData(prev => ({ ...prev, global_percentage: v[0] }))}
+                                                min={situationsSummary?.current_progress_percentage || 0}
+                                                max={100}
+                                                step={5}
+                                                className="flex-1"
+                                            />
+                                            <div className="flex items-center gap-2 w-24">
+                                                <Input
+                                                    type="number"
+                                                    min={situationsSummary?.current_progress_percentage || 0}
+                                                    max={100}
+                                                    value={situationData.global_percentage}
+                                                    onChange={(e) => setSituationData(prev => ({ ...prev, global_percentage: parseFloat(e.target.value) || 0 }))}
+                                                    className="text-center"
+                                                    data-testid="situation-global-percentage"
+                                                />
+                                                <span className="font-medium">%</span>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Quick buttons */}
+                                        <div className="flex gap-2 flex-wrap">
+                                            {[25, 50, 75, 100].filter(p => p > (situationsSummary?.current_progress_percentage || 0)).map(pct => (
+                                                <Button
+                                                    key={pct}
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setSituationData(prev => ({ ...prev, global_percentage: pct }))}
+                                                    className={situationData.global_percentage === pct ? 'border-emerald-500 bg-emerald-50' : ''}
+                                                >
+                                                    {pct}%
+                                                </Button>
+                                            ))}
+                                        </div>
+                                        
+                                        {/* Preview */}
+                                        <div className="bg-white border rounded-lg p-3 space-y-1">
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-slate-500">Cette situation:</span>
+                                                <span className="font-medium">
+                                                    {(situationData.global_percentage - (situationsSummary?.current_progress_percentage || 0)).toFixed(1)}% 
+                                                    ({formatCurrency(
+                                                        ((quote?.total_ttc || 0) * ((situationData.global_percentage - (situationsSummary?.current_progress_percentage || 0)) / 100))
+                                                    )} TTC)
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-slate-500">Après cette situation:</span>
+                                                <span className="font-bold text-emerald-600">{situationData.global_percentage}% d'avancement</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </TabsContent>
+
+                                <TabsContent value="per_line" className="mt-4 space-y-4">
+                                    <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-600">
+                                        <strong>Mode par ligne :</strong> Définir l'avancement pour chaque poste du devis individuellement.
+                                    </div>
+                                    
+                                    <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                                        {situationData.line_items.map((item, index) => {
+                                            const prevPct = situationsSummary?.line_progress?.[index]?.cumulative_percent || 0;
+                                            return (
+                                                <div key={index} className="bg-white border rounded-lg p-3 space-y-2">
+                                                    <div className="flex justify-between items-start">
+                                                        <p className="font-medium text-sm text-slate-900 flex-1 pr-2">{item.description}</p>
+                                                        <span className="text-xs text-slate-500 whitespace-nowrap">
+                                                            {formatCurrency(item.quantity * item.unit_price)} HT
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <Slider
+                                                            value={[item.progress_percent]}
+                                                            onValueChange={(v) => updateLineItemProgress(index, v[0])}
+                                                            min={prevPct}
+                                                            max={100}
+                                                            step={5}
+                                                            className="flex-1"
+                                                        />
+                                                        <div className="flex items-center gap-1 w-20">
+                                                            <Input
+                                                                type="number"
+                                                                min={prevPct}
+                                                                max={100}
+                                                                value={item.progress_percent}
+                                                                onChange={(e) => updateLineItemProgress(index, parseFloat(e.target.value) || prevPct)}
+                                                                className="text-center text-sm h-8"
+                                                            />
+                                                            <span className="text-sm">%</span>
+                                                        </div>
+                                                    </div>
+                                                    {prevPct > 0 && (
+                                                        <p className="text-xs text-slate-400">Cumul précédent: {prevPct}%</p>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </TabsContent>
+                            </Tabs>
+                        </div>
+
+                        {/* Site reference */}
+                        <div className="space-y-2">
+                            <Label>Référence chantier (optionnel)</Label>
+                            <Input
+                                placeholder={`Chantier ${quote?.quote_number || ''}`}
+                                value={situationData.chantier_ref}
+                                onChange={(e) => setSituationData(prev => ({ ...prev, chantier_ref: e.target.value }))}
+                            />
+                        </div>
+
+                        {/* Notes */}
+                        <div className="space-y-2">
+                            <Label>Notes (optionnel)</Label>
+                            <Textarea
+                                placeholder="Notes pour la situation de travaux..."
+                                value={situationData.notes}
+                                onChange={(e) => setSituationData(prev => ({ ...prev, notes: e.target.value }))}
+                                rows={2}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button variant="outline" onClick={() => setShowSituationModal(false)}>
+                            Annuler
+                        </Button>
+                        <Button 
+                            onClick={handleCreateSituation}
+                            disabled={creatingSituation}
+                            className="bg-emerald-600 hover:bg-emerald-700"
+                            data-testid="confirm-create-situation-btn"
+                        >
+                            {creatingSituation ? (
+                                <>
+                                    <span className="spinner w-4 h-4 mr-2"></span>
+                                    Création...
+                                </>
+                            ) : (
+                                <>
+                                    <HardHat className="w-4 h-4 mr-2" />
+                                    Créer la situation
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
