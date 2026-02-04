@@ -32,8 +32,15 @@ load_dotenv(ROOT_DIR / '.env')
 # Resend configuration
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
-if RESEND_API_KEY:
+
+# Validate Resend API key (test keys start with re_123 or similar test patterns)
+RESEND_CONFIGURED = False
+if RESEND_API_KEY and not RESEND_API_KEY.startswith("re_123"):
     resend.api_key = RESEND_API_KEY
+    RESEND_CONFIGURED = True
+else:
+    logging.warning("Resend API key not configured or using test key. Email sending disabled.")
+    logging.warning("To enable email: Add a valid RESEND_API_KEY to backend/.env (get one at https://resend.com)")
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
