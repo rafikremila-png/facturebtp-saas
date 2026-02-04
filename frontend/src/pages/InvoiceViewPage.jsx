@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getInvoice, updateInvoice, downloadInvoicePdf, createInvoiceShareLink } from "@/lib/api";
+import { getInvoice, updateInvoice, downloadInvoicePdf, createInvoiceShareLink, sendInvoiceEmail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Download, CheckCircle, Share2, Copy, Check } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ArrowLeft, Download, CheckCircle, Share2, Copy, Check, Mail, Send } from "lucide-react";
 import { toast } from "sonner";
 
 function InvoiceViewPage() {
@@ -20,6 +21,9 @@ function InvoiceViewPage() {
     var [showShareModal, setShowShareModal] = useState(false);
     var [shareUrl, setShareUrl] = useState("");
     var [copied, setCopied] = useState(false);
+    var [showEmailModal, setShowEmailModal] = useState(false);
+    var [emailData, setEmailData] = useState({ recipient_email: "", custom_message: "" });
+    var [sendingEmail, setSendingEmail] = useState(false);
 
     useEffect(function() {
         getInvoice(params.id).then(function(res) {
