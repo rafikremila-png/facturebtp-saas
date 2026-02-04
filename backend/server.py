@@ -1106,10 +1106,12 @@ async def create_invoice(invoice_data: InvoiceCreate, user: dict = Depends(get_c
     return InvoiceResponse(**invoice_doc)
 
 @api_router.get("/invoices", response_model=List[InvoiceResponse])
-async def list_invoices(payment_status: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def list_invoices(payment_status: Optional[str] = None, client_id: Optional[str] = None, user: dict = Depends(get_current_user)):
     query = {}
     if payment_status:
         query["payment_status"] = payment_status
+    if client_id:
+        query["client_id"] = client_id
     invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     # Add default fields for compatibility
     for inv in invoices:
