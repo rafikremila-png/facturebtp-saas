@@ -1935,7 +1935,7 @@ def generate_financial_summary_pdf(summary: dict, company: CompanySettings):
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
     
-    buffer = io.BytesIO()
+    buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
     elements = []
     styles = getSampleStyleSheet()
