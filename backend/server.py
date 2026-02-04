@@ -6,6 +6,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import asyncio
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional
@@ -15,6 +16,7 @@ import jwt
 import bcrypt
 from io import BytesIO
 import base64
+import resend
 
 # ReportLab imports for PDF
 from reportlab.lib import colors
@@ -26,6 +28,12 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Resend configuration
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
