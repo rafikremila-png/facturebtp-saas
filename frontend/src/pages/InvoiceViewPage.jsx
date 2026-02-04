@@ -84,6 +84,7 @@ function InvoiceViewPage() {
             <div className="flex justify-between">
                 <Button variant="ghost" onClick={function() { navigate("/factures"); }} data-testid="back-btn"><ArrowLeft className="w-4 h-4 mr-2" />Retour</Button>
                 <div className="flex gap-2">
+                    <Button variant="outline" onClick={handleShare} data-testid="share-btn"><Share2 className="w-4 h-4 mr-2" />Partager</Button>
                     <Button variant="outline" onClick={downloadPdf} data-testid="download-pdf-btn"><Download className="w-4 h-4 mr-2" />PDF</Button>
                     {invoice.payment_status !== "paye" && <Button className="bg-green-600" onClick={markPaid} data-testid="mark-paid-btn"><CheckCircle className="w-4 h-4 mr-2" />Payée</Button>}
                 </div>
@@ -102,6 +103,29 @@ function InvoiceViewPage() {
                     <TableBody>{invoice.items.map(function(it, i) { return <TableRow key={i}><TableCell>{it.description}</TableCell><TableCell className="text-right">{it.quantity}</TableCell><TableCell className="text-right">{fmt(it.unit_price)}</TableCell><TableCell className="text-right">{it.vat_rate}%</TableCell><TableCell className="text-right">{fmt(it.quantity * it.unit_price)}</TableCell></TableRow>; })}</TableBody></Table>
             </CardContent></Card>
             <Card><CardContent className="pt-6 text-right space-y-1"><p>Total HT: <strong>{fmt(invoice.total_ht)}</strong></p><p>TVA: <strong>{fmt(invoice.total_vat)}</strong></p><p className="text-xl">Total TTC: <strong className="text-orange-600">{fmt(invoice.total_ttc)}</strong></p></CardContent></Card>
+
+            {/* Share Modal */}
+            <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Share2 className="w-5 h-5 text-orange-600" />
+                            Partager la facture
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <p className="text-sm text-slate-600">
+                            Envoyez ce lien à votre client pour qu'il puisse consulter et télécharger la facture.
+                        </p>
+                        <div className="flex gap-2">
+                            <Input value={shareUrl} readOnly className="flex-1 font-mono text-sm" />
+                            <Button onClick={copyToClipboard} variant="outline">
+                                {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
