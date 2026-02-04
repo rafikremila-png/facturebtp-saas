@@ -66,6 +66,7 @@ export const getInvoice = (id) => api.get(`/invoices/${id}`);
 export const createInvoice = (data) => api.post('/invoices', data);
 export const updateInvoice = (id, data) => api.put(`/invoices/${id}`, data);
 export const deleteInvoice = (id) => api.delete(`/invoices/${id}`);
+export const bulkDeleteInvoices = (ids) => api.post('/invoices/bulk-delete', { ids });
 
 // Retenue de garantie (Retention Guarantee)
 export const applyRetenueGarantie = (invoiceId, data) => api.post(`/invoices/${invoiceId}/retenue-garantie`, data);
