@@ -75,6 +75,17 @@ export const getQuoteRetenuesSummary = (quoteId) => api.get(`/quotes/${quoteId}/
 // Project Financial Summary
 export const getProjectFinancialSummary = (quoteId) => api.get(`/quotes/${quoteId}/financial-summary`);
 export const getPublicFinancialSummary = (shareToken) => api.get(`/public/quote/${shareToken}/financial-summary`);
+export const downloadFinancialSummaryPdf = async (quoteId, quoteNumber) => {
+    const response = await api.get(`/quotes/${quoteId}/financial-summary/pdf`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Recapitulatif_financier_${quoteNumber}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+};
 
 export const downloadInvoicePdf = async (id, invoiceNumber) => {
     const response = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
