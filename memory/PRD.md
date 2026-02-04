@@ -276,3 +276,9 @@ Build a production-ready MVP web application for a French construction company (
 2. Configurer une vraie clé API Resend pour l'envoi d'email en production
 3. **P2: Multi-utilisateurs** avec rôles (Admin, Commercial, Comptable)
 4. **P3: Relances automatiques** pour factures impayées
+
+## Test Reports Created
+- `/app/test_reports/iteration_5.json` - Situations testing
+- `/app/test_reports/iteration_6.json` - Retenue de garantie testing
+- `/app/test_reports/iteration_7.json` - Financial summary testing
+- `/app/test_reports/iteration_8.json` - PDF export testing (Feb 4, 2026)
