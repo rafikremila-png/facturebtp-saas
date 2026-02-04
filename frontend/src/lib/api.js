@@ -61,7 +61,7 @@ export const downloadQuotePdf = async (id, quoteNumber) => {
 };
 
 // Invoices
-export const getInvoices = (paymentStatus) => api.get('/invoices', { params: { payment_status: paymentStatus } });
+export const getInvoices = (paymentStatus, clientId) => api.get('/invoices', { params: { payment_status: paymentStatus, client_id: clientId } });
 export const getInvoice = (id) => api.get(`/invoices/${id}`);
 export const createInvoice = (data) => api.post('/invoices', data);
 export const updateInvoice = (id, data) => api.put(`/invoices/${id}`, data);
