@@ -47,8 +47,26 @@ const SelectScrollDownButton = React.forwardRef(({ className, ...props }, ref) =
 SelectScrollDownButton.displayName =
   SelectPrimitive.ScrollDownButton.displayName
 
+// SafePortal wrapper that handles unmount gracefully
+const SafePortal = ({ children }) => {
+  const [mounted, setMounted] = React.useState(false);
+  
+  React.useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  if (!mounted) return null;
+  
+  return (
+    <SelectPrimitive.Portal forceMount={undefined}>
+      {children}
+    </SelectPrimitive.Portal>
+  );
+};
+
 const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => (
-  <SelectPrimitive.Portal>
+  <SafePortal>
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
@@ -68,7 +86,7 @@ const SelectContent = React.forwardRef(({ className, children, position = "poppe
       </SelectPrimitive.Viewport>
       <SelectScrollDownButton />
     </SelectPrimitive.Content>
-  </SelectPrimitive.Portal>
+  </SafePortal>
 ))
 SelectContent.displayName = SelectPrimitive.Content.displayName
 
