@@ -23,30 +23,6 @@
         -->
         <title>BTP Facture - Gestion Devis & Factures</title>
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
-        <!-- Suppress ResizeObserver errors before React loads -->
-        <script>
-            (function() {
-                // Suppress ResizeObserver loop errors globally
-                var resizeObserverErrorHandler = function(e) {
-                    if (e && e.message && e.message.indexOf('ResizeObserver') > -1) {
-                        e.stopImmediatePropagation();
-                        e.preventDefault();
-                        return true;
-                    }
-                };
-                window.addEventListener('error', resizeObserverErrorHandler, true);
-                
-                // Override window.onerror
-                var originalOnError = window.onerror;
-                window.onerror = function(msg) {
-                    if (msg && msg.indexOf && msg.indexOf('ResizeObserver') > -1) {
-                        return true;
-                    }
-                    if (originalOnError) return originalOnError.apply(this, arguments);
-                    return false;
-                };
-            })();
-        </script>
         <!--
         These two scripts have been added for the Visual Edits, please do not edit or remove them
         -->
