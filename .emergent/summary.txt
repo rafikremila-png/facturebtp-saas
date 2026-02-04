@@ -1,0 +1,148 @@
+<analysis>**original_problem_statement:**
+The user wants to build a production-ready MVP web application for a French construction company (BTP) to manage quotes (devis) and invoices (factures). The application must be fully compliant with French legal, accounting, and tax requirements.
+
+**PRODUCT REQUIREMENTS:**
+- **Core Features:** Client management (CRUD), Quote management (CRUD, status tracking, PDF generation, conversion to invoice), Invoice management (CRUD, payment status, PDF generation), and a Dashboard.
+- **French BTP Specifics:**
+    - **Renovation Kits:** Predefined sets of line items for common jobs (e.g., bathroom renovation).
+    - **Client View:** A public, secure link for clients to view quotes/invoices without an account.
+    - **Email Notifications:** Send documents to clients via email.
+    - **Auto-Entrepreneur Mode:** A toggle to switch to a VAT-exempt mode (TVA non applicable, art. 293B du CGI).
+    - **Legal Compliance:** Include all mandatory French legal information (SIRET, APE, etc.) on documents, configurable payment deadlines, and legally required late payment penalty text on invoices.
+    - **Advance Payments (Acomptes):** Create down-payment invoices (as a % or fixed amount) from a quote and track the remaining balance.
+    - **Situation Invoices (Factures de situation):** The latest request is to implement progressive billing for long-term projects based on work completion percentage.
+
+**User's preferred language**: French
+
+**what currently exists?**
+A full-stack React/FastAPI application for managing construction quotes and invoices. The application is substantially complete and includes:
+- Secure JWT authentication.
+- Full CRUD for clients, quotes, and invoices.
+- A settings page to manage extensive company details, including legal information and a toggle for Auto-entrepreneur mode.
+- A dashboard with key metrics.
+- PDF generation for quotes and invoices, compliant with many French legal standards.
+- Feature: Predefined line items by trade.
+- Feature: Renovation Kits for adding multiple items at once.
+- Feature: A public, shareable Client View for documents.
+- Feature: An email sending modal (using a mocked Resend integration).
+- Feature: A complete system for creating and tracking advance payments (acomptes) against quotes.
+
+**Last working item**:
+- **Last item agent was working:** The agent started working on the user's new request to implement **Situation invoices** () for progressive billing on long-term projects. The agent acknowledged the request and began exploring the existing backend models in  to plan the implementation.
+- **Status:** NOT STARTED
+- **Agent Testing Done:** N
+- **Which testing method agent to use?** both
+- **User Testing Done:** N
+
+**All Pending/In progress Issue list**:
+There are no known pending bugs or issues. The critical  bug from the previous fork was successfully resolved.
+
+**In progress Task List**:
+- **Task 1:** Implement Situation Invoices (Factures de situation). (Priority: P0)
+
+**Task Detail:**
+- **Task 1:**
+    - **Where to resume:** The agent has reviewed the models in . The next step is to plan and implement the backend and frontend changes for this feature.
+        - **Backend:** Create new data models for situations, API endpoints (CRUD), and update the PDF generation logic to create Situation de travaux documents.
+        - **Frontend:** Add UI elements (buttons, modals, progress bars) to the Quote Detail page to create and track situations.
+    - **What will be achieved with this?** This will allow users to bill for long-term projects progressively based on the percentage of work completed, a critical feature for many construction businesses.
+    - **Status:** NOT STARTED
+    - **Should Test frontend/backend/both after fix?** Both
+    - **Blocked on something:** No
+
+**Upcoming and Future Tasks**
+- **Upcoming Tasks:**
+    - **P1: TVA Attestations (10% / 5.5%):** Implement a guided form for clients to fill out the necessary attestations for reduced VAT rates on renovation work. The ability to select these VAT rates should be conditional on a valid attestation being linked to the project.
+- **Future Tasks:**
+    - **P2: Multi-User Support:** Implement a role-based system for multiple users (e.g., Admin, Sales, Accountant).
+    - **P3: Email Reminders:** Add an automated reminder system for unpaid invoices.
+
+**Completed work in this session**
+- **Bug Fix:**
+    - Resolved the critical frontend runtime error  and subsequent  errors by implementing a stable patch in .
+- **Feature Implementations:**
+    - **Renovation Kits:** Implemented a full CRUD system for creating and using kits of line items.
+    - **Public Client View:** Created a secure, read-only page for clients to view documents via a unique link.
+    - **Email Integration (Mocked):** Added modals to send documents via email, integrating with Resend via the Emergent LLM Key. The API calls are in place but rely on a test key.
+    - **French Legal Compliance:**
+        - Added an Auto-entrepreneur mode that disables VAT calculations and adds the required legal mention.
+        - Expanded the company settings to include mandatory fields (RCS, Code APE, IBAN, etc.).
+        - Implemented configurable payment deadlines and automatic inclusion of late-payment penalty text on invoices.
+    - **Advance Payments (Acomptes):** Built a complete feature to create down-payment invoices from quotes, track payments with a progress bar, and generate a final balance invoice.
+- **Agent Support:**
+    - Responded to the user's query about saving to GitHub by correctly using the .
+
+**Earlier issues found/mentioned but not fixed**
+- None.
+
+**Known issue recurrence from previous fork**
+- None. The  issue was resolved.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- **Backend:** FastAPI, Motor (async MongoDB), Pydantic, JWT, ReportLab, Resend (for emails).
+- **Frontend:** React, React Router, Axios, Shadcn/UI, Tailwind CSS,  for toasts.
+- **Architecture:** SPA with a RESTful API backend. The backend  is a single large file containing all logic (models, routes, helpers).
+
+**key DB schema**
+- **clients:** 
+- **quotes:** 
+- **invoices:** 
+- **company_settings:** 
+- **renovation_kits:** 
+- **share_tokens:** (Used for public client view) , , , 
+
+**changes in tech stack**
+-  was added to  for email integration.
+
+**All files of reference**
+- ****: The single source of truth for all backend logic. Was heavily modified to add all new features (kits, public view, email, legal info, acomptes).
+- ****: Updated with API functions for all new features.
+- ****: Updated to handle the auto-entrepreneur mode (hiding VAT).
+- ****: Heavily modified to include modals and UI for creating advance payments () and viewing their progress.
+- ****: Heavily modified to add a new tab for managing Renovation Kits and new form fields for extended company legal information.
+- ****: New file created to render the public-facing view of a quote or invoice.
+- ****: Updated to include the new route for .
+
+**Critical Info for New Agent**
+1.  **Start with Situation Invoices:** Your immediate task is to implement the Situation invoices feature as requested by the user. The work has not started yet.
+2.  **Follow the PRD:** The user provides detailed Product Requirements Documents. Adhere to them strictly, especially regarding French legal and BTP-specific functionalities.
+3.  **Email is Mocked:** The email sending feature uses the Resend integration via  but was implemented with a test key (). It is not sending real emails yet.
+4.  **Testing Agent Anomaly:** During the implementation of the Acomptes feature, the agent called the testing agent but it seemed to hang or fail, as the report file was not created. The agent proceeded with manual testing. Be aware that the final test run for the last feature was not completed by the automated agent.
+
+**documents and test reports created in this job**
+-  (Continuously updated with completed tasks and new requirements)
+- 
+- 
+
+**Last 10 User Messages and any pending HUMAN messages**
+1.  **:** Provided a detailed PRD for Situation invoices. (PENDING - Work just started)
+2.  **:** Acknowledged the user's  command and summarized the work done.
+3.  **:** Sent the message stop.
+4.  **:** Finished implementing the Acomptes feature and suggested the next enhancement.
+5.  **:** Updated the PRD after finishing the Acomptes feature.
+6.  **:** Noted that the testing agent for the Acomptes feature was still running and proceeded with manual checks.
+7.  **:** Sent the message ok while the testing agent was running.
+8.  **:** Started the testing agent to validate the Acomptes feature.
+9.  **:** Provided a detailed PRD for the Acomptes (Advance Payments) feature.
+10. **:** Finished implementing legal features and suggested the next steps.
+
+**Project Health Check:**
+- **Healthy:** The application is stable and functional. The critical frontend bug from the previous session has been resolved. All new features have been implemented and manually tested successfully.
+
+**3rd Party Integrations**
+- **Resend (Email):** Integrated via  and uses the Emergent LLM Key. Currently configured with a test key ().
+
+**Testing status**
+- **Testing agent used after significant changes:** YES
+- **Troubleshoot agent used after agent stuck in loop:** NO
+- **Test files created:** None.
+- **Known regressions:** None.
+
+**Credentials to test flow:**
+The testing agent creates a test user () automatically. You can use this for manual testing if needed. Use the API to get a token first.
+
+**What agent forgot to execute**
+- The testing agent for the final feature (Acomptes) did not produce a report file (). The agent correctly identified the file was missing but then proceeded to summarize and finish based on manual tests instead of re-running or debugging the testing agent. The Acomptes feature lacks an automated test validation.</analysis>
