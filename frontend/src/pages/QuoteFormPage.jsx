@@ -360,6 +360,68 @@ export default function QuoteFormPage() {
                     </CardContent>
                 </Card>
 
+                {/* Renovation Kits */}
+                <Card className="border-blue-200 bg-blue-50/50">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="font-['Barlow_Condensed'] text-lg flex items-center gap-2">
+                            <Layers className="w-5 h-5 text-blue-600" />
+                            Kits de rénovation
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-wrap gap-2">
+                            <Button 
+                                type="button" 
+                                variant="outline"
+                                onClick={() => setShowKitModal(true)}
+                                className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                                data-testid="add-kit-btn"
+                            >
+                                <Layers className="w-4 h-4 mr-2" />
+                                Ajouter un kit
+                            </Button>
+                            <Button 
+                                type="button" 
+                                variant="outline"
+                                onClick={() => setShowSaveKitModal(true)}
+                                className="border-green-300 text-green-700 hover:bg-green-100"
+                                disabled={formData.items.filter(i => i.description.trim()).length === 0}
+                                data-testid="save-kit-btn"
+                            >
+                                <BookmarkPlus className="w-4 h-4 mr-2" />
+                                Sauvegarder comme kit
+                            </Button>
+                        </div>
+                        {kits.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                {kits.slice(0, 5).map(kit => (
+                                    <Button
+                                        key={kit.id}
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => addKit(kit)}
+                                        className="text-xs bg-white border hover:bg-blue-50"
+                                    >
+                                        + {kit.name}
+                                    </Button>
+                                ))}
+                                {kits.length > 5 && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setShowKitModal(true)}
+                                        className="text-xs text-blue-600"
+                                    >
+                                        Voir tous ({kits.length})
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
                 {/* Line Items */}
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
