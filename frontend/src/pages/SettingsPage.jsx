@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { getSettings, updateSettings, uploadLogo, getPredefinedCategories, createPredefinedItem, updatePredefinedItem, deletePredefinedItem, resetPredefinedItems } from "@/lib/api";
+import { getSettings, updateSettings, uploadLogo, getPredefinedCategories, createPredefinedItem, updatePredefinedItem, deletePredefinedItem, resetPredefinedItems, getKits, createKit, updateKit, deleteKit, resetKits } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Building2, Save, Upload, Plus, Trash2, Package, RefreshCw, Pencil } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Building2, Save, Upload, Plus, Trash2, Package, RefreshCw, Pencil, Layers, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
 const UNIT_OPTIONS = ["unité", "m²", "ml", "m³", "heure", "jour", "forfait", "kg", "litre"];
