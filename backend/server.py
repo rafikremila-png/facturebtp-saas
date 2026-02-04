@@ -173,6 +173,13 @@ class InvoiceResponse(BaseModel):
     situation_percentage: Optional[float] = None  # Current cumulative %
     previous_percentage: Optional[float] = None  # Previous cumulative %
     chantier_ref: Optional[str] = None
+    # Retenue de garantie fields (French BTP standard)
+    has_retenue_garantie: bool = False
+    retenue_garantie_rate: float = 5.0  # Default 5% (max legal)
+    retenue_garantie_amount: float = 0.0
+    retenue_garantie_release_date: Optional[str] = None
+    retenue_garantie_released: bool = False
+    net_a_payer: Optional[float] = None  # TTC minus retention
 
 # ============== ACOMPTE MODELS ==============
 
