@@ -621,6 +621,142 @@ export default function QuoteDetailPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Acompte Modal */}
+            <Dialog open={showAcompteModal} onOpenChange={setShowAcompteModal}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <CreditCard className="w-5 h-5 text-purple-600" />
+                            Créer un acompte
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <div className="bg-purple-50 rounded-lg p-4 space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span>Total du devis:</span>
+                                <span className="font-bold">{formatCurrency(quote?.total_ttc || 0)}</span>
+                            </div>
+                            {acomptesSummary && acomptesSummary.acomptes_count > 0 && (
+                                <>
+                                    <div className="flex justify-between text-sm">
+                                        <span>Déjà facturé:</span>
+                                        <span className="font-medium text-purple-600">-{formatCurrency(acomptesSummary.total_acomptes_ttc)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm font-bold border-t pt-2">
+                                        <span>Restant:</span>
+                                        <span>{formatCurrency(acomptesSummary.remaining_ttc)}</span>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="space-y-3">
+                            <Label>Type d'acompte</Label>
+                            <RadioGroup 
+                                value={acompteData.acompte_type} 
+                                onValueChange={(v) => setAcompteData(prev => ({ ...prev, acompte_type: v }))}
+                                className="flex gap-4"
+                            >
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="percentage" id="percentage" />
+                                    <Label htmlFor="percentage" className="flex items-center gap-1 cursor-pointer">
+                                        <Percent className="w-4 h-4" />
+                                        Pourcentage
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="amount" id="amount" />
+                                    <Label htmlFor="amount" className="flex items-center gap-1 cursor-pointer">
+                                        <Euro className="w-4 h-4" />
+                                        Montant fixe
+                                    </Label>
+                                </div>
+                            </RadioGroup>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>
+                                {acompteData.acompte_type === 'percentage' ? 'Pourcentage (%)' : 'Montant (€ TTC)'}
+                            </Label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    max={acompteData.acompte_type === 'percentage' ? 100 : (acomptesSummary?.remaining_ttc || quote?.total_ttc)}
+                                    step={acompteData.acompte_type === 'percentage' ? 5 : 100}
+                                    value={acompteData.value}
+                                    onChange={(e) => setAcompteData(prev => ({ ...prev, value: parseFloat(e.target.value) || 0 }))}
+                                    className="flex-1"
+                                    data-testid="acompte-value-input"
+                                />
+                                <span className="text-lg font-medium w-8">
+                                    {acompteData.acompte_type === 'percentage' ? '%' : '€'}
+                                </span>
+                            </div>
+                            {/* Preview */}
+                            <p className="text-sm text-slate-500">
+                                = {formatCurrency(
+                                    acompteData.acompte_type === 'percentage'
+                                        ? ((quote?.total_ttc || 0) * (acompteData.value / 100))
+                                        : acompteData.value
+                                )} TTC
+                            </p>
+                        </div>
+
+                        {/* Quick buttons */}
+                        {acompteData.acompte_type === 'percentage' && (
+                            <div className="flex gap-2 flex-wrap">
+                                {[30, 40, 50].map(pct => (
+                                    <Button
+                                        key={pct}
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setAcompteData(prev => ({ ...prev, value: pct }))}
+                                        className={acompteData.value === pct ? 'border-purple-500 bg-purple-50' : ''}
+                                    >
+                                        {pct}%
+                                    </Button>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <Label>Notes (optionnel)</Label>
+                            <Textarea
+                                placeholder="Notes pour la facture d'acompte..."
+                                value={acompteData.notes}
+                                onChange={(e) => setAcompteData(prev => ({ ...prev, notes: e.target.value }))}
+                                rows={2}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button variant="outline" onClick={() => setShowAcompteModal(false)}>
+                            Annuler
+                        </Button>
+                        <Button 
+                            onClick={handleCreateAcompte}
+                            disabled={creatingAcompte || acompteData.value <= 0}
+                            className="bg-purple-600 hover:bg-purple-700"
+                            data-testid="confirm-create-acompte-btn"
+                        >
+                            {creatingAcompte ? (
+                                <>
+                                    <span className="spinner w-4 h-4 mr-2"></span>
+                                    Création...
+                                </>
+                            ) : (
+                                <>
+                                    <Receipt className="w-4 h-4 mr-2" />
+                                    Créer la facture d'acompte
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
