@@ -78,9 +78,10 @@ export default function SettingsPage() {
 
     const loadData = async () => {
         try {
-            const [settingsRes, categoriesRes] = await Promise.all([
+            const [settingsRes, categoriesRes, kitsRes] = await Promise.all([
                 getSettings(),
-                getPredefinedCategories()
+                getPredefinedCategories(),
+                getKits()
             ]);
             
             if (settingsRes.data) {
@@ -102,6 +103,8 @@ export default function SettingsPage() {
             if (categoriesRes.data.length > 0) {
                 setSelectedCategory(categoriesRes.data[0].name);
             }
+            
+            setKits(kitsRes.data);
         } catch (error) {
             toast.error("Erreur lors du chargement des paramètres");
         } finally {
