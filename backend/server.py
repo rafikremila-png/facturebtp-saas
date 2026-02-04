@@ -849,6 +849,13 @@ async def list_invoices(payment_status: Optional[str] = None, user: dict = Depen
         inv.setdefault("acompte_value", None)
         inv.setdefault("parent_quote_id", None)
         inv.setdefault("acompte_number", None)
+        # Add retenue de garantie defaults
+        inv.setdefault("has_retenue_garantie", False)
+        inv.setdefault("retenue_garantie_rate", 0)
+        inv.setdefault("retenue_garantie_amount", 0)
+        inv.setdefault("retenue_garantie_release_date", None)
+        inv.setdefault("retenue_garantie_released", False)
+        inv.setdefault("net_a_payer", inv["total_ttc"])
     return [InvoiceResponse(**i) for i in invoices]
 
 @api_router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
