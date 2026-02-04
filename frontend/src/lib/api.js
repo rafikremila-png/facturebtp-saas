@@ -118,6 +118,12 @@ export const getQuoteAcomptes = (quoteId) => api.get(`/quotes/${quoteId}/acompte
 export const getAcomptesSummary = (quoteId) => api.get(`/quotes/${quoteId}/acomptes/summary`);
 export const createFinalInvoice = (quoteId) => api.post(`/quotes/${quoteId}/final-invoice`);
 
+// Situations (Progressive Billing)
+export const createSituation = (quoteId, data) => api.post(`/quotes/${quoteId}/situation`, data);
+export const getQuoteSituations = (quoteId) => api.get(`/quotes/${quoteId}/situations`);
+export const getSituationsSummary = (quoteId) => api.get(`/quotes/${quoteId}/situations/summary`);
+export const createSituationFinalInvoice = (quoteId) => api.post(`/quotes/${quoteId}/situation/final-invoice`);
+
 // Public endpoints (no auth)
 export const getPublicQuote = (token) => axios.get(`${API}/public/quote/${token}`);
 export const getPublicInvoice = (token) => axios.get(`${API}/public/invoice/${token}`);
