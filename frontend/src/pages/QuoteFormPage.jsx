@@ -149,6 +149,62 @@ export default function QuoteFormPage() {
         toast.success("Article ajouté");
     };
 
+    const addKit = (kit) => {
+        const newItems = kit.items.map(item => ({
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            vat_rate: item.vat_rate,
+            unit: item.unit || ""
+        }));
+        
+        setFormData(prev => ({
+            ...prev,
+            items: [...prev.items.filter(item => item.description.trim()), ...newItems]
+        }));
+        
+        setShowKitModal(false);
+        toast.success(`Kit "${kit.name}" ajouté avec ${kit.items.length} lignes`);
+    };
+
+    const saveAsKit = async () => {
+        if (!newKitName.trim()) {
+            toast.error("Veuillez saisir un nom pour le kit");
+            return;
+        }
+        
+        const validItems = formData.items.filter(item => item.description.trim());
+        if (validItems.length === 0) {
+            toast.error("Le devis doit contenir au moins une ligne");
+            return;
+        }
+        
+        try {
+            await createKit({
+                name: newKitName,
+                description: newKitDescription,
+                items: validItems.map(item => ({
+                    description: item.description,
+                    unit: item.unit || "unité",
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    vat_rate: item.vat_rate
+                }))
+            });
+            
+            // Refresh kits list
+            const kitsRes = await getKits();
+            setKits(kitsRes.data);
+            
+            setShowSaveKitModal(false);
+            setNewKitName("");
+            setNewKitDescription("");
+            toast.success("Kit sauvegardé avec succès");
+        } catch (error) {
+            toast.error("Erreur lors de la sauvegarde du kit");
+        }
+    };
+
     const removeItem = (index) => {
         if (formData.items.length === 1) return;
         setFormData(prev => ({
