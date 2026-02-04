@@ -1205,11 +1205,21 @@ async def create_situation(quote_id: str, situation_data: SituationCreate, user:
             raise HTTPException(status_code=400, detail="Le nombre de lignes doit correspondre au devis")
         
         # Get previous line-by-line progress
+        # If previous situation was global, all lines have the same progress = global percentage
         previous_line_progress = {}
         if existing_situations:
             last_situation = existing_situations[0]
-            for item in last_situation.get("items", []):
-                previous_line_progress[item.get("description", "")] = item.get("cumulative_percent", 0)
+            last_type = last_situation.get("situation_type", "global")
+            
+            if last_type == "global":
+                # For global situations, all lines have same cumulative progress
+                global_cumul = last_situation.get("situation_percentage", 0)
+                for quote_item in quote["items"]:
+                    previous_line_progress[quote_item["description"]] = global_cumul
+            else:
+                # For per_line situations, get each line's cumulative progress
+                for item in last_situation.get("items", []):
+                    previous_line_progress[item.get("description", "")] = item.get("cumulative_percent", 0)
         
         situation_items = []
         total_situation_ht = 0
