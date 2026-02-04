@@ -34,7 +34,9 @@ const StatusBadge = ({ status }) => {
     return <span className={`text-xs px-2 py-1 rounded font-medium ${config.className}`}>{config.label}</span>;
 };
 
-export default function ProjectFinancialSummary({ summary, isPublic = false }) {
+export default function ProjectFinancialSummary({ summary, isPublic = false, quoteId = null }) {
+    const [isDownloading, setIsDownloading] = useState(false);
+
     if (!summary) return null;
 
     const { 
@@ -43,6 +45,20 @@ export default function ProjectFinancialSummary({ summary, isPublic = false }) {
         progress_percentage,
         acomptes, situations, retenue_garantie, totals, invoices
     } = summary;
+
+    const handleDownloadPdf = async () => {
+        if (!quoteId) return;
+        setIsDownloading(true);
+        try {
+            await downloadFinancialSummaryPdf(quoteId, quote_number);
+            toast.success("PDF téléchargé avec succès");
+        } catch (error) {
+            console.error("Erreur lors du téléchargement:", error);
+            toast.error("Erreur lors du téléchargement du PDF");
+        } finally {
+            setIsDownloading(false);
+        }
+    };
 
     return (
         <div className="space-y-6" data-testid="financial-summary">
@@ -57,13 +73,33 @@ export default function ProjectFinancialSummary({ summary, isPublic = false }) {
                             </div>
                             <h2 className="text-2xl font-bold">{client_name}</h2>
                         </div>
-                        <div className="text-right">
-                            <p className="text-slate-400 text-sm">Montant total du projet</p>
-                            <p className="text-3xl font-bold text-emerald-400">{formatCurrency(project_total_ttc)}</p>
-                            {project_total_vat > 0 && (
-                                <p className="text-xs text-slate-400">
-                                    {formatCurrency(project_total_ht)} HT + {formatCurrency(project_total_vat)} TVA
-                                </p>
+                        <div className="flex flex-col items-end gap-3">
+                            <div className="text-right">
+                                <p className="text-slate-400 text-sm">Montant total du projet</p>
+                                <p className="text-3xl font-bold text-emerald-400">{formatCurrency(project_total_ttc)}</p>
+                                {project_total_vat > 0 && (
+                                    <p className="text-xs text-slate-400">
+                                        {formatCurrency(project_total_ht)} HT + {formatCurrency(project_total_vat)} TVA
+                                    </p>
+                                )}
+                            </div>
+                            {/* Download PDF Button - Only for authenticated users */}
+                            {!isPublic && quoteId && (
+                                <Button 
+                                    onClick={handleDownloadPdf}
+                                    disabled={isDownloading}
+                                    variant="secondary"
+                                    size="sm"
+                                    className="bg-white/10 hover:bg-white/20 text-white border-white/20"
+                                    data-testid="download-financial-pdf-btn"
+                                >
+                                    {isDownloading ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <Download className="w-4 h-4 mr-2" />
+                                    )}
+                                    Télécharger PDF
+                                </Button>
                             )}
                         </div>
                     </div>
