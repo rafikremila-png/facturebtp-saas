@@ -451,6 +451,17 @@ export default function QuoteDetailPage() {
                             Situation
                         </Button>
                     )}
+                    {quote.status !== "brouillon" && financialSummary && (
+                        <Button 
+                            variant={showFinancialSummary ? "default" : "outline"}
+                            className={showFinancialSummary ? "bg-slate-800 hover:bg-slate-700" : ""}
+                            onClick={() => setShowFinancialSummary(!showFinancialSummary)}
+                            data-testid="toggle-financial-summary-btn"
+                        >
+                            <BarChart3 className="w-4 h-4 mr-2" />
+                            {showFinancialSummary ? "Masquer récapitulatif" : "Récapitulatif financier"}
+                        </Button>
+                    )}
                     {quote.status === "accepte" && (
                         <Button 
                             className="bg-green-600 hover:bg-green-700"
