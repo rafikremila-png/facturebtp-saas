@@ -1187,6 +1187,18 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Facture non trouvée")
     return {"message": "Facture supprimée"}
 
+@api_router.post("/invoices/bulk-delete")
+async def bulk_delete_invoices(request: BulkDeleteRequest, user: dict = Depends(get_current_user)):
+    """Delete multiple invoices at once"""
+    if not request.ids:
+        raise HTTPException(status_code=400, detail="Aucune facture sélectionnée")
+    
+    result = await db.invoices.delete_many({"id": {"$in": request.ids}})
+    return {
+        "message": f"{result.deleted_count} facture(s) supprimée(s)",
+        "deleted_count": result.deleted_count
+    }
+
 # ============== ACOMPTES (ADVANCE PAYMENTS) ==============
 
 @api_router.post("/quotes/{quote_id}/acompte", response_model=AcompteResponse)
