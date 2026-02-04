@@ -91,12 +91,14 @@ function AppRoutes() {
 
 function App() {
     return (
-        <AuthProvider>
-            <BrowserRouter>
-                <AppRoutes />
-                <Toaster position="top-right" richColors />
-            </BrowserRouter>
-        </AuthProvider>
+        <ErrorBoundary>
+            <AuthProvider>
+                <BrowserRouter>
+                    <AppRoutes />
+                    <Toaster position="top-right" richColors />
+                </BrowserRouter>
+            </AuthProvider>
+        </ErrorBoundary>
     );
 }
 
