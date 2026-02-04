@@ -46,6 +46,7 @@ export const getQuote = (id) => api.get(`/quotes/${id}`);
 export const createQuote = (data) => api.post('/quotes', data);
 export const updateQuote = (id, data) => api.put(`/quotes/${id}`, data);
 export const deleteQuote = (id) => api.delete(`/quotes/${id}`);
+export const bulkDeleteQuotes = (ids) => api.post('/quotes/bulk-delete', { ids });
 export const convertQuoteToInvoice = (id) => api.post(`/quotes/${id}/convert`);
 export const downloadQuotePdf = async (id, quoteNumber) => {
     const response = await api.get(`/quotes/${id}/pdf`, { responseType: 'blob' });
