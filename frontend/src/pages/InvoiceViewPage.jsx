@@ -178,17 +178,48 @@ function InvoiceViewPage() {
                     <div><Label>Reste</Label><p className="text-xl font-bold text-red-600">{fmt(Math.max(0, invoice.total_ttc - (invoice.paid_amount || 0)))}</p></div>
                 </CardContent></Card>
             <Card><CardContent className="p-0">
-                <Table><TableHeader><TableRow className="bg-slate-900"><TableHead className="text-white">Description</TableHead><TableHead className="text-white text-right">Qté</TableHead><TableHead className="text-white text-right">Prix HT</TableHead><TableHead className="text-white text-right">TVA</TableHead><TableHead className="text-white text-right">Total</TableHead></TableRow></TableHeader>
-                    <TableBody>{invoice.items.map(function(it, i) { return <TableRow key={i}><TableCell>{it.description}</TableCell><TableCell className="text-right">{it.quantity}</TableCell><TableCell className="text-right">{fmt(it.unit_price)}</TableCell><TableCell className="text-right">{it.vat_rate}%</TableCell><TableCell className="text-right">{fmt(it.quantity * it.unit_price)}</TableCell></TableRow>; })}</TableBody></Table>
+                <Table>
+                    <TableHeader>
+                        <TableRow className="bg-slate-900">
+                            <TableHead className="text-white">Description</TableHead>
+                            <TableHead className="text-white text-right">Qté</TableHead>
+                            <TableHead className="text-white text-right">Prix HT</TableHead>
+                            {invoice.total_vat > 0 && <TableHead className="text-white text-right">TVA</TableHead>}
+                            <TableHead className="text-white text-right">Total</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {invoice.items.map(function(it, i) { 
+                            return (
+                                <TableRow key={i}>
+                                    <TableCell>{it.description}</TableCell>
+                                    <TableCell className="text-right">{it.quantity}</TableCell>
+                                    <TableCell className="text-right">{fmt(it.unit_price)}</TableCell>
+                                    {invoice.total_vat > 0 && <TableCell className="text-right">{it.vat_rate}%</TableCell>}
+                                    <TableCell className="text-right">{fmt(it.quantity * it.unit_price)}</TableCell>
+                                </TableRow>
+                            ); 
+                        })}
+                    </TableBody>
+                </Table>
             </CardContent></Card>
             
             {/* Totals Card with Retenue de Garantie */}
             <Card>
                 <CardContent className="pt-6 space-y-4">
                     <div className="text-right space-y-1">
-                        <p>Total HT: <strong>{fmt(invoice.total_ht)}</strong></p>
-                        <p>TVA: <strong>{fmt(invoice.total_vat)}</strong></p>
-                        <p className="text-xl">Total TTC: <strong className="text-orange-600">{fmt(invoice.total_ttc)}</strong></p>
+                        {invoice.total_vat > 0 ? (
+                            <>
+                                <p>Total HT: <strong>{fmt(invoice.total_ht)}</strong></p>
+                                <p>TVA: <strong>{fmt(invoice.total_vat)}</strong></p>
+                                <p className="text-xl">Total TTC: <strong className="text-orange-600">{fmt(invoice.total_ttc)}</strong></p>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-xl">Total: <strong className="text-orange-600">{fmt(invoice.total_ht)}</strong></p>
+                                <p className="text-xs text-slate-500 italic">TVA non applicable, art. 293B du CGI</p>
+                            </>
+                        )}
                     </div>
                     
                     {/* Retenue de Garantie Section */}
