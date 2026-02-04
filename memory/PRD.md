@@ -117,8 +117,21 @@ Build a production-ready MVP web application for a French construction company (
 - No online payments
 - No client portal
 
+## Bug Fixes Log (Feb 2026)
+
+### ResizeObserver / removeChild Error - FIXED ✅
+- **Problem**: "ResizeObserver loop completed with undelivered notifications" and "removeChild" errors when using dropdown menus
+- **Root cause**: Radix UI Select component triggers rapid ResizeObserver callbacks that exceed the browser's rendering frame budget
+- **Solution**: Patched the native `ResizeObserver` in `frontend/src/index.js` to use `requestAnimationFrame` for batching observations
+- **Previous failed approaches**: 
+  - Multiple error handlers in index.js (caused removeChild conflicts)
+  - Scripts in index.html (duplicate handlers)
+  - Disabling FAST_REFRESH (not effective)
+- **Files modified**: `frontend/src/index.js`, `frontend/public/index.html`, `frontend/.env`
+
 ## Next Action Items
-1. Add email notifications for quote/invoice sending
-2. Multi-user support with roles
-3. Monthly/yearly reports
-4. Bank details in PDF for payments
+1. Create "kits" or "templates" (e.g., "Bathroom renovation") to pre-fill multiple line items at once
+2. Add email notifications for quote/invoice sending
+3. Multi-user support with roles
+4. Monthly/yearly reports
+5. Bank details in PDF for payments
