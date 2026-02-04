@@ -57,6 +57,12 @@ export default function QuoteFormPage() {
             if (settingsRes.data.default_vat_rates?.length > 0) {
                 setVatRates(settingsRes.data.default_vat_rates);
             }
+            
+            // Check auto-entrepreneur mode
+            if (settingsRes.data.is_auto_entrepreneur) {
+                setIsAutoEntrepreneur(true);
+                setAutoEntrepreneurMention(settingsRes.data.auto_entrepreneur_mention || "TVA non applicable, art. 293B du CGI");
+            }
 
             if (isEdit) {
                 const quoteRes = await getQuote(id);
