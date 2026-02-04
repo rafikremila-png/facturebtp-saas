@@ -3536,8 +3536,10 @@ async def send_invoice_email(invoice_id: str, request: SendDocumentEmailRequest,
         share_token = generate_share_token()
         await db.invoices.update_one({"id": invoice_id}, {"$set": {"share_token": share_token}})
     
-    # Get base URL from environment
-    base_url = os.environ.get("FRONTEND_URL", "https://buildtrack-132.preview.emergentagent.com")
+    # Get base URL from environment (required for email links)
+    base_url = os.environ.get("FRONTEND_URL")
+    if not base_url:
+        raise HTTPException(status_code=500, detail="Configuration manquante: FRONTEND_URL non défini dans les variables d'environnement")
     share_url = f"{base_url}/client/facture/{share_token}"
     
     # Generate email HTML
