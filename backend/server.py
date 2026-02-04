@@ -1908,6 +1908,258 @@ async def get_public_project_financial_summary(share_token: str):
     
     return summary
 
+@api_router.get("/quotes/{quote_id}/financial-summary/pdf")
+async def download_financial_summary_pdf(quote_id: str, user: dict = Depends(get_current_user)):
+    """Generate and download PDF of the financial summary"""
+    summary = await calculate_project_financial_summary(quote_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    company = await get_company_settings()
+    pdf_buffer = generate_financial_summary_pdf(summary, company)
+    
+    filename = f"Recapitulatif_financier_{summary['quote_number']}.pdf"
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+def generate_financial_summary_pdf(summary: dict, company: CompanySettings):
+    """Generate a professional PDF for the financial summary"""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#0F172A'), alignment=TA_CENTER, spaceAfter=10)
+    subtitle_style = ParagraphStyle('Subtitle', parent=styles['Normal'], fontSize=12, textColor=colors.HexColor('#64748B'), alignment=TA_CENTER)
+    section_style = ParagraphStyle('Section', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#0F172A'), spaceBefore=15, spaceAfter=8)
+    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#334155'))
+    bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#0F172A'), fontName='Helvetica-Bold')
+    
+    # ========== HEADER ==========
+    elements.append(Paragraph("RÉCAPITULATIF FINANCIER", title_style))
+    elements.append(Paragraph(f"Projet {summary['quote_number']}", subtitle_style))
+    elements.append(Spacer(1, 5*mm))
+    
+    # Company info
+    if company.company_name:
+        elements.append(Paragraph(f"<b>{company.company_name}</b>", normal_style))
+        if company.address:
+            elements.append(Paragraph(company.address, normal_style))
+        if company.siret:
+            elements.append(Paragraph(f"SIRET: {company.siret}", normal_style))
+    elements.append(Spacer(1, 8*mm))
+    
+    # ========== PROJECT INFO ==========
+    info_data = [
+        ["Client:", summary['client_name']],
+        ["Référence devis:", summary['quote_number']],
+        ["Statut:", {"brouillon": "Brouillon", "envoye": "Envoyé", "accepte": "Accepté", "refuse": "Refusé", "facture": "Facturé"}.get(summary['status'], summary['status'])],
+        ["Date du récapitulatif:", datetime.now().strftime("%d/%m/%Y")],
+    ]
+    
+    info_table = Table(info_data, colWidths=[50*mm, 120*mm])
+    info_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#64748B')),
+        ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#0F172A')),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 10*mm))
+    
+    # ========== MONTANT TOTAL ==========
+    elements.append(Paragraph("MONTANT TOTAL DU PROJET", section_style))
+    
+    total_data = [
+        ["Total HT:", f"{summary['project_total_ht']:,.2f} €".replace(",", " ")],
+        ["Total TVA:", f"{summary['project_total_vat']:,.2f} €".replace(",", " ")],
+        ["TOTAL TTC:", f"{summary['project_total_ttc']:,.2f} €".replace(",", " ")],
+    ]
+    
+    if summary['project_total_vat'] == 0:
+        total_data = [
+            ["TOTAL:", f"{summary['project_total_ht']:,.2f} €".replace(",", " ")],
+            ["", "TVA non applicable, art. 293B du CGI"],
+        ]
+    
+    total_table = Table(total_data, colWidths=[50*mm, 50*mm])
+    total_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('TEXTCOLOR', (0, 0), (-1, -2), colors.HexColor('#334155')),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, -1), (-1, -1), 14),
+        ('TEXTCOLOR', (1, -1), (1, -1), colors.HexColor('#059669')),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(total_table)
+    elements.append(Spacer(1, 8*mm))
+    
+    # ========== SYNTHÈSE DES PAIEMENTS ==========
+    elements.append(Paragraph("SYNTHÈSE DES PAIEMENTS", section_style))
+    
+    totals = summary['totals']
+    synth_data = [
+        ["Montant facturé:", f"{totals['total_invoiced']:,.2f} €".replace(",", " ")],
+        ["Montant encaissé:", f"{totals['total_paid']:,.2f} €".replace(",", " ")],
+        ["Reste à facturer:", f"{totals['remaining_to_invoice']:,.2f} €".replace(",", " ")],
+        ["RESTE À PAYER:", f"{totals['remaining_to_pay']:,.2f} €".replace(",", " ")],
+    ]
+    
+    synth_table = Table(synth_data, colWidths=[60*mm, 50*mm])
+    synth_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('TEXTCOLOR', (0, 0), (-1, -2), colors.HexColor('#334155')),
+        ('TEXTCOLOR', (1, 1), (1, 1), colors.HexColor('#16A34A')),  # Encaissé en vert
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, -1), (-1, -1), 12),
+        ('TEXTCOLOR', (1, -1), (1, -1), colors.HexColor('#D97706')),  # Reste à payer en orange
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LINEABOVE', (0, -1), (-1, -1), 1, colors.HexColor('#E2E8F0')),
+        ('TOPPADDING', (0, -1), (-1, -1), 6),
+    ]))
+    elements.append(synth_table)
+    
+    # Progress bar simulation
+    progress = totals['percentage_paid']
+    elements.append(Spacer(1, 3*mm))
+    elements.append(Paragraph(f"<b>Progression des paiements: {progress}%</b>", normal_style))
+    elements.append(Spacer(1, 8*mm))
+    
+    # ========== DÉTAIL PAR CATÉGORIE ==========
+    elements.append(Paragraph("DÉTAIL PAR CATÉGORIE", section_style))
+    
+    # Acomptes
+    acomptes = summary['acomptes']
+    if acomptes['count'] > 0:
+        elements.append(Paragraph(f"<b>Acomptes ({acomptes['count']})</b>", bold_style))
+        acompte_data = [
+            ["Facturé:", f"{acomptes['total_invoiced']:,.2f} €".replace(",", " ")],
+            ["Encaissé:", f"{acomptes['total_paid']:,.2f} €".replace(",", " ")],
+            ["En attente:", f"{acomptes['pending']:,.2f} €".replace(",", " ")],
+        ]
+        acompte_table = Table(acompte_data, colWidths=[40*mm, 40*mm])
+        acompte_table.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#64748B')),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ]))
+        elements.append(acompte_table)
+    else:
+        elements.append(Paragraph("<b>Acomptes:</b> Aucun", normal_style))
+    
+    elements.append(Spacer(1, 4*mm))
+    
+    # Situations
+    situations = summary['situations']
+    if situations['count'] > 0:
+        elements.append(Paragraph(f"<b>Situations de travaux ({situations['count']})</b>", bold_style))
+        elements.append(Paragraph(f"Avancement chantier: {situations['progress_percentage']}%", normal_style))
+        sit_data = [
+            ["Facturé:", f"{situations['total_invoiced']:,.2f} €".replace(",", " ")],
+            ["Encaissé:", f"{situations['total_paid']:,.2f} €".replace(",", " ")],
+            ["En attente:", f"{situations['pending']:,.2f} €".replace(",", " ")],
+        ]
+        sit_table = Table(sit_data, colWidths=[40*mm, 40*mm])
+        sit_table.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#64748B')),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ]))
+        elements.append(sit_table)
+    else:
+        elements.append(Paragraph("<b>Situations:</b> Aucune", normal_style))
+    
+    elements.append(Spacer(1, 4*mm))
+    
+    # Retenue de garantie
+    retenue = summary['retenue_garantie']
+    if retenue['total_retained'] > 0:
+        elements.append(Paragraph("<b>Retenue de garantie</b>", bold_style))
+        ret_data = [
+            ["Total retenu:", f"{retenue['total_retained']:,.2f} €".replace(",", " ")],
+            ["Libéré:", f"{retenue['total_released']:,.2f} €".replace(",", " ")],
+            ["En attente:", f"{retenue['pending_release']:,.2f} €".replace(",", " ")],
+        ]
+        if retenue.get('next_release_date'):
+            ret_data.append(["Prochaine libération:", retenue['next_release_date'][:10]])
+        ret_table = Table(ret_data, colWidths=[50*mm, 40*mm])
+        ret_table.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#64748B')),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ]))
+        elements.append(ret_table)
+    else:
+        elements.append(Paragraph("<b>Retenue de garantie:</b> Aucune", normal_style))
+    
+    elements.append(Spacer(1, 10*mm))
+    
+    # ========== HISTORIQUE DES FACTURES ==========
+    if summary.get('invoices') and len(summary['invoices']) > 0:
+        elements.append(Paragraph("HISTORIQUE DES FACTURES", section_style))
+        
+        inv_header = ["N° Facture", "Type", "Date", "Montant TTC", "Statut"]
+        inv_data = [inv_header]
+        
+        for inv in summary['invoices']:
+            status_map = {"paye": "Payé", "impaye": "En attente", "partiel": "Partiel"}
+            inv_data.append([
+                inv['invoice_number'],
+                inv['type'],
+                inv['date'],
+                f"{inv['total_ttc']:,.2f} €".replace(",", " "),
+                status_map.get(inv['payment_status'], inv['payment_status'])
+            ])
+        
+        inv_table = Table(inv_data, colWidths=[35*mm, 40*mm, 25*mm, 35*mm, 25*mm])
+        inv_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0F172A')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (2, 0), (4, -1), 'CENTER'),
+            ('ALIGN', (3, 1), (3, -1), 'RIGHT'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(inv_table)
+    
+    elements.append(Spacer(1, 15*mm))
+    
+    # ========== FOOTER ==========
+    footer_style = ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#94A3B8'), alignment=TA_CENTER)
+    elements.append(Paragraph("_" * 80, footer_style))
+    elements.append(Paragraph(f"Document généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}", footer_style))
+    if company.company_name:
+        elements.append(Paragraph(f"{company.company_name} - {company.phone or ''} - {company.email or ''}", footer_style))
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
 # ============== COMPANY SETTINGS ==============
 
 @api_router.get("/settings", response_model=CompanySettings)
