@@ -35,6 +35,7 @@ Build a production-ready MVP web application for a French construction company (
 10. **Mode auto-entrepreneur** - TVA non applicable (art. 293B du CGI)
 11. **Informations légales étendues** - RCS/RM, Code APE, Capital social, IBAN/BIC
 12. **Délai de paiement configurable** - Défaut 30 jours, mentions légales automatiques
+13. **Acomptes (Advance Payments)** - Factures d'acompte avec % ou montant fixe
 
 ## Architecture
 
