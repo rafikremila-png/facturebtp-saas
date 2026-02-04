@@ -2414,7 +2414,7 @@ def generate_financial_summary_pdf(summary: dict, company: CompanySettings):
         
         inv_table = Table(inv_data, colWidths=[35*mm, 40*mm, 25*mm, 35*mm, 25*mm])
         inv_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0F172A')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EA580C')),  # Orange header
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
