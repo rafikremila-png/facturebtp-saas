@@ -3306,16 +3306,6 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
         for line in legal_lines:
             elements.append(Paragraph(line, legal_style))
     
-    # ========== FOOTER ==========
-    elements.append(Spacer(1, 8*mm))
-    footer_parts = []
-    if company.company_name:
-        footer_parts.append(company.company_name)
-    if company.siret:
-        footer_parts.append(f"SIRET: {company.siret}")
-    if company.rcs_rm:
-        footer_parts.append(company.rcs_rm)
-    
     # Build PDF with footer on each page
     doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
     buffer.seek(0)
