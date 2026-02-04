@@ -685,7 +685,7 @@ export default function SettingsPage() {
                                 <div className="md:col-span-2">
                                     <Label className="text-xs">Catégorie</Label>
                                     <Select value={newItem.category} onValueChange={(v) => setNewItem(p => ({ ...p, category: v }))}>
-                                        <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
+                                        <SelectTrigger><SelectValue placeholder={!newItem.category ? "Choisir" : undefined} /></SelectTrigger>
                                         <SelectContent>
                                             {DEFAULT_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                                         </SelectContent>
