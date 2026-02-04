@@ -758,11 +758,17 @@ async def list_invoices(payment_status: Optional[str] = None, user: dict = Depen
     if payment_status:
         query["payment_status"] = payment_status
     invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    # Add default payment_due_date for old invoices
+    # Add default fields for compatibility
     for inv in invoices:
         if "payment_due_date" not in inv:
             issue_date = datetime.fromisoformat(inv["issue_date"].replace("Z", "+00:00"))
             inv["payment_due_date"] = (issue_date + timedelta(days=30)).isoformat()
+        # Add acompte defaults
+        inv.setdefault("is_acompte", False)
+        inv.setdefault("acompte_type", None)
+        inv.setdefault("acompte_value", None)
+        inv.setdefault("parent_quote_id", None)
+        inv.setdefault("acompte_number", None)
     return [InvoiceResponse(**i) for i in invoices]
 
 @api_router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
@@ -770,10 +776,16 @@ async def get_invoice(invoice_id: str, user: dict = Depends(get_current_user)):
     invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
-    # Add default payment_due_date for old invoices
+    # Add default fields for compatibility
     if "payment_due_date" not in invoice:
         issue_date = datetime.fromisoformat(invoice["issue_date"].replace("Z", "+00:00"))
         invoice["payment_due_date"] = (issue_date + timedelta(days=30)).isoformat()
+    # Add acompte defaults
+    invoice.setdefault("is_acompte", False)
+    invoice.setdefault("acompte_type", None)
+    invoice.setdefault("acompte_value", None)
+    invoice.setdefault("parent_quote_id", None)
+    invoice.setdefault("acompte_number", None)
     return InvoiceResponse(**invoice)
 
 @api_router.put("/invoices/{invoice_id}", response_model=InvoiceResponse)
