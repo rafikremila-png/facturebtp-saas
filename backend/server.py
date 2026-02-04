@@ -2446,6 +2446,22 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
             f"- Une indemnité forfaitaire pour frais de recouvrement de 40 euros",
         ]
         
+        # Add retenue de garantie legal mention if applicable
+        if doc_data.get('has_retenue_garantie', False):
+            retenue_rate = doc_data.get('retenue_garantie_rate', 5)
+            release_date = doc_data.get('retenue_garantie_release_date', '')
+            if release_date:
+                release_date_str = release_date[:10] if isinstance(release_date, str) else release_date.strftime('%Y-%m-%d')
+            else:
+                release_date_str = "1 an après réception"
+            
+            legal_lines.extend([
+                "",
+                f"<b>Retenue de garantie:</b>",
+                f"Une retenue de garantie de {retenue_rate}% est appliquée conformément à la loi n°75-1334 du 31 décembre 1975.",
+                f"Cette retenue sera libérée le {release_date_str}, sauf réserves non levées.",
+            ])
+        
         for line in legal_lines:
             elements.append(Paragraph(line, legal_style))
     
