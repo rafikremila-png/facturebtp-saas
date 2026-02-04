@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, Save, Plus, Trash2, Package, Layers, BookmarkPlus } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Package, Layers, BookmarkPlus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 export default function QuoteFormPage() {
@@ -20,6 +20,8 @@ export default function QuoteFormPage() {
     const [saving, setSaving] = useState(false);
     const [clients, setClients] = useState([]);
     const [vatRates, setVatRates] = useState([20.0, 10.0, 5.5, 2.1]);
+    const [isAutoEntrepreneur, setIsAutoEntrepreneur] = useState(false);
+    const [autoEntrepreneurMention, setAutoEntrepreneurMention] = useState("");
     const [categories, setCategories] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState("");
     const [selectedItem, setSelectedItem] = useState("");
