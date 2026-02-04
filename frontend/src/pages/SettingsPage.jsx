@@ -679,6 +679,145 @@ export default function SettingsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Delete Kit Dialog */}
+            <AlertDialog open={!!showDeleteKitDialog} onOpenChange={() => setShowDeleteKitDialog(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Supprimer ce kit ?</AlertDialogTitle>
+                        <AlertDialogDescription>Cette action est irréversible.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteKit} className="bg-red-600 hover:bg-red-700">Supprimer</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Reset Kits Dialog */}
+            <AlertDialog open={showResetKitsDialog} onOpenChange={setShowResetKitsDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Réinitialiser les kits ?</AlertDialogTitle>
+                        <AlertDialogDescription>Tous vos kits personnalisés seront supprimés et remplacés par les kits par défaut.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleResetKits} className="bg-amber-600 hover:bg-amber-700">Réinitialiser</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* New Kit Modal */}
+            <Dialog open={showNewKitModal} onOpenChange={setShowNewKitModal}>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="font-['Barlow_Condensed'] text-xl flex items-center gap-2">
+                            <Layers className="w-5 h-5 text-blue-600" />
+                            Créer un nouveau kit
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Nom du kit *</Label>
+                                <Input
+                                    placeholder="Ex: Rénovation salle de bain"
+                                    value={newKit.name}
+                                    onChange={(e) => setNewKit(prev => ({ ...prev, name: e.target.value }))}
+                                    data-testid="new-kit-name"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Description</Label>
+                                <Input
+                                    placeholder="Description du kit..."
+                                    value={newKit.description}
+                                    onChange={(e) => setNewKit(prev => ({ ...prev, description: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="border-t pt-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <Label className="text-base font-semibold">Lignes du kit</Label>
+                                <Button type="button" variant="outline" size="sm" onClick={addKitItem}>
+                                    <Plus className="w-4 h-4 mr-2" />Ajouter ligne
+                                </Button>
+                            </div>
+                            <div className="space-y-3">
+                                {newKit.items.map((item, index) => (
+                                    <div key={index} className="grid grid-cols-12 gap-2 items-end p-3 bg-slate-50 rounded-lg">
+                                        <div className="col-span-12 md:col-span-4">
+                                            <Label className="text-xs">Description</Label>
+                                            <Input
+                                                placeholder="Description"
+                                                value={item.description}
+                                                onChange={(e) => updateKitItem(index, "description", e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="col-span-4 md:col-span-2">
+                                            <Label className="text-xs">Unité</Label>
+                                            <Select value={item.unit} onValueChange={(v) => updateKitItem(index, "unit", v)}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    {UNIT_OPTIONS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="col-span-3 md:col-span-2">
+                                            <Label className="text-xs">Quantité</Label>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                step="0.1"
+                                                value={item.quantity}
+                                                onChange={(e) => updateKitItem(index, "quantity", parseFloat(e.target.value) || 0)}
+                                            />
+                                        </div>
+                                        <div className="col-span-3 md:col-span-2">
+                                            <Label className="text-xs">Prix €</Label>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={item.unit_price}
+                                                onChange={(e) => updateKitItem(index, "unit_price", parseFloat(e.target.value) || 0)}
+                                            />
+                                        </div>
+                                        <div className="col-span-2 md:col-span-2 flex items-end gap-2">
+                                            <span className="text-sm font-medium flex-1 text-right">
+                                                {(item.quantity * item.unit_price).toFixed(2)} €
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => removeKitItem(index)}
+                                                disabled={newKit.items.length === 1}
+                                                className="hover:bg-red-50 hover:text-red-600"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-4 text-right">
+                                <span className="text-lg font-bold">Total: {calculateKitTotal(newKit.items)} € HT</span>
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button type="button" variant="outline" onClick={() => setShowNewKitModal(false)}>
+                            Annuler
+                        </Button>
+                        <Button type="button" onClick={handleCreateKit} className="bg-blue-600 hover:bg-blue-700" data-testid="confirm-create-kit">
+                            <Plus className="w-4 h-4 mr-2" />Créer le kit
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
