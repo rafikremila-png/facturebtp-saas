@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { getQuote, updateQuote, convertQuoteToInvoice, downloadQuotePdf, createQuoteShareLink, sendQuoteEmail, createAcompte, getAcomptesSummary, createFinalInvoice, createSituation, getSituationsSummary, createSituationFinalInvoice } from "@/lib/api";
+import { getQuote, updateQuote, convertQuoteToInvoice, downloadQuotePdf, createQuoteShareLink, sendQuoteEmail, createAcompte, getAcomptesSummary, createFinalInvoice, createSituation, getSituationsSummary, createSituationFinalInvoice, getProjectFinancialSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -26,8 +26,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
-import { ArrowLeft, Download, Pencil, FileCheck, Calendar, User, Euro, Share2, Copy, Check, Mail, Send, CreditCard, Receipt, Percent, PiggyBank, FileText, HardHat, TrendingUp, ClipboardList } from "lucide-react";
+import { ArrowLeft, Download, Pencil, FileCheck, Calendar, User, Euro, Share2, Copy, Check, Mail, Send, CreditCard, Receipt, Percent, PiggyBank, FileText, HardHat, TrendingUp, ClipboardList, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
+import ProjectFinancialSummary from "@/components/ProjectFinancialSummary";
 
 const statusLabels = {
     brouillon: "Brouillon",
