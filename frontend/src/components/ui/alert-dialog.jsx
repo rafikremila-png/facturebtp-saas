@@ -21,8 +21,22 @@ const AlertDialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
 ))
 AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
 
+// SafePortal wrapper for AlertDialog that handles unmount gracefully
+const SafeAlertDialogPortal = ({ children }) => {
+  const [mounted, setMounted] = React.useState(false);
+  
+  React.useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  if (!mounted) return null;
+  
+  return <AlertDialogPortal>{children}</AlertDialogPortal>;
+};
+
 const AlertDialogContent = React.forwardRef(({ className, ...props }, ref) => (
-  <AlertDialogPortal>
+  <SafeAlertDialogPortal>
     <AlertDialogOverlay />
     <AlertDialogPrimitive.Content
       ref={ref}
@@ -31,7 +45,7 @@ const AlertDialogContent = React.forwardRef(({ className, ...props }, ref) => (
         className
       )}
       {...props} />
-  </AlertDialogPortal>
+  </SafeAlertDialogPortal>
 ))
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName
 
