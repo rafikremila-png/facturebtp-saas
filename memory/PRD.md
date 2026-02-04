@@ -141,7 +141,32 @@ Build a production-ready MVP web application for a French construction company (
 
 ## Changelog (Feb 2026)
 
-### Système d'Acomptes (Advance Payments) ✅ (NEW)
+### Factures de Situation (Progressive Billing) ✅ (NEW - Feb 4, 2026)
+- **Mode Global** : Appliquer un % d'avancement identique sur l'ensemble du devis
+- **Mode Par Ligne** : Définir un % d'avancement différent pour chaque poste
+- **Interface utilisateur** :
+  - Bouton "Situation" (vert émeraude) sur la page de détail du devis
+  - Modal avec onglets pour choisir le mode (Global / Par ligne)
+  - Slider et input numérique pour le pourcentage
+  - Boutons rapides (25%, 50%, 75%, 100%)
+  - Aperçu des montants calculés en temps réel
+- **Section "Situations de travaux"** sur la page de détail :
+  - Barre de progression de l'avancement du chantier
+  - Liste des situations avec numéro, cumul %, type, montant, statut
+  - Total facturé et reste à facturer
+  - Bouton "Nouvelle situation" et "Décompte final"
+- **Calculs automatiques** :
+  - Cumul des % précédents
+  - Montants HT/TVA/TTC par situation
+  - Reste à facturer
+- **Validations** :
+  - Le % doit être > cumul précédent
+  - Le % ne peut pas dépasser 100%
+  - Le devis doit être accepté ou envoyé
+- **Génération PDF** : Documents "Situation de travaux" avec tableau % par ligne
+- **Décompte final** : Récapitulatif de toutes les situations + solde à payer
+
+### Système d'Acomptes (Advance Payments) ✅
 - Création d'acomptes depuis un devis accepté ou envoyé
 - **Type d'acompte** : Pourcentage (%) ou Montant fixe (€)
 - **Facture d'acompte** : Numéro unique, mention "Facture d'acompte"
@@ -156,12 +181,12 @@ Build a production-ready MVP web application for a French construction company (
 - Masquage automatique des colonnes TVA dans les formulaires
 - PDFs adaptés sans TVA
 
-### Informations légales étendues ✅ (NEW)
+### Informations légales étendues ✅
 - Champs ajoutés : RCS/RM, Code APE/NAF, Capital social
 - Coordonnées bancaires : IBAN + BIC/SWIFT
 - Affichage sur tous les PDFs conformément aux exigences françaises
 
-### Délai de paiement configurable ✅ (NEW)
+### Délai de paiement configurable ✅
 - Paramètre par défaut : 30 jours (configurable)
 - Date d'échéance calculée automatiquement sur les factures
 - Mentions légales automatiques sur les factures :
@@ -190,6 +215,7 @@ Build a production-ready MVP web application for a French construction company (
 - **NOTE**: Utilise une clé test Resend (re_123_test). Pour activer l'envoi réel, remplacer par une vraie clé Resend dans backend/.env
 
 ## Next Action Items
-1. Configurer une vraie clé API Resend pour l'envoi d'email en production
-2. Attestations TVA réduite (10%/5.5%) - formulaire guidé avec conditions
-3. Multi-utilisateurs avec rôles (Admin, Commercial, Comptable)
+1. **P1: Attestations TVA réduite (10%/5.5%)** - formulaire guidé avec conditions
+2. Configurer une vraie clé API Resend pour l'envoi d'email en production
+3. **P2: Multi-utilisateurs** avec rôles (Admin, Commercial, Comptable)
+4. **P3: Relances automatiques** pour factures impayées
