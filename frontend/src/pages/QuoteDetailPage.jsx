@@ -72,6 +72,11 @@ export default function QuoteDetailPage() {
     });
     const [creatingSituation, setCreatingSituation] = useState(false);
     const [creatingSituationFinal, setCreatingSituationFinal] = useState(false);
+    
+    // Financial summary state
+    const [financialSummary, setFinancialSummary] = useState(null);
+    const [showFinancialSummary, setShowFinancialSummary] = useState(false);
+    const [loadingFinancialSummary, setLoadingFinancialSummary] = useState(false);
 
     useEffect(() => {
         loadQuote();
@@ -81,6 +86,7 @@ export default function QuoteDetailPage() {
         if (quote && quote.status !== 'brouillon') {
             loadAcomptesSummary();
             loadSituationsSummary();
+            loadFinancialSummary();
         }
     }, [quote]);
 
@@ -90,6 +96,18 @@ export default function QuoteDetailPage() {
             initializeLineItems();
         }
     }, [quote, showSituationModal, situationData.situation_type]);
+    
+    const loadFinancialSummary = async () => {
+        setLoadingFinancialSummary(true);
+        try {
+            const response = await getProjectFinancialSummary(id);
+            setFinancialSummary(response.data);
+        } catch (error) {
+            console.error("Error loading financial summary:", error);
+        } finally {
+            setLoadingFinancialSummary(false);
+        }
+    };
 
     const initializeLineItems = () => {
         if (!quote) return;
