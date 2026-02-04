@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getInvoices, deleteInvoice, downloadInvoicePdf } from "@/lib/api";
+import { getInvoices, deleteInvoice, downloadInvoicePdf, bulkDeleteInvoices } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Table,
     TableBody,
@@ -44,6 +45,8 @@ export default function InvoicesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [deleteId, setDeleteId] = useState(null);
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
 
     useEffect(() => {
         loadInvoices();
@@ -53,6 +56,7 @@ export default function InvoicesPage() {
         try {
             const response = await getInvoices();
             setInvoices(response.data);
+            setSelectedIds([]);
         } catch (error) {
             toast.error("Erreur lors du chargement des factures");
         } finally {
@@ -73,6 +77,19 @@ export default function InvoicesPage() {
         }
     };
 
+    const handleBulkDelete = async () => {
+        if (selectedIds.length === 0) return;
+        try {
+            const response = await bulkDeleteInvoices(selectedIds);
+            toast.success(response.data.message);
+            loadInvoices();
+        } catch (error) {
+            toast.error("Erreur lors de la suppression des factures");
+        } finally {
+            setShowBulkDeleteDialog(false);
+        }
+    };
+
     const handleDownloadPdf = async (invoice) => {
         try {
             await downloadInvoicePdf(invoice.id, invoice.invoice_number);
@@ -89,6 +106,25 @@ export default function InvoicesPage() {
         const matchesStatus = statusFilter === "all" || invoice.payment_status === statusFilter;
         return matchesSearch && matchesStatus;
     });
+
+    const handleSelectAll = (checked) => {
+        if (checked) {
+            setSelectedIds(filteredInvoices.map(inv => inv.id));
+        } else {
+            setSelectedIds([]);
+        }
+    };
+
+    const handleSelectOne = (id, checked) => {
+        if (checked) {
+            setSelectedIds(prev => [...prev, id]);
+        } else {
+            setSelectedIds(prev => prev.filter(i => i !== id));
+        }
+    };
+
+    const isAllSelected = filteredInvoices.length > 0 && selectedIds.length === filteredInvoices.length;
+    const isSomeSelected = selectedIds.length > 0 && selectedIds.length < filteredInvoices.length;
 
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('fr-FR');
@@ -116,12 +152,24 @@ export default function InvoicesPage() {
                     </h1>
                     <p className="text-slate-500 mt-1">{invoices.length} facture(s)</p>
                 </div>
-                <Link to="/factures/new">
-                    <Button className="bg-orange-600 hover:bg-orange-700" data-testid="add-invoice-btn">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Nouvelle facture
-                    </Button>
-                </Link>
+                <div className="flex gap-2">
+                    {selectedIds.length > 0 && (
+                        <Button 
+                            variant="destructive"
+                            onClick={() => setShowBulkDeleteDialog(true)}
+                            data-testid="bulk-delete-btn"
+                        >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Supprimer ({selectedIds.length})
+                        </Button>
+                    )}
+                    <Link to="/factures/new">
+                        <Button className="bg-orange-600 hover:bg-orange-700" data-testid="add-invoice-btn">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Nouvelle facture
+                        </Button>
+                    </Link>
+                </div>
             </div>
 
             {/* Filters */}
@@ -176,6 +224,17 @@ export default function InvoicesPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-slate-900 hover:bg-slate-900">
+                                    <TableHead className="w-12">
+                                        <Checkbox
+                                            checked={isAllSelected}
+                                            ref={(el) => {
+                                                if (el) el.indeterminate = isSomeSelected;
+                                            }}
+                                            onCheckedChange={handleSelectAll}
+                                            className="border-white data-[state=checked]:bg-orange-600 data-[state=checked]:border-orange-600"
+                                            data-testid="select-all-checkbox"
+                                        />
+                                    </TableHead>
                                     <TableHead className="text-white font-semibold">N° Facture</TableHead>
                                     <TableHead className="text-white font-semibold">Client</TableHead>
                                     <TableHead className="text-white font-semibold">Date</TableHead>
@@ -188,9 +247,16 @@ export default function InvoicesPage() {
                                 {filteredInvoices.map((invoice, index) => (
                                     <TableRow 
                                         key={invoice.id} 
-                                        className="table-row-hover"
+                                        className={`table-row-hover ${selectedIds.includes(invoice.id) ? 'bg-orange-50' : ''}`}
                                         data-testid={`invoice-row-${index}`}
                                     >
+                                        <TableCell>
+                                            <Checkbox
+                                                checked={selectedIds.includes(invoice.id)}
+                                                onCheckedChange={(checked) => handleSelectOne(invoice.id, checked)}
+                                                data-testid={`select-invoice-${index}`}
+                                            />
+                                        </TableCell>
                                         <TableCell className="font-mono font-medium">{invoice.invoice_number}</TableCell>
                                         <TableCell className="font-medium">{invoice.client_name}</TableCell>
                                         <TableCell className="text-slate-600">{formatDate(invoice.issue_date)}</TableCell>
@@ -250,7 +316,7 @@ export default function InvoicesPage() {
                 </Card>
             )}
 
-            {/* Delete Dialog */}
+            {/* Single Delete Dialog */}
             <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -267,6 +333,29 @@ export default function InvoicesPage() {
                             data-testid="confirm-delete-btn"
                         >
                             Supprimer
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Bulk Delete Dialog */}
+            <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Suppression groupée</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Êtes-vous sûr de vouloir supprimer <strong>{selectedIds.length} facture(s)</strong> ? 
+                            Cette action est irréversible et supprimera définitivement toutes les factures sélectionnées.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={handleBulkDelete}
+                            className="bg-red-600 hover:bg-red-700"
+                            data-testid="confirm-bulk-delete-btn"
+                        >
+                            Supprimer {selectedIds.length} facture(s)
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
