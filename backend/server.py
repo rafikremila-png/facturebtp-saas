@@ -969,6 +969,21 @@ async def delete_quote(quote_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     return {"message": "Devis supprimé"}
 
+class BulkDeleteRequest(BaseModel):
+    ids: List[str]
+
+@api_router.post("/quotes/bulk-delete")
+async def bulk_delete_quotes(request: BulkDeleteRequest, user: dict = Depends(get_current_user)):
+    """Delete multiple quotes at once"""
+    if not request.ids:
+        raise HTTPException(status_code=400, detail="Aucun devis sélectionné")
+    
+    result = await db.quotes.delete_many({"id": {"$in": request.ids}})
+    return {
+        "message": f"{result.deleted_count} devis supprimé(s)",
+        "deleted_count": result.deleted_count
+    }
+
 @api_router.post("/quotes/{quote_id}/convert", response_model=InvoiceResponse)
 async def convert_quote_to_invoice(quote_id: str, user: dict = Depends(get_current_user)):
     quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
