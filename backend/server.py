@@ -3038,7 +3038,7 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
         items_table = Table(table_data, colWidths=[70*mm, 18*mm, 30*mm, 20*mm, 30*mm])
     
     items_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EA580C')),  # Orange header (same as Total TTC)
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
