@@ -247,6 +247,57 @@ class TestPublicFinancialSummary:
             pytest.skip("Could not compare - one endpoint failed")
 
 
+class TestFinancialSummaryPDF:
+    """Tests for financial summary PDF download endpoint"""
+    
+    def test_download_financial_summary_pdf_success(self, auth_headers):
+        """Test GET /api/quotes/{id}/financial-summary/pdf returns valid PDF"""
+        response = requests.get(
+            f"{BASE_URL}/api/quotes/{TEST_QUOTE_ID}/financial-summary/pdf",
+            headers=auth_headers
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        
+        # Verify content type is PDF
+        content_type = response.headers.get('Content-Type', '')
+        assert 'application/pdf' in content_type, f"Expected PDF content type, got: {content_type}"
+        
+        # Verify content disposition header for download
+        content_disposition = response.headers.get('Content-Disposition', '')
+        assert 'attachment' in content_disposition, f"Expected attachment disposition, got: {content_disposition}"
+        assert 'Recapitulatif_financier' in content_disposition, f"Expected filename in disposition, got: {content_disposition}"
+        
+        # Verify PDF content starts with PDF magic bytes
+        pdf_content = response.content
+        assert len(pdf_content) > 0, "PDF content is empty"
+        assert pdf_content[:4] == b'%PDF', f"Content does not start with PDF magic bytes: {pdf_content[:10]}"
+        
+        print(f"✓ Financial summary PDF downloaded successfully")
+        print(f"  - Content-Type: {content_type}")
+        print(f"  - Content-Disposition: {content_disposition}")
+        print(f"  - PDF size: {len(pdf_content)} bytes")
+    
+    def test_download_financial_summary_pdf_not_found(self, auth_headers):
+        """Test 404 for non-existent quote PDF"""
+        response = requests.get(
+            f"{BASE_URL}/api/quotes/non-existent-id/financial-summary/pdf",
+            headers=auth_headers
+        )
+        
+        assert response.status_code == 404
+        print("✓ 404 returned for non-existent quote PDF")
+    
+    def test_download_financial_summary_pdf_unauthorized(self):
+        """Test 401/403 without authentication for PDF"""
+        response = requests.get(
+            f"{BASE_URL}/api/quotes/{TEST_QUOTE_ID}/financial-summary/pdf"
+        )
+        
+        assert response.status_code in [401, 403]
+        print(f"✓ {response.status_code} returned without authentication for PDF")
+
+
 class TestFinancialSummaryEdgeCases:
     """Test edge cases for financial summary"""
     
