@@ -141,7 +141,25 @@ Build a production-ready MVP web application for a French construction company (
 
 ## Changelog (Feb 2026)
 
-### Factures de Situation (Progressive Billing) ✅ (NEW - Feb 4, 2026)
+### Retenue de Garantie (Retention Guarantee) ✅ (NEW - Feb 4, 2026)
+- **Conformité légale** : Loi n°75-1334 du 31 décembre 1975
+- **Taux maximum** : 5% du montant TTC (validation automatique)
+- **Durée de garantie** : 6, 12 ou 24 mois (défaut: 12 mois)
+- **Interface utilisateur** :
+  - Bouton "Appliquer" sur les factures sans retenue
+  - Modal avec slider (0.5%-5%) et aperçu des calculs
+  - Section dédiée sur la page de facture avec :
+    - Montant retenu et date de libération
+    - Indicateur visuel (retenue active = ambre, libérée = vert)
+    - Bouton "Libérer la retenue" quand applicable
+- **Calculs automatiques** :
+  - Montant de la retenue = TTC × taux
+  - Net à payer = TTC - retenue
+  - Date de libération basée sur la durée de garantie
+- **PDF** : Mention légale automatique + ligne de déduction
+- **Paramètres entreprise** : Configuration par défaut (toggle, taux, durée)
+
+### Factures de Situation (Progressive Billing) ✅ (Feb 4, 2026)
 - **Mode Global** : Appliquer un % d'avancement identique sur l'ensemble du devis
 - **Mode Par Ligne** : Définir un % d'avancement différent pour chaque poste
 - **Interface utilisateur** :
