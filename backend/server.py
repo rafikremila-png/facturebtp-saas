@@ -119,6 +119,7 @@ class QuoteResponse(BaseModel):
     status: str
     notes: str
     created_at: str
+    share_token: Optional[str] = None
 
 class InvoiceCreate(BaseModel):
     client_id: str
