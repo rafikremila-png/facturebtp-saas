@@ -191,13 +191,22 @@ Build a production-ready MVP web application for a French construction company (
 - **Progression visuelle** : Barre de progression + liste des acomptes
 - **Récapitulatif** : Total facturé, total payé, solde restant
 - **Facture de solde** : Déduit automatiquement les acomptes payés
-- Compatible avec le mode auto-entrepreneur (sans TVA)
+- ✅ Compatible avec le mode auto-entrepreneur (sans TVA)
 
-### Mode Auto-entrepreneur ✅
+### Mode Auto-entrepreneur ✅ (Enhanced - Feb 4, 2026)
 - Toggle dans Paramètres > Entreprise
 - Quand activé : mention légale "TVA non applicable, art. 293B du CGI" sur tous les documents
-- Masquage automatique des colonnes TVA dans les formulaires
-- PDFs adaptés sans TVA
+- **Adaptation automatique complète** :
+  - Devis : TVA = 0, items vat_rate = 0
+  - Acomptes : TVA = 0, calculs proportionnels HT uniquement
+  - Situations : TVA = 0, facturation progressive sans TVA
+  - Factures : TVA = 0, items vat_rate = 0
+  - Retenue de garantie : Compatible (calculée sur TTC = HT)
+- **Interface adaptée** :
+  - Masquage automatique des colonnes TVA dans les tableaux
+  - Affichage "Total" au lieu de "Total HT / TVA / TTC"
+  - Mention légale automatique en pied de totaux
+- PDFs adaptés avec mention légale
 
 ### Informations légales étendues ✅
 - Champs ajoutés : RCS/RM, Code APE/NAF, Capital social
