@@ -141,7 +141,7 @@ Build a production-ready MVP web application for a French construction company (
 
 ## Changelog (Feb 2026)
 
-### Tableau de Bord Financier du Projet ✅ (NEW - Feb 4, 2026)
+### Tableau de Bord Financier du Projet ✅ (Feb 4, 2026)
 - **Dashboard complet** accessible depuis la page de détail du devis
 - **Double accès** :
   - Admin : Bouton "Récapitulatif financier" avec liens cliquables
@@ -156,6 +156,20 @@ Build a production-ready MVP web application for a French construction company (
   - `GET /api/quotes/{id}/financial-summary` (authentifié)
   - `GET /api/public/quote/{token}/financial-summary` (public)
 - **But** : Clarté absolue pour l'artisan ET le client
+
+### Export PDF Récapitulatif Financier ✅ (Feb 4, 2026)
+- **Bouton "Télécharger PDF"** dans le composant récapitulatif financier
+- **PDF professionnel** généré par ReportLab avec :
+  - En-tête avec informations entreprise (nom, adresse, SIRET)
+  - Informations projet (client, référence devis, statut, date)
+  - Montant total du projet (HT, TVA, TTC ou mention auto-entrepreneur)
+  - Synthèse des paiements (facturé, encaissé, reste à payer)
+  - Détail par catégorie (acomptes, situations, retenue de garantie)
+  - Historique des factures (numéro, type, date, montant, statut)
+  - Pied de page avec date de génération et coordonnées
+- **API** : `GET /api/quotes/{id}/financial-summary/pdf` (authentifié, retourne le fichier PDF)
+- **Nom du fichier** : `Recapitulatif_financier_{NUMERO_DEVIS}.pdf`
+- **Visibilité** : Uniquement pour les utilisateurs authentifiés (pas visible en vue publique client)
 
 ### Retenue de Garantie (Retention Guarantee) ✅ (Feb 4, 2026)
 - **Conformité légale** : Loi n°75-1334 du 31 décembre 1975
