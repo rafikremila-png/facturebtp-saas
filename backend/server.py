@@ -1569,6 +1569,150 @@ async def create_situation_final_invoice(quote_id: str, user: dict = Depends(get
     
     return InvoiceResponse(**invoice_doc)
 
+# ============== RETENUE DE GARANTIE (RETENTION GUARANTEE) ==============
+
+@api_router.post("/invoices/{invoice_id}/retenue-garantie")
+async def apply_retenue_garantie(invoice_id: str, retenue_data: RetenueGarantieCreate, user: dict = Depends(get_current_user)):
+    """Apply retention guarantee to an invoice (French BTP standard)"""
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+    
+    # Validate rate (max 5% per French law)
+    if retenue_data.rate > 5.0:
+        raise HTTPException(status_code=400, detail="La retenue de garantie ne peut pas dépasser 5%")
+    if retenue_data.rate <= 0:
+        raise HTTPException(status_code=400, detail="Le taux doit être supérieur à 0")
+    
+    # Calculate retention amount
+    total_ttc = invoice["total_ttc"]
+    retenue_amount = round(total_ttc * (retenue_data.rate / 100), 2)
+    net_a_payer = round(total_ttc - retenue_amount, 2)
+    
+    # Calculate release date (default: 1 year from issue date)
+    issue_date = datetime.fromisoformat(invoice["issue_date"].replace("Z", "+00:00"))
+    release_date = issue_date + timedelta(days=retenue_data.warranty_months * 30)
+    
+    update_data = {
+        "has_retenue_garantie": True,
+        "retenue_garantie_rate": retenue_data.rate,
+        "retenue_garantie_amount": retenue_amount,
+        "retenue_garantie_release_date": release_date.isoformat(),
+        "retenue_garantie_released": False,
+        "net_a_payer": net_a_payer
+    }
+    
+    await db.invoices.update_one({"id": invoice_id}, {"$set": update_data})
+    
+    # Fetch updated invoice
+    updated_invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    
+    return {
+        "message": "Retenue de garantie appliquée",
+        "invoice_id": invoice_id,
+        "total_ttc": total_ttc,
+        "retenue_rate": retenue_data.rate,
+        "retenue_amount": retenue_amount,
+        "net_a_payer": net_a_payer,
+        "release_date": release_date.isoformat()
+    }
+
+@api_router.delete("/invoices/{invoice_id}/retenue-garantie")
+async def remove_retenue_garantie(invoice_id: str, user: dict = Depends(get_current_user)):
+    """Remove retention guarantee from an invoice"""
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+    
+    if invoice.get("retenue_garantie_released"):
+        raise HTTPException(status_code=400, detail="La retenue a déjà été libérée")
+    
+    update_data = {
+        "has_retenue_garantie": False,
+        "retenue_garantie_rate": 0,
+        "retenue_garantie_amount": 0,
+        "retenue_garantie_release_date": None,
+        "retenue_garantie_released": False,
+        "net_a_payer": invoice["total_ttc"]
+    }
+    
+    await db.invoices.update_one({"id": invoice_id}, {"$set": update_data})
+    
+    return {"message": "Retenue de garantie supprimée", "invoice_id": invoice_id}
+
+@api_router.post("/invoices/{invoice_id}/retenue-garantie/release")
+async def release_retenue_garantie(invoice_id: str, user: dict = Depends(get_current_user)):
+    """Release the retention guarantee (after warranty period)"""
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+    
+    if not invoice.get("has_retenue_garantie"):
+        raise HTTPException(status_code=400, detail="Cette facture n'a pas de retenue de garantie")
+    
+    if invoice.get("retenue_garantie_released"):
+        raise HTTPException(status_code=400, detail="La retenue a déjà été libérée")
+    
+    await db.invoices.update_one(
+        {"id": invoice_id}, 
+        {
+            "$set": {
+                "retenue_garantie_released": True,
+                "retenue_garantie_released_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {
+        "message": "Retenue de garantie libérée",
+        "invoice_id": invoice_id,
+        "released_amount": invoice.get("retenue_garantie_amount", 0),
+        "released_at": datetime.now(timezone.utc).isoformat()
+    }
+
+@api_router.get("/quotes/{quote_id}/retenues-garantie/summary")
+async def get_quote_retenues_summary(quote_id: str, user: dict = Depends(get_current_user)):
+    """Get summary of all retention guarantees for a quote/project"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    # Get all invoices with retention for this quote
+    invoices = await db.invoices.find(
+        {"parent_quote_id": quote_id, "has_retenue_garantie": True},
+        {"_id": 0}
+    ).to_list(100)
+    
+    total_retained = sum(inv.get("retenue_garantie_amount", 0) for inv in invoices)
+    total_released = sum(
+        inv.get("retenue_garantie_amount", 0) 
+        for inv in invoices 
+        if inv.get("retenue_garantie_released")
+    )
+    pending_release = total_retained - total_released
+    
+    retentions = [
+        {
+            "invoice_id": inv["id"],
+            "invoice_number": inv["invoice_number"],
+            "amount": inv.get("retenue_garantie_amount", 0),
+            "rate": inv.get("retenue_garantie_rate", 5),
+            "release_date": inv.get("retenue_garantie_release_date"),
+            "released": inv.get("retenue_garantie_released", False),
+            "released_at": inv.get("retenue_garantie_released_at")
+        }
+        for inv in invoices
+    ]
+    
+    return {
+        "quote_id": quote_id,
+        "quote_number": quote["quote_number"],
+        "total_retained": round(total_retained, 2),
+        "total_released": round(total_released, 2),
+        "pending_release": round(pending_release, 2),
+        "retentions": retentions
+    }
+
 # ============== COMPANY SETTINGS ==============
 
 @api_router.get("/settings", response_model=CompanySettings)
