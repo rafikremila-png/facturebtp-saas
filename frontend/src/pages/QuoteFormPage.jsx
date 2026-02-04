@@ -441,9 +441,20 @@ export default function QuoteFormPage() {
                         </Button>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                        {/* Auto-entrepreneur banner */}
+                        {isAutoEntrepreneur && (
+                            <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex items-center gap-3">
+                                <AlertTriangle className="w-5 h-5 text-amber-600" />
+                                <div className="text-sm">
+                                    <span className="font-medium text-amber-800">Mode auto-entrepreneur actif</span>
+                                    <span className="text-amber-700"> - {autoEntrepreneurMention}</span>
+                                </div>
+                            </div>
+                        )}
+                        
                         {formData.items.map((item, index) => (
                             <div key={index} className="grid grid-cols-12 gap-2 items-end p-4 bg-slate-50 rounded-lg" data-testid={`item-row-${index}`}>
-                                <div className="col-span-12 md:col-span-4 space-y-1">
+                                <div className={`col-span-12 ${isAutoEntrepreneur ? 'md:col-span-5' : 'md:col-span-4'} space-y-1`}>
                                     <Label className="text-xs">Description</Label>
                                     <Input
                                         placeholder="Description du service..."
@@ -473,7 +484,7 @@ export default function QuoteFormPage() {
                                     />
                                 </div>
                                 <div className="col-span-3 md:col-span-2 space-y-1">
-                                    <Label className="text-xs">Prix unit. HT</Label>
+                                    <Label className="text-xs">Prix unit. {isAutoEntrepreneur ? '' : 'HT'}</Label>
                                     <Input
                                         type="number"
                                         min="0"
@@ -483,19 +494,21 @@ export default function QuoteFormPage() {
                                         data-testid={`item-price-${index}`}
                                     />
                                 </div>
-                                <div className="col-span-2 md:col-span-1 space-y-1">
-                                    <Label className="text-xs">TVA</Label>
-                                    <Select value={String(item.vat_rate)} onValueChange={(v) => updateItem(index, "vat_rate", parseFloat(v))}>
-                                        <SelectTrigger data-testid={`item-vat-${index}`}>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {vatRates.map(rate => (
-                                                <SelectItem key={rate} value={String(rate)}>{rate}%</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                {!isAutoEntrepreneur && (
+                                    <div className="col-span-2 md:col-span-1 space-y-1">
+                                        <Label className="text-xs">TVA</Label>
+                                        <Select value={String(item.vat_rate)} onValueChange={(v) => updateItem(index, "vat_rate", parseFloat(v))}>
+                                            <SelectTrigger data-testid={`item-vat-${index}`}>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {vatRates.map(rate => (
+                                                    <SelectItem key={rate} value={String(rate)}>{rate}%</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                                 <div className="col-span-1 space-y-1">
                                     <Label className="text-xs opacity-0">X</Label>
                                     <Button
@@ -520,13 +533,15 @@ export default function QuoteFormPage() {
 
                         <div className="border-t pt-4 mt-4 space-y-2">
                             <div className="flex justify-end gap-8 text-sm">
-                                <span className="text-slate-500">Total HT:</span>
+                                <span className="text-slate-500">Total {isAutoEntrepreneur ? '' : 'HT'}:</span>
                                 <span className="font-medium w-24 text-right">{totals.totalHT} €</span>
                             </div>
-                            <div className="flex justify-end gap-8 text-sm">
-                                <span className="text-slate-500">Total TVA:</span>
-                                <span className="font-medium w-24 text-right">{totals.totalVAT} €</span>
-                            </div>
+                            {!isAutoEntrepreneur && (
+                                <div className="flex justify-end gap-8 text-sm">
+                                    <span className="text-slate-500">Total TVA:</span>
+                                    <span className="font-medium w-24 text-right">{totals.totalVAT} €</span>
+                                </div>
+                            )}
                             <div className="flex justify-end gap-8 text-lg font-bold">
                                 <span className="text-slate-900">Total TTC:</span>
                                 <span className="text-orange-600 w-24 text-right">{totals.totalTTC} €</span>
