@@ -140,7 +140,16 @@ Build a production-ready MVP web application for a French construction company (
 
 ## Changelog (Feb 2026)
 
-### Mode Auto-entrepreneur ✅ (NEW)
+### Système d'Acomptes (Advance Payments) ✅ (NEW)
+- Création d'acomptes depuis un devis accepté ou envoyé
+- **Type d'acompte** : Pourcentage (%) ou Montant fixe (€)
+- **Facture d'acompte** : Numéro unique, mention "Facture d'acompte"
+- **Progression visuelle** : Barre de progression + liste des acomptes
+- **Récapitulatif** : Total facturé, total payé, solde restant
+- **Facture de solde** : Déduit automatiquement les acomptes payés
+- Compatible avec le mode auto-entrepreneur (sans TVA)
+
+### Mode Auto-entrepreneur ✅
 - Toggle dans Paramètres > Entreprise
 - Quand activé : mention légale "TVA non applicable, art. 293B du CGI" sur tous les documents
 - Masquage automatique des colonnes TVA dans les formulaires
