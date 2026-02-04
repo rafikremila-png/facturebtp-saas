@@ -278,16 +278,24 @@ Build a production-ready MVP web application for a French construction company (
 - Téléchargement du PDF
 - Informations légales de l'entreprise en pied de page
 
-### Envoi email ✅ (MOCKED)
+### Envoi email (Configuration requise)
 - Bouton "Envoyer par email" sur devis et factures
 - Modal avec champ email et message personnalisé
 - PDF en pièce jointe
 - Lien de consultation en ligne
-- **NOTE**: Utilise une clé test Resend (re_123_test). Pour activer l'envoi réel, remplacer par une vraie clé Resend dans backend/.env
+- **Configuration requise** :
+  1. Créer un compte sur https://resend.com
+  2. Générer une API Key dans Dashboard → API Keys
+  3. Ajouter dans `/app/backend/.env` :
+     ```
+     RESEND_API_KEY=re_votre_vraie_cle_ici
+     SENDER_EMAIL=votre-email@votredomaine.com
+     ```
+  4. Redémarrer le backend : `sudo supervisorctl restart backend`
+- Message d'erreur clair si non configuré (HTTP 503)
 
 ## Next Action Items
 1. **P1: Attestations TVA réduite (10%/5.5%)** - formulaire guidé avec conditions
-2. Configurer une vraie clé API Resend pour l'envoi d'email en production
 3. **P2: Multi-utilisateurs** avec rôles (Admin, Commercial, Comptable)
 4. **P3: Relances automatiques** pour factures impayées
 
