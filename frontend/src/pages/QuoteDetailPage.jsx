@@ -153,6 +153,14 @@ export default function QuoteDetailPage() {
                 <div className="flex gap-2">
                     <Button 
                         variant="outline"
+                        onClick={handleShare}
+                        data-testid="share-btn"
+                    >
+                        <Share2 className="w-4 h-4 mr-2" />
+                        Partager
+                    </Button>
+                    <Button 
+                        variant="outline"
                         onClick={handleDownloadPdf}
                         data-testid="download-pdf-btn"
                     >
