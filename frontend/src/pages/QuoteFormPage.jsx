@@ -560,6 +560,106 @@ export default function QuoteFormPage() {
                     </Button>
                 </div>
             </form>
+
+            {/* Kit Selection Modal */}
+            <Dialog open={showKitModal} onOpenChange={setShowKitModal}>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="font-['Barlow_Condensed'] text-xl flex items-center gap-2">
+                            <Layers className="w-5 h-5 text-blue-600" />
+                            Sélectionner un kit de rénovation
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 mt-4">
+                        {kits.length === 0 ? (
+                            <p className="text-center text-slate-500 py-8">Aucun kit disponible</p>
+                        ) : (
+                            kits.map(kit => (
+                                <div 
+                                    key={kit.id} 
+                                    className="border rounded-lg p-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                                    onClick={() => addKit(kit)}
+                                    data-testid={`kit-option-${kit.id}`}
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h3 className="font-semibold text-slate-900">{kit.name}</h3>
+                                            {kit.description && (
+                                                <p className="text-sm text-slate-500 mt-1">{kit.description}</p>
+                                            )}
+                                            <p className="text-xs text-slate-400 mt-2">
+                                                {kit.items.length} lignes • {kit.is_default ? "Kit par défaut" : "Kit personnalisé"}
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-sm font-medium text-orange-600">
+                                                {kit.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0).toFixed(2)} € HT
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 text-xs text-slate-500">
+                                        {kit.items.slice(0, 3).map((item, idx) => (
+                                            <span key={idx}>{item.description}{idx < 2 && kit.items.length > idx + 1 ? " • " : ""}</span>
+                                        ))}
+                                        {kit.items.length > 3 && <span> +{kit.items.length - 3} autres</span>}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Save as Kit Modal */}
+            <Dialog open={showSaveKitModal} onOpenChange={setShowSaveKitModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="font-['Barlow_Condensed'] text-xl flex items-center gap-2">
+                            <BookmarkPlus className="w-5 h-5 text-green-600" />
+                            Sauvegarder comme kit
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                            <Label>Nom du kit *</Label>
+                            <Input
+                                placeholder="Ex: Rénovation appartement T2"
+                                value={newKitName}
+                                onChange={(e) => setNewKitName(e.target.value)}
+                                data-testid="kit-name-input"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Description (optionnel)</Label>
+                            <Textarea
+                                placeholder="Description du kit..."
+                                value={newKitDescription}
+                                onChange={(e) => setNewKitDescription(e.target.value)}
+                                rows={2}
+                            />
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-3">
+                            <p className="text-sm text-slate-600">
+                                Ce kit contiendra <strong>{formData.items.filter(i => i.description.trim()).length}</strong> ligne(s) pour un total de <strong>{totals.totalHT} € HT</strong>
+                            </p>
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button type="button" variant="outline" onClick={() => setShowSaveKitModal(false)}>
+                            Annuler
+                        </Button>
+                        <Button 
+                            type="button" 
+                            onClick={saveAsKit}
+                            className="bg-green-600 hover:bg-green-700"
+                            data-testid="confirm-save-kit-btn"
+                        >
+                            <BookmarkPlus className="w-4 h-4 mr-2" />
+                            Sauvegarder
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
