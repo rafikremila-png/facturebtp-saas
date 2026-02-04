@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getInvoice, updateInvoice, downloadInvoicePdf, createInvoiceShareLink, sendInvoiceEmail } from "@/lib/api";
+import { getInvoice, updateInvoice, downloadInvoicePdf, createInvoiceShareLink, sendInvoiceEmail, applyRetenueGarantie, removeRetenueGarantie, releaseRetenueGarantie } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, Download, CheckCircle, Share2, Copy, Check, Mail, Send } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Progress } from "@/components/ui/progress";
+import { ArrowLeft, Download, CheckCircle, Share2, Copy, Check, Mail, Send, Shield, ShieldCheck, Unlock, Calendar, Percent, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 function InvoiceViewPage() {
@@ -24,14 +27,23 @@ function InvoiceViewPage() {
     var [showEmailModal, setShowEmailModal] = useState(false);
     var [emailData, setEmailData] = useState({ recipient_email: "", custom_message: "" });
     var [sendingEmail, setSendingEmail] = useState(false);
+    // Retenue de garantie state
+    var [showRetenueModal, setShowRetenueModal] = useState(false);
+    var [retenueData, setRetenueData] = useState({ rate: 5, warranty_months: 12 });
+    var [applyingRetenue, setApplyingRetenue] = useState(false);
+    var [releasingRetenue, setReleasingRetenue] = useState(false);
 
     useEffect(function() {
+        loadInvoice();
+    }, [params.id]);
+
+    function loadInvoice() {
         getInvoice(params.id).then(function(res) {
             setInvoice(res.data);
             setPaidAmount(String(res.data.paid_amount || 0));
             setLoading(false);
         }).catch(function() { toast.error("Erreur"); navigate("/factures"); });
-    }, [params.id, navigate]);
+    }
 
     function updateStatus(s) {
         updateInvoice(params.id, { payment_status: s }).then(function() {
@@ -48,14 +60,57 @@ function InvoiceViewPage() {
     }
 
     function markPaid() {
-        updateInvoice(params.id, { payment_status: "paye", paid_amount: invoice.total_ttc }).then(function() {
-            setInvoice(function(p) { return { ...p, payment_status: "paye", paid_amount: p.total_ttc }; });
+        const amount = invoice.has_retenue_garantie ? invoice.net_a_payer : invoice.total_ttc;
+        updateInvoice(params.id, { payment_status: "paye", paid_amount: amount }).then(function() {
+            setInvoice(function(p) { return { ...p, payment_status: "paye", paid_amount: amount }; });
             toast.success("Payée");
         }).catch(function() { toast.error("Erreur"); });
     }
 
     function downloadPdf() { downloadInvoicePdf(invoice.id, invoice.invoice_number).catch(function() { toast.error("Erreur"); }); }
     function fmt(n) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2 }) + " €"; }
+
+    // Retenue de garantie functions
+    async function handleApplyRetenue() {
+        if (retenueData.rate <= 0 || retenueData.rate > 5) {
+            toast.error("Le taux doit être entre 0 et 5%");
+            return;
+        }
+        setApplyingRetenue(true);
+        try {
+            await applyRetenueGarantie(invoice.id, retenueData);
+            toast.success("Retenue de garantie appliquée");
+            setShowRetenueModal(false);
+            loadInvoice();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || "Erreur");
+        } finally {
+            setApplyingRetenue(false);
+        }
+    }
+
+    async function handleRemoveRetenue() {
+        try {
+            await removeRetenueGarantie(invoice.id);
+            toast.success("Retenue de garantie supprimée");
+            loadInvoice();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || "Erreur");
+        }
+    }
+
+    async function handleReleaseRetenue() {
+        setReleasingRetenue(true);
+        try {
+            await releaseRetenueGarantie(invoice.id);
+            toast.success("Retenue de garantie libérée");
+            loadInvoice();
+        } catch (error) {
+            toast.error(error.response?.data?.detail || "Erreur");
+        } finally {
+            setReleasingRetenue(false);
+        }
+    }
 
     async function handleShare() {
         try {
