@@ -3316,12 +3316,8 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     if company.rcs_rm:
         footer_parts.append(company.rcs_rm)
     
-    if footer_parts:
-        elements.append(Paragraph(" - ".join(footer_parts), small_style))
-    
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
+    # Build PDF with footer on each page
+    doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
     buffer.seek(0)
     return buffer
 
