@@ -424,6 +424,93 @@ export default function QuoteDetailPage() {
                 </CardContent>
             </Card>
 
+            {/* Acomptes Section */}
+            {acomptesSummary && acomptesSummary.acomptes_count > 0 && (
+                <Card className="border-purple-200 bg-purple-50/30">
+                    <CardHeader>
+                        <CardTitle className="font-['Barlow_Condensed'] flex items-center gap-2">
+                            <PiggyBank className="w-5 h-5 text-purple-600" />
+                            Acomptes ({acomptesSummary.acomptes_count})
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {/* Progress bar */}
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-600">Progression des paiements</span>
+                                <span className="font-medium">{acomptesSummary.percentage_invoiced}% facturé</span>
+                            </div>
+                            <Progress value={acomptesSummary.percentage_invoiced} className="h-3" />
+                        </div>
+
+                        {/* Acomptes list */}
+                        <div className="space-y-2">
+                            {acomptesSummary.acomptes.map((acompte) => (
+                                <div key={acompte.id} className="flex items-center justify-between p-3 bg-white rounded-lg border">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                            acompte.payment_status === 'paye' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'
+                                        }`}>
+                                            {acompte.acompte_number}
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-slate-900">{acompte.invoice_number}</p>
+                                            <p className="text-sm text-slate-500">
+                                                {acompte.acompte_type === 'percentage' ? `${acompte.acompte_value}%` : `${acompte.acompte_value}€`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="font-bold text-slate-900">{formatCurrency(acompte.total_ttc)}</p>
+                                        <span className={`text-xs px-2 py-1 rounded ${
+                                            acompte.payment_status === 'paye' 
+                                                ? 'bg-green-100 text-green-700' 
+                                                : 'bg-amber-100 text-amber-700'
+                                        }`}>
+                                            {acompte.payment_status === 'paye' ? 'Payé' : 'En attente'}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Summary */}
+                        <div className="border-t pt-4 space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span>Total des acomptes:</span>
+                                <span className="font-medium">{formatCurrency(acomptesSummary.total_acomptes_ttc)}</span>
+                            </div>
+                            <div className="flex justify-between text-lg font-bold">
+                                <span className="text-slate-900">Solde restant:</span>
+                                <span className="text-purple-600">{formatCurrency(acomptesSummary.remaining_ttc)}</span>
+                            </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        {quote.status === "accepte" && acomptesSummary.remaining_ttc > 0 && (
+                            <div className="flex gap-2 pt-2">
+                                <Button 
+                                    variant="outline"
+                                    onClick={() => setShowAcompteModal(true)}
+                                    className="border-purple-300 text-purple-700 hover:bg-purple-100"
+                                >
+                                    <CreditCard className="w-4 h-4 mr-2" />
+                                    Nouvel acompte
+                                </Button>
+                                <Button 
+                                    className="bg-green-600 hover:bg-green-700"
+                                    onClick={handleCreateFinalInvoice}
+                                    disabled={creatingFinal}
+                                >
+                                    <FileText className="w-4 h-4 mr-2" />
+                                    Créer facture de solde
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Notes */}
             {quote.notes && (
                 <Card>
