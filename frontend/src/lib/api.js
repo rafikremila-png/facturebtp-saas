@@ -41,7 +41,7 @@ export const updateClient = (id, data) => api.put(`/clients/${id}`, data);
 export const deleteClient = (id) => api.delete(`/clients/${id}`);
 
 // Quotes
-export const getQuotes = (status) => api.get('/quotes', { params: { status } });
+export const getQuotes = (status, clientId) => api.get('/quotes', { params: { status, client_id: clientId } });
 export const getQuote = (id) => api.get(`/quotes/${id}`);
 export const createQuote = (data) => api.post('/quotes', data);
 export const updateQuote = (id, data) => api.put(`/quotes/${id}`, data);
