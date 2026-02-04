@@ -124,8 +124,7 @@ export default function InvoicesPage() {
         const matchesSearch = 
             invoice.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
             invoice.client_name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesStatus = statusFilter === "all" || invoice.payment_status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return matchesSearch;
     });
 
     const handleSelectAll = (checked) => {
