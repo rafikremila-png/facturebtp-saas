@@ -1050,112 +1050,201 @@ async def get_company_settings():
 
 def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: dict):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm, leftMargin=20*mm, rightMargin=20*mm)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
     
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor('#EA580C'), spaceAfter=12)
-    header_style = ParagraphStyle('Header', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#475569'))
-    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10)
-    bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold')
-    small_style = ParagraphStyle('Small', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#64748B'))
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=22, textColor=colors.HexColor('#EA580C'), spaceAfter=8)
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#475569'), leading=12)
+    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=9, leading=12)
+    bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold', leading=12)
+    small_style = ParagraphStyle('Small', parent=styles['Normal'], fontSize=7, textColor=colors.HexColor('#64748B'), leading=10)
+    legal_style = ParagraphStyle('Legal', parent=styles['Normal'], fontSize=7, textColor=colors.HexColor('#374151'), leading=10)
     
     elements = []
     
-    # Header with company info
+    # ========== HEADER: Company Info ==========
     company_name = company.company_name or "Votre Entreprise BTP"
     elements.append(Paragraph(company_name, title_style))
     
+    # Company details (all required French legal info)
+    company_lines = []
     if company.address:
-        elements.append(Paragraph(company.address, header_style))
+        company_lines.append(company.address)
+    
+    contact_parts = []
     if company.phone:
-        elements.append(Paragraph(f"Tél: {company.phone}", header_style))
+        contact_parts.append(f"Tél: {company.phone}")
     if company.email:
-        elements.append(Paragraph(f"Email: {company.email}", header_style))
+        contact_parts.append(f"Email: {company.email}")
+    if contact_parts:
+        company_lines.append(" | ".join(contact_parts))
+    
+    legal_parts = []
     if company.siret:
-        elements.append(Paragraph(f"SIRET: {company.siret}", header_style))
-    if company.vat_number:
-        elements.append(Paragraph(f"N° TVA: {company.vat_number}", header_style))
+        legal_parts.append(f"SIRET: {company.siret}")
+    if company.rcs_rm:
+        legal_parts.append(company.rcs_rm)
+    if company.code_ape:
+        legal_parts.append(f"Code APE: {company.code_ape}")
+    if legal_parts:
+        company_lines.append(" | ".join(legal_parts))
     
-    elements.append(Spacer(1, 15*mm))
+    if company.capital_social:
+        company_lines.append(f"Capital social: {company.capital_social}")
     
-    # Document title
+    # VAT number or auto-entrepreneur mention
+    if company.is_auto_entrepreneur:
+        company_lines.append(company.auto_entrepreneur_mention)
+    elif company.vat_number:
+        company_lines.append(f"N° TVA Intracommunautaire: {company.vat_number}")
+    
+    for line in company_lines:
+        elements.append(Paragraph(line, header_style))
+    
+    elements.append(Spacer(1, 12*mm))
+    
+    # ========== DOCUMENT TITLE ==========
     if doc_type == "quote":
         doc_title = f"DEVIS N° {doc_data['quote_number']}"
     else:
         doc_title = f"FACTURE N° {doc_data['invoice_number']}"
     
-    elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#0F172A'))))
-    elements.append(Spacer(1, 5*mm))
+    elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
+    elements.append(Spacer(1, 4*mm))
     
-    # Date and client info table
+    # ========== DATE & CLIENT INFO ==========
     issue_date = doc_data['issue_date'][:10] if isinstance(doc_data['issue_date'], str) else doc_data['issue_date'].strftime('%Y-%m-%d')
     
-    info_data = [
-        [Paragraph(f"<b>Date d'émission:</b> {issue_date}", normal_style), Paragraph("<b>Client:</b>", normal_style)],
-    ]
+    left_col = []
+    left_col.append(Paragraph(f"<b>Date d'émission:</b> {issue_date}", normal_style))
     
     if doc_type == "quote":
         validity_date = doc_data['validity_date'][:10] if isinstance(doc_data['validity_date'], str) else doc_data['validity_date'].strftime('%Y-%m-%d')
-        info_data.append([Paragraph(f"<b>Validité:</b> {validity_date}", normal_style), Paragraph(client.get('name', ''), bold_style)])
+        left_col.append(Paragraph(f"<b>Date de validité:</b> {validity_date}", normal_style))
     else:
-        info_data.append([Paragraph("", normal_style), Paragraph(client.get('name', ''), bold_style)])
+        # Invoice: payment due date
+        payment_due = doc_data.get('payment_due_date', '')
+        if payment_due:
+            due_date = payment_due[:10] if isinstance(payment_due, str) else payment_due.strftime('%Y-%m-%d')
+            left_col.append(Paragraph(f"<b>Date d'échéance:</b> {due_date}", normal_style))
     
-    info_data.append([Paragraph("", normal_style), Paragraph(client.get('address', ''), normal_style)])
-    info_data.append([Paragraph("", normal_style), Paragraph(client.get('email', ''), normal_style)])
+    right_col = []
+    right_col.append(Paragraph("<b>Client:</b>", normal_style))
+    right_col.append(Paragraph(client.get('name', ''), bold_style))
+    if client.get('address'):
+        right_col.append(Paragraph(client.get('address', ''), normal_style))
+    if client.get('email'):
+        right_col.append(Paragraph(client.get('email', ''), normal_style))
+    if client.get('phone'):
+        right_col.append(Paragraph(f"Tél: {client.get('phone', '')}", normal_style))
+    
+    # Create two-column layout
+    info_data = [[left_col[0] if left_col else '', right_col[0] if right_col else '']]
+    max_rows = max(len(left_col), len(right_col))
+    for i in range(1, max_rows):
+        left_item = left_col[i] if i < len(left_col) else ''
+        right_item = right_col[i] if i < len(right_col) else ''
+        info_data.append([left_item, right_item])
     
     info_table = Table(info_data, colWidths=[90*mm, 80*mm])
     info_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
     elements.append(info_table)
-    elements.append(Spacer(1, 10*mm))
+    elements.append(Spacer(1, 8*mm))
     
-    # Items table
-    table_data = [
-        [Paragraph("<b>Description</b>", bold_style), 
-         Paragraph("<b>Qté</b>", bold_style), 
-         Paragraph("<b>Prix unit. HT</b>", bold_style), 
-         Paragraph("<b>TVA</b>", bold_style), 
-         Paragraph("<b>Total HT</b>", bold_style)]
-    ]
+    # ========== ITEMS TABLE ==========
+    is_auto_entrepreneur = company.is_auto_entrepreneur
     
-    for item in doc_data['items']:
-        line_total = item['quantity'] * item['unit_price']
-        table_data.append([
-            Paragraph(item['description'], normal_style),
-            Paragraph(str(item['quantity']), normal_style),
-            Paragraph(f"{item['unit_price']:.2f} €", normal_style),
-            Paragraph(f"{item['vat_rate']}%", normal_style),
-            Paragraph(f"{line_total:.2f} €", normal_style)
-        ])
+    if is_auto_entrepreneur:
+        # No VAT columns for auto-entrepreneur
+        table_data = [
+            [Paragraph("<b>Description</b>", bold_style), 
+             Paragraph("<b>Qté</b>", bold_style), 
+             Paragraph("<b>Prix unitaire</b>", bold_style), 
+             Paragraph("<b>Total</b>", bold_style)]
+        ]
+        
+        for item in doc_data['items']:
+            line_total = item['quantity'] * item['unit_price']
+            table_data.append([
+                Paragraph(item['description'], normal_style),
+                Paragraph(str(item['quantity']), normal_style),
+                Paragraph(f"{item['unit_price']:.2f} €", normal_style),
+                Paragraph(f"{line_total:.2f} €", normal_style)
+            ])
+        
+        items_table = Table(table_data, colWidths=[85*mm, 20*mm, 35*mm, 35*mm])
+    else:
+        # Full table with VAT
+        table_data = [
+            [Paragraph("<b>Description</b>", bold_style), 
+             Paragraph("<b>Qté</b>", bold_style), 
+             Paragraph("<b>Prix unit. HT</b>", bold_style), 
+             Paragraph("<b>TVA</b>", bold_style), 
+             Paragraph("<b>Total HT</b>", bold_style)]
+        ]
+        
+        for item in doc_data['items']:
+            line_total = item['quantity'] * item['unit_price']
+            table_data.append([
+                Paragraph(item['description'], normal_style),
+                Paragraph(str(item['quantity']), normal_style),
+                Paragraph(f"{item['unit_price']:.2f} €", normal_style),
+                Paragraph(f"{item['vat_rate']}%", normal_style),
+                Paragraph(f"{line_total:.2f} €", normal_style)
+            ])
+        
+        items_table = Table(table_data, colWidths=[70*mm, 18*mm, 30*mm, 20*mm, 30*mm])
     
-    items_table = Table(table_data, colWidths=[70*mm, 20*mm, 30*mm, 20*mm, 30*mm])
     items_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('TOPPADDING', (0, 0), (-1, 0), 6),
         ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8FAFC')),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#F8FAFC'), colors.white]),
-        ('TOPPADDING', (0, 1), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ('TOPPADDING', (0, 1), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
     ]))
     elements.append(items_table)
-    elements.append(Spacer(1, 8*mm))
+    elements.append(Spacer(1, 6*mm))
     
-    # Totals
-    totals_data = [
-        ["Total HT:", f"{doc_data['total_ht']:.2f} €"],
-        ["Total TVA:", f"{doc_data['total_vat']:.2f} €"],
-        ["Total TTC:", f"{doc_data['total_ttc']:.2f} €"],
-    ]
+    # ========== TOTALS ==========
+    if is_auto_entrepreneur:
+        totals_data = [
+            ["Total:", f"{doc_data['total_ht']:.2f} €"],
+        ]
+    else:
+        # Group VAT by rate
+        vat_by_rate = {}
+        for item in doc_data['items']:
+            rate = item['vat_rate']
+            line_ht = item['quantity'] * item['unit_price']
+            line_vat = line_ht * rate / 100
+            if rate not in vat_by_rate:
+                vat_by_rate[rate] = 0
+            vat_by_rate[rate] += line_vat
+        
+        totals_data = [
+            ["Total HT:", f"{doc_data['total_ht']:.2f} €"],
+        ]
+        
+        # Show VAT breakdown by rate
+        for rate in sorted(vat_by_rate.keys()):
+            if vat_by_rate[rate] > 0:
+                totals_data.append([f"TVA {rate}%:", f"{vat_by_rate[rate]:.2f} €"])
+        
+        totals_data.append(["Total TTC:", f"{doc_data['total_ttc']:.2f} €"])
     
+    # Invoice-specific: payment info
     if doc_type == "invoice":
         payment_status_map = {"impaye": "Impayé", "paye": "Payé", "partiel": "Partiellement payé"}
         totals_data.append(["Statut:", payment_status_map.get(doc_data['payment_status'], doc_data['payment_status'])])
@@ -1165,39 +1254,111 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
             totals_data.append(["Reste à payer:", f"{remaining:.2f} €"])
     
     totals_table = Table(totals_data, colWidths=[120*mm, 50*mm])
-    totals_table.setStyle(TableStyle([
+    
+    # Highlight the final row
+    final_row_idx = len(totals_data) - 1
+    if doc_type == "invoice":
+        # For invoice, highlight the TTC row (usually 3rd row if no payment)
+        ttc_row_idx = 2 if not is_auto_entrepreneur else 0
+    else:
+        ttc_row_idx = final_row_idx
+    
+    table_style = [
         ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
         ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#EA580C')),
-        ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-    ]))
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]
+    
+    # Find the TTC row for highlighting
+    for i, row in enumerate(totals_data):
+        if "TTC" in row[0] or (is_auto_entrepreneur and row[0] == "Total:"):
+            table_style.extend([
+                ('FONTNAME', (0, i), (-1, i), 'Helvetica-Bold'),
+                ('BACKGROUND', (0, i), (-1, i), colors.HexColor('#EA580C')),
+                ('TEXTCOLOR', (0, i), (-1, i), colors.white),
+            ])
+            break
+    
+    totals_table.setStyle(TableStyle(table_style))
     elements.append(totals_table)
     
-    # Notes
+    # ========== BANK DETAILS (for invoices) ==========
+    if doc_type == "invoice" and (company.iban or company.bic):
+        elements.append(Spacer(1, 8*mm))
+        elements.append(Paragraph("<b>Coordonnées bancaires:</b>", bold_style))
+        if company.iban:
+            elements.append(Paragraph(f"IBAN: {company.iban}", normal_style))
+        if company.bic:
+            elements.append(Paragraph(f"BIC: {company.bic}", normal_style))
+    
+    # ========== NOTES ==========
     if doc_data.get('notes'):
-        elements.append(Spacer(1, 10*mm))
+        elements.append(Spacer(1, 8*mm))
         elements.append(Paragraph("<b>Notes:</b>", bold_style))
         elements.append(Paragraph(doc_data['notes'], normal_style))
     
-    # Legal mentions
-    elements.append(Spacer(1, 15*mm))
+    # ========== LEGAL MENTIONS ==========
+    elements.append(Spacer(1, 10*mm))
+    
     if doc_type == "quote":
-        legal_text = "Ce devis est valable pour la durée indiquée ci-dessus. Signature précédée de la mention 'Bon pour accord'."
+        # Quote legal mentions
+        legal_lines = [
+            f"Ce devis est valable jusqu'au {validity_date}.",
+            "En signant ce devis, le client reconnaît avoir pris connaissance des conditions générales de vente.",
+            "",
+            "Signature du client précédée de la mention \"Bon pour accord\" et de la date:",
+            "",
+            "_" * 50,
+        ]
+        for line in legal_lines:
+            elements.append(Paragraph(line, legal_style))
     else:
-        payment_method_map = {"virement": "virement bancaire", "especes": "espèces", "cheque": "chèque"}
+        # Invoice legal mentions (French legal requirements)
+        payment_method_map = {
+            "virement": "virement bancaire",
+            "especes": "espèces", 
+            "cheque": "chèque",
+            "carte": "carte bancaire"
+        }
         method = payment_method_map.get(doc_data.get('payment_method', 'virement'), 'virement bancaire')
-        legal_text = f"En cas de retard de paiement, une pénalité de 3 fois le taux d'intérêt légal sera appliquée. Mode de paiement: {method}."
+        
+        payment_due = doc_data.get('payment_due_date', '')
+        if payment_due:
+            due_date_str = payment_due[:10] if isinstance(payment_due, str) else payment_due.strftime('%Y-%m-%d')
+        else:
+            due_date_str = "30 jours"
+        
+        legal_lines = [
+            f"<b>Mode de règlement:</b> {method}",
+            f"<b>Date limite de paiement:</b> {due_date_str}",
+            "",
+            "<b>Conditions de paiement:</b>",
+            f"En cas de retard de paiement, seront exigibles, conformément à l'article L 441-6 du code de commerce:",
+            f"- Une indemnité calculée sur la base de trois fois le taux d'intérêt légal en vigueur",
+            f"- Une indemnité forfaitaire pour frais de recouvrement de 40 euros",
+        ]
+        
+        for line in legal_lines:
+            elements.append(Paragraph(line, legal_style))
     
-    elements.append(Paragraph(legal_text, small_style))
-    
+    # ========== FOOTER ==========
+    elements.append(Spacer(1, 8*mm))
+    footer_parts = []
+    if company.company_name:
+        footer_parts.append(company.company_name)
     if company.siret:
-        elements.append(Paragraph(f"SIRET: {company.siret} - TVA: {company.vat_number or 'N/A'}", small_style))
+        footer_parts.append(f"SIRET: {company.siret}")
+    if company.rcs_rm:
+        footer_parts.append(company.rcs_rm)
+    
+    if footer_parts:
+        elements.append(Paragraph(" - ".join(footer_parts), small_style))
     
     doc.build(elements)
+    buffer.seek(0)
+    return buffer
     buffer.seek(0)
     return buffer
 
