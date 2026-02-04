@@ -3227,7 +3227,7 @@ async def send_quote_email(quote_id: str, request: SendDocumentEmailRequest, use
         await db.quotes.update_one({"id": quote_id}, {"$set": {"share_token": share_token}})
     
     # Get base URL from environment
-    base_url = os.environ.get("FRONTEND_URL", "https://quoteinvoice-btp.preview.emergentagent.com")
+    base_url = os.environ.get("FRONTEND_URL", "https://buildtrack-132.preview.emergentagent.com")
     share_url = f"{base_url}/client/devis/{share_token}"
     
     # Generate email HTML
@@ -3286,7 +3286,7 @@ async def send_invoice_email(invoice_id: str, request: SendDocumentEmailRequest,
         await db.invoices.update_one({"id": invoice_id}, {"$set": {"share_token": share_token}})
     
     # Get base URL from environment
-    base_url = os.environ.get("FRONTEND_URL", "https://quoteinvoice-btp.preview.emergentagent.com")
+    base_url = os.environ.get("FRONTEND_URL", "https://buildtrack-132.preview.emergentagent.com")
     share_url = f"{base_url}/client/facture/{share_token}"
     
     # Generate email HTML
