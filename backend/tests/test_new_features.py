@@ -171,9 +171,24 @@ class TestRenovationKits:
 class TestPublicClientView:
     """Test public client view functionality"""
     
-    def test_public_quote_access_without_auth(self):
+    @pytest.fixture(scope="class")
+    def fresh_share_token(self, auth_headers):
+        """Create a fresh share token for testing"""
+        # Get a quote
+        quotes_response = requests.get(f"{BASE_URL}/api/quotes", headers=auth_headers)
+        if quotes_response.status_code != 200 or len(quotes_response.json()) == 0:
+            pytest.skip("No quotes available for testing")
+        
+        quote_id = quotes_response.json()[0]["id"]
+        
+        # Create share link
+        share_response = requests.post(f"{BASE_URL}/api/quotes/{quote_id}/share", headers=auth_headers)
+        assert share_response.status_code == 200
+        return share_response.json()["share_token"]
+    
+    def test_public_quote_access_without_auth(self, fresh_share_token):
         """Test that public quote can be accessed without authentication"""
-        response = requests.get(f"{BASE_URL}/api/public/quote/{TEST_SHARE_TOKEN}")
+        response = requests.get(f"{BASE_URL}/api/public/quote/{fresh_share_token}")
         assert response.status_code == 200
         
         data = response.json()
@@ -185,9 +200,9 @@ class TestPublicClientView:
         assert "total_vat" in data
         assert "total_ttc" in data
     
-    def test_public_quote_has_company_info(self):
+    def test_public_quote_has_company_info(self, fresh_share_token):
         """Test that public quote includes company information"""
-        response = requests.get(f"{BASE_URL}/api/public/quote/{TEST_SHARE_TOKEN}")
+        response = requests.get(f"{BASE_URL}/api/public/quote/{fresh_share_token}")
         assert response.status_code == 200
         
         data = response.json()
@@ -198,9 +213,9 @@ class TestPublicClientView:
         assert "phone" in company
         assert "email" in company
     
-    def test_public_quote_has_status_label(self):
+    def test_public_quote_has_status_label(self, fresh_share_token):
         """Test that public quote has status label in French"""
-        response = requests.get(f"{BASE_URL}/api/public/quote/{TEST_SHARE_TOKEN}")
+        response = requests.get(f"{BASE_URL}/api/public/quote/{fresh_share_token}")
         assert response.status_code == 200
         
         data = response.json()
@@ -210,9 +225,9 @@ class TestPublicClientView:
         valid_labels = ["Devis", "Devis envoyé", "Devis accepté", "Devis refusé", "Facturé"]
         assert data["status_label"] in valid_labels
     
-    def test_public_quote_pdf_download(self):
+    def test_public_quote_pdf_download(self, fresh_share_token):
         """Test that public quote PDF can be downloaded"""
-        response = requests.get(f"{BASE_URL}/api/public/quote/{TEST_SHARE_TOKEN}/pdf")
+        response = requests.get(f"{BASE_URL}/api/public/quote/{fresh_share_token}/pdf")
         assert response.status_code == 200
         assert response.headers.get("content-type") == "application/pdf"
     
