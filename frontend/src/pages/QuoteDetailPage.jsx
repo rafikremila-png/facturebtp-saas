@@ -261,6 +261,21 @@ export default function QuoteDetailPage() {
         newLineItems[index] = { ...newLineItems[index], progress_percent: newValue };
         setSituationData(prev => ({ ...prev, line_items: newLineItems }));
     };
+    
+    const openSituationModal = () => {
+        // Initialize with a sensible default percentage (current + 10 or next 5% increment)
+        const currentPct = situationsSummary?.current_progress_percentage || 0;
+        const defaultPct = Math.min(100, Math.ceil((currentPct + 10) / 5) * 5);
+        
+        setSituationData({ 
+            situation_type: "global", 
+            global_percentage: defaultPct, 
+            line_items: [],
+            notes: "",
+            chantier_ref: ""
+        });
+        setShowSituationModal(true);
+    };
 
 
     const handleCreateFinalInvoice = async () => {
