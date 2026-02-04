@@ -234,6 +234,77 @@ export default function SettingsPage() {
         }
     };
 
+    // Kits handlers
+    const handleCreateKit = async () => {
+        if (!newKit.name.trim()) {
+            toast.error("Le nom du kit est requis");
+            return;
+        }
+        const validItems = newKit.items.filter(i => i.description.trim());
+        if (validItems.length === 0) {
+            toast.error("Ajoutez au moins une ligne au kit");
+            return;
+        }
+        try {
+            await createKit({ ...newKit, items: validItems });
+            toast.success("Kit créé avec succès");
+            setShowNewKitModal(false);
+            setNewKit({ name: "", description: "", items: [{ description: "", unit: "unité", quantity: 1, unit_price: 0, vat_rate: 20 }] });
+            loadData();
+        } catch (error) {
+            toast.error("Erreur lors de la création du kit");
+        }
+    };
+
+    const handleDeleteKit = async () => {
+        if (!showDeleteKitDialog) return;
+        try {
+            await deleteKit(showDeleteKitDialog);
+            toast.success("Kit supprimé");
+            setShowDeleteKitDialog(null);
+            loadData();
+        } catch (error) {
+            toast.error("Erreur lors de la suppression");
+        }
+    };
+
+    const handleResetKits = async () => {
+        try {
+            await resetKits();
+            toast.success("Kits réinitialisés");
+            setShowResetKitsDialog(false);
+            loadData();
+        } catch (error) {
+            toast.error("Erreur lors de la réinitialisation");
+        }
+    };
+
+    const addKitItem = () => {
+        setNewKit(prev => ({
+            ...prev,
+            items: [...prev.items, { description: "", unit: "unité", quantity: 1, unit_price: 0, vat_rate: 20 }]
+        }));
+    };
+
+    const removeKitItem = (index) => {
+        if (newKit.items.length === 1) return;
+        setNewKit(prev => ({
+            ...prev,
+            items: prev.items.filter((_, i) => i !== index)
+        }));
+    };
+
+    const updateKitItem = (index, field, value) => {
+        setNewKit(prev => ({
+            ...prev,
+            items: prev.items.map((item, i) => i === index ? { ...item, [field]: value } : item)
+        }));
+    };
+
+    const calculateKitTotal = (items) => {
+        return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0).toFixed(2);
+    };
+
     const currentCategoryItems = categories.find(c => c.name === selectedCategory)?.items || [];
 
     if (loading) {
