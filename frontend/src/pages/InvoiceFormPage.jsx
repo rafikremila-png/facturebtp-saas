@@ -107,11 +107,11 @@ function InvoiceFormPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <div><Label className="text-xs">Catégorie</Label>
                                 <Select value={selectedCategory} onValueChange={function(v) { setSelectedCategory(v); setSelectedItem(""); }}>
-                                    <SelectTrigger><SelectValue placeholder={!selectedCategory ? "Choisir" : undefined} /></SelectTrigger>
+                                    <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
                                     <SelectContent>{categories.map(function(c) { return <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>; })}</SelectContent></Select></div>
                             <div><Label className="text-xs">Article</Label>
                                 <Select value={selectedItem} onValueChange={setSelectedItem} disabled={!selectedCategory}>
-                                    <SelectTrigger><SelectValue placeholder={!selectedItem ? "Choisir" : undefined} /></SelectTrigger>
+                                    <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
                                     <SelectContent>{selectedCategoryItems.map(function(it) { return <SelectItem key={it.id} value={it.id}>{it.description} ({it.default_price}€/{it.unit})</SelectItem>; })}</SelectContent></Select></div>
                             <div className="flex items-end"><Button type="button" onClick={addPredefinedItem} className="bg-orange-600 w-full" disabled={!selectedCategory || !selectedItem}><Plus className="w-4 h-4 mr-2" />Ajouter</Button></div>
                         </div>
