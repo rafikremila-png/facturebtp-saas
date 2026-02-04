@@ -121,6 +121,28 @@ export default function QuoteDetailPage() {
         }
     };
 
+    const handleSendEmail = async () => {
+        if (!emailData.recipient_email) {
+            toast.error("Veuillez saisir une adresse email");
+            return;
+        }
+        
+        setSendingEmail(true);
+        try {
+            await sendQuoteEmail(quote.id, emailData);
+            toast.success("Devis envoyé par email");
+            setShowEmailModal(false);
+            setEmailData({ recipient_email: "", custom_message: "" });
+            // Refresh quote to get updated status
+            const response = await getQuote(id);
+            setQuote(response.data);
+        } catch (error) {
+            toast.error(error.response?.data?.detail || "Erreur lors de l'envoi");
+        } finally {
+            setSendingEmail(false);
+        }
+    };
+
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('fr-FR', {
             day: 'numeric',
