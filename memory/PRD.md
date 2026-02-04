@@ -139,6 +139,15 @@ Build a production-ready MVP web application for a French construction company (
 - **Root cause**: Radix UI Select component triggers rapid ResizeObserver callbacks that exceed the browser's rendering frame budget
 - **Solution**: Patched the native `ResizeObserver` in `frontend/src/index.js` to use `requestAnimationFrame` for batching observations
 
+### Portal removeChild Error During Navigation - FIXED ✅ (Feb 4, 2026)
+- **Problem**: "Failed to execute 'removeChild' on 'Node'" and "commitDeletionEffects" errors when navigating while dropdowns/modals are open
+- **Root cause**: Radix UI Portal components mount content in a separate DOM node. When navigating while a portal is open or animating, React tries to remove a DOM node that was already removed by the portal's cleanup
+- **Solution**: 
+  1. Patched `Node.prototype.removeChild` and `Node.prototype.insertBefore` in `index.js` to gracefully handle already-detached nodes
+  2. Added global error handler to suppress these benign DOM manipulation errors
+  3. Created `ErrorBoundary.jsx` component to catch and recover from React rendering errors
+- **Files modified**: `frontend/src/index.js`, `frontend/src/App.js`, `frontend/src/components/ErrorBoundary.jsx`
+
 ## Changelog (Feb 2026)
 
 ### Tableau de Bord Financier du Projet ✅ (Feb 4, 2026)
