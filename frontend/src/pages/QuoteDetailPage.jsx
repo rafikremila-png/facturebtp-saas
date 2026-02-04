@@ -738,7 +738,7 @@ export default function QuoteDetailPage() {
                             <div className="flex gap-2 pt-2">
                                 <Button 
                                     variant="outline"
-                                    onClick={() => setShowSituationModal(true)}
+                                    onClick={openSituationModal}
                                     className="border-emerald-300 text-emerald-700 hover:bg-emerald-100"
                                 >
                                     <TrendingUp className="w-4 h-4 mr-2" />
