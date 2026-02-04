@@ -79,8 +79,32 @@ export default function QuoteDetailPage() {
     useEffect(() => {
         if (quote && quote.status !== 'brouillon') {
             loadAcomptesSummary();
+            loadSituationsSummary();
         }
     }, [quote]);
+
+    // Initialize line_items when quote loads and modal opens
+    useEffect(() => {
+        if (quote && showSituationModal && situationData.situation_type === 'per_line') {
+            initializeLineItems();
+        }
+    }, [quote, showSituationModal, situationData.situation_type]);
+
+    const initializeLineItems = () => {
+        if (!quote) return;
+        const previousProgress = situationsSummary?.line_progress || [];
+        const lineItems = quote.items.map((item, index) => {
+            const prevPct = previousProgress[index]?.cumulative_percent || 0;
+            return {
+                description: item.description,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                vat_rate: item.vat_rate,
+                progress_percent: prevPct // Start at previous cumulative
+            };
+        });
+        setSituationData(prev => ({ ...prev, line_items: lineItems }));
+    };
 
     const loadQuote = async () => {
         try {
