@@ -72,6 +72,10 @@ export const removeRetenueGarantie = (invoiceId) => api.delete(`/invoices/${invo
 export const releaseRetenueGarantie = (invoiceId) => api.post(`/invoices/${invoiceId}/retenue-garantie/release`);
 export const getQuoteRetenuesSummary = (quoteId) => api.get(`/quotes/${quoteId}/retenues-garantie/summary`);
 
+// Project Financial Summary
+export const getProjectFinancialSummary = (quoteId) => api.get(`/quotes/${quoteId}/financial-summary`);
+export const getPublicFinancialSummary = (shareToken) => api.get(`/public/quote/${shareToken}/financial-summary`);
+
 export const downloadInvoicePdf = async (id, invoiceNumber) => {
     const response = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
     const url = window.URL.createObjectURL(new Blob([response.data]));
