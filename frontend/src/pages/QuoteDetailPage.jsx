@@ -557,18 +557,30 @@ export default function QuoteDetailPage() {
             <Card>
                 <CardContent className="pt-6">
                     <div className="flex flex-col items-end space-y-2">
-                        <div className="flex gap-8 text-sm">
-                            <span className="text-slate-500">Total HT:</span>
-                            <span className="font-medium w-28 text-right">{formatCurrency(quote.total_ht)}</span>
-                        </div>
-                        <div className="flex gap-8 text-sm">
-                            <span className="text-slate-500">Total TVA:</span>
-                            <span className="font-medium w-28 text-right">{formatCurrency(quote.total_vat)}</span>
-                        </div>
-                        <div className="flex gap-8 text-xl font-bold pt-2 border-t">
-                            <span className="text-slate-900">Total TTC:</span>
-                            <span className="text-orange-600 w-28 text-right">{formatCurrency(quote.total_ttc)}</span>
-                        </div>
+                        {quote.total_vat > 0 ? (
+                            <>
+                                <div className="flex gap-8 text-sm">
+                                    <span className="text-slate-500">Total HT:</span>
+                                    <span className="font-medium w-28 text-right">{formatCurrency(quote.total_ht)}</span>
+                                </div>
+                                <div className="flex gap-8 text-sm">
+                                    <span className="text-slate-500">Total TVA:</span>
+                                    <span className="font-medium w-28 text-right">{formatCurrency(quote.total_vat)}</span>
+                                </div>
+                                <div className="flex gap-8 text-xl font-bold pt-2 border-t">
+                                    <span className="text-slate-900">Total TTC:</span>
+                                    <span className="text-orange-600 w-28 text-right">{formatCurrency(quote.total_ttc)}</span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex gap-8 text-xl font-bold">
+                                    <span className="text-slate-900">Total:</span>
+                                    <span className="text-orange-600 w-28 text-right">{formatCurrency(quote.total_ht)}</span>
+                                </div>
+                                <p className="text-xs text-slate-500 italic">TVA non applicable, art. 293B du CGI</p>
+                            </>
+                        )}
                     </div>
                 </CardContent>
             </Card>
