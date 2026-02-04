@@ -181,7 +181,200 @@ function InvoiceViewPage() {
                 <Table><TableHeader><TableRow className="bg-slate-900"><TableHead className="text-white">Description</TableHead><TableHead className="text-white text-right">Qté</TableHead><TableHead className="text-white text-right">Prix HT</TableHead><TableHead className="text-white text-right">TVA</TableHead><TableHead className="text-white text-right">Total</TableHead></TableRow></TableHeader>
                     <TableBody>{invoice.items.map(function(it, i) { return <TableRow key={i}><TableCell>{it.description}</TableCell><TableCell className="text-right">{it.quantity}</TableCell><TableCell className="text-right">{fmt(it.unit_price)}</TableCell><TableCell className="text-right">{it.vat_rate}%</TableCell><TableCell className="text-right">{fmt(it.quantity * it.unit_price)}</TableCell></TableRow>; })}</TableBody></Table>
             </CardContent></Card>
-            <Card><CardContent className="pt-6 text-right space-y-1"><p>Total HT: <strong>{fmt(invoice.total_ht)}</strong></p><p>TVA: <strong>{fmt(invoice.total_vat)}</strong></p><p className="text-xl">Total TTC: <strong className="text-orange-600">{fmt(invoice.total_ttc)}</strong></p></CardContent></Card>
+            
+            {/* Totals Card with Retenue de Garantie */}
+            <Card>
+                <CardContent className="pt-6 space-y-4">
+                    <div className="text-right space-y-1">
+                        <p>Total HT: <strong>{fmt(invoice.total_ht)}</strong></p>
+                        <p>TVA: <strong>{fmt(invoice.total_vat)}</strong></p>
+                        <p className="text-xl">Total TTC: <strong className="text-orange-600">{fmt(invoice.total_ttc)}</strong></p>
+                    </div>
+                    
+                    {/* Retenue de Garantie Section */}
+                    {invoice.has_retenue_garantie && (
+                        <div className={`border rounded-lg p-4 ${invoice.retenue_garantie_released ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    {invoice.retenue_garantie_released ? (
+                                        <ShieldCheck className="w-5 h-5 text-green-600" />
+                                    ) : (
+                                        <Shield className="w-5 h-5 text-amber-600" />
+                                    )}
+                                    <span className="font-semibold">Retenue de garantie ({invoice.retenue_garantie_rate}%)</span>
+                                </div>
+                                {invoice.retenue_garantie_released ? (
+                                    <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Libérée</span>
+                                ) : (
+                                    <span className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded">Retenue</span>
+                                )}
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <p className="text-slate-500">Montant retenu</p>
+                                    <p className="font-bold text-lg">{fmt(invoice.retenue_garantie_amount)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-slate-500">Date de libération</p>
+                                    <p className="font-medium flex items-center gap-1">
+                                        <Calendar className="w-4 h-4" />
+                                        {invoice.retenue_garantie_release_date ? new Date(invoice.retenue_garantie_release_date).toLocaleDateString('fr-FR') : '-'}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {!invoice.retenue_garantie_released && (
+                                <div className="mt-4 pt-4 border-t border-amber-200">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm text-slate-500">Net à payer (après retenue)</p>
+                                            <p className="text-xl font-bold text-emerald-600">{fmt(invoice.net_a_payer || (invoice.total_ttc - invoice.retenue_garantie_amount))}</p>
+                                        </div>
+                                        <Button 
+                                            onClick={handleReleaseRetenue}
+                                            disabled={releasingRetenue}
+                                            className="bg-emerald-600 hover:bg-emerald-700"
+                                            data-testid="release-retenue-btn"
+                                        >
+                                            {releasingRetenue ? (
+                                                <><span className="spinner w-4 h-4 mr-2"></span>Libération...</>
+                                            ) : (
+                                                <><Unlock className="w-4 h-4 mr-2" />Libérer la retenue</>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {invoice.retenue_garantie_released && (
+                                <div className="mt-3 p-2 bg-green-100 rounded text-sm text-green-800">
+                                    ✓ Retenue libérée - Le montant de {fmt(invoice.retenue_garantie_amount)} est maintenant dû au prestataire.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    
+                    {/* Toggle to apply retenue */}
+                    {!invoice.has_retenue_garantie && invoice.payment_status !== 'paye' && (
+                        <div className="border rounded-lg p-4 bg-slate-50">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Shield className="w-5 h-5 text-slate-400" />
+                                    <div>
+                                        <p className="font-medium">Retenue de garantie</p>
+                                        <p className="text-xs text-slate-500">Max 5% - Libérable après garantie</p>
+                                    </div>
+                                </div>
+                                <Button 
+                                    variant="outline"
+                                    onClick={() => setShowRetenueModal(true)}
+                                    data-testid="add-retenue-btn"
+                                >
+                                    <Shield className="w-4 h-4 mr-2" />
+                                    Appliquer
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Retenue de Garantie Modal */}
+            <Dialog open={showRetenueModal} onOpenChange={setShowRetenueModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Shield className="w-5 h-5 text-amber-600" />
+                            Appliquer une retenue de garantie
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                            <div className="flex items-start gap-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
+                                <div>
+                                    <strong>Réglementation française (Loi n°75-1334)</strong>
+                                    <p className="text-amber-700 mt-1">La retenue de garantie ne peut excéder 5% du montant TTC. Elle est libérable 1 an après la réception des travaux, sauf réserves.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            <Label>Taux de retenue (%)</Label>
+                            <div className="flex items-center gap-4">
+                                <Slider
+                                    value={[retenueData.rate]}
+                                    onValueChange={(v) => setRetenueData(prev => ({ ...prev, rate: v[0] }))}
+                                    min={0.5}
+                                    max={5}
+                                    step={0.5}
+                                    className="flex-1"
+                                />
+                                <div className="flex items-center gap-2 w-20">
+                                    <Input
+                                        type="number"
+                                        min={0.5}
+                                        max={5}
+                                        step={0.5}
+                                        value={retenueData.rate}
+                                        onChange={(e) => setRetenueData(prev => ({ ...prev, rate: Math.min(5, parseFloat(e.target.value) || 0) }))}
+                                        className="text-center"
+                                    />
+                                    <Percent className="w-4 h-4 text-slate-400" />
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <Label>Durée de garantie (mois)</Label>
+                            <Select
+                                value={String(retenueData.warranty_months)}
+                                onValueChange={(v) => setRetenueData(prev => ({ ...prev, warranty_months: parseInt(v) }))}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="6">6 mois</SelectItem>
+                                    <SelectItem value="12">12 mois (1 an - standard)</SelectItem>
+                                    <SelectItem value="24">24 mois (2 ans)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        
+                        <div className="bg-slate-100 rounded-lg p-4 space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span>Total TTC de la facture:</span>
+                                <span className="font-medium">{fmt(invoice?.total_ttc || 0)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-amber-700">
+                                <span>Retenue de garantie ({retenueData.rate}%):</span>
+                                <span className="font-medium">-{fmt((invoice?.total_ttc || 0) * retenueData.rate / 100)}</span>
+                            </div>
+                            <div className="flex justify-between text-lg font-bold border-t pt-2">
+                                <span>Net à payer:</span>
+                                <span className="text-emerald-600">{fmt((invoice?.total_ttc || 0) * (1 - retenueData.rate / 100))}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button variant="outline" onClick={() => setShowRetenueModal(false)}>Annuler</Button>
+                        <Button 
+                            onClick={handleApplyRetenue} 
+                            disabled={applyingRetenue}
+                            className="bg-amber-600 hover:bg-amber-700"
+                            data-testid="confirm-retenue-btn"
+                        >
+                            {applyingRetenue ? (
+                                <><span className="spinner w-4 h-4 mr-2"></span>Application...</>
+                            ) : (
+                                <><Shield className="w-4 h-4 mr-2" />Appliquer la retenue</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Share Modal */}
             <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
