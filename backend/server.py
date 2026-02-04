@@ -867,6 +867,119 @@ async def reset_predefined_items(user: dict = Depends(get_current_user)):
     await initialize_default_items()
     return {"message": "Articles réinitialisés"}
 
+# ============== RENOVATION KITS ROUTES ==============
+
+async def initialize_default_kits():
+    """Initialize default renovation kits if none exist"""
+    count = await db.renovation_kits.count_documents({"is_default": True})
+    if count == 0:
+        for kit in DEFAULT_RENOVATION_KITS:
+            kit_doc = {
+                "id": str(uuid.uuid4()),
+                "name": kit["name"],
+                "description": kit["description"],
+                "items": kit["items"],
+                "is_default": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.renovation_kits.insert_one(kit_doc)
+
+@api_router.get("/kits", response_model=List[KitResponse])
+async def list_kits(user: dict = Depends(get_current_user)):
+    """List all renovation kits"""
+    await initialize_default_kits()
+    kits = await db.renovation_kits.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
+    return [KitResponse(**kit) for kit in kits]
+
+@api_router.get("/kits/{kit_id}", response_model=KitResponse)
+async def get_kit(kit_id: str, user: dict = Depends(get_current_user)):
+    """Get a specific kit"""
+    kit = await db.renovation_kits.find_one({"id": kit_id}, {"_id": 0})
+    if not kit:
+        raise HTTPException(status_code=404, detail="Kit non trouvé")
+    return KitResponse(**kit)
+
+@api_router.post("/kits", response_model=KitResponse)
+async def create_kit(kit_data: KitCreate, user: dict = Depends(get_current_user)):
+    """Create a new renovation kit"""
+    kit_id = str(uuid.uuid4())
+    kit_doc = {
+        "id": kit_id,
+        "name": kit_data.name,
+        "description": kit_data.description,
+        "items": [item.model_dump() for item in kit_data.items],
+        "is_default": False,  # User-created kits are not default
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.renovation_kits.insert_one(kit_doc)
+    return KitResponse(**kit_doc)
+
+@api_router.put("/kits/{kit_id}", response_model=KitResponse)
+async def update_kit(kit_id: str, kit_data: KitUpdate, user: dict = Depends(get_current_user)):
+    """Update a renovation kit"""
+    kit = await db.renovation_kits.find_one({"id": kit_id}, {"_id": 0})
+    if not kit:
+        raise HTTPException(status_code=404, detail="Kit non trouvé")
+    
+    update_data = {}
+    if kit_data.name is not None:
+        update_data["name"] = kit_data.name
+    if kit_data.description is not None:
+        update_data["description"] = kit_data.description
+    if kit_data.items is not None:
+        update_data["items"] = [item.model_dump() for item in kit_data.items]
+    
+    if update_data:
+        await db.renovation_kits.update_one({"id": kit_id}, {"$set": update_data})
+    
+    updated_kit = await db.renovation_kits.find_one({"id": kit_id}, {"_id": 0})
+    return KitResponse(**updated_kit)
+
+@api_router.delete("/kits/{kit_id}")
+async def delete_kit(kit_id: str, user: dict = Depends(get_current_user)):
+    """Delete a renovation kit"""
+    result = await db.renovation_kits.delete_one({"id": kit_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Kit non trouvé")
+    return {"message": "Kit supprimé"}
+
+@api_router.post("/kits/from-quote/{quote_id}", response_model=KitResponse)
+async def create_kit_from_quote(quote_id: str, kit_name: str, kit_description: str = "", user: dict = Depends(get_current_user)):
+    """Create a kit from an existing quote"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    # Convert quote items to kit items
+    kit_items = []
+    for item in quote["items"]:
+        kit_items.append({
+            "description": item["description"],
+            "unit": item.get("unit", "unité"),
+            "quantity": item["quantity"],
+            "unit_price": item["unit_price"],
+            "vat_rate": item["vat_rate"]
+        })
+    
+    kit_id = str(uuid.uuid4())
+    kit_doc = {
+        "id": kit_id,
+        "name": kit_name,
+        "description": kit_description,
+        "items": kit_items,
+        "is_default": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.renovation_kits.insert_one(kit_doc)
+    return KitResponse(**kit_doc)
+
+@api_router.post("/kits/reset")
+async def reset_kits(user: dict = Depends(get_current_user)):
+    """Reset kits to defaults (removes user kits)"""
+    await db.renovation_kits.delete_many({})
+    await initialize_default_kits()
+    return {"message": "Kits réinitialisés"}
+
 # ============== PDF GENERATION ==============
 
 async def get_company_settings():
