@@ -550,6 +550,13 @@ export default function QuoteDetailPage() {
                 </CardContent>
             </Card>
 
+            {/* Financial Summary Section */}
+            {showFinancialSummary && financialSummary && (
+                <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                    <ProjectFinancialSummary summary={financialSummary} isPublic={false} />
+                </div>
+            )}
+
             {/* Line Items */}
             <Card>
                 <CardHeader>
