@@ -80,6 +80,25 @@ function InvoiceViewPage() {
         }
     }
 
+    async function handleSendEmail() {
+        if (!emailData.recipient_email) {
+            toast.error("Veuillez saisir une adresse email");
+            return;
+        }
+        
+        setSendingEmail(true);
+        try {
+            await sendInvoiceEmail(invoice.id, emailData);
+            toast.success("Facture envoyée par email");
+            setShowEmailModal(false);
+            setEmailData({ recipient_email: "", custom_message: "" });
+        } catch (error) {
+            toast.error(error.response?.data?.detail || "Erreur lors de l'envoi");
+        } finally {
+            setSendingEmail(false);
+        }
+    }
+
     if (loading) return <div className="flex justify-center py-20"><div className="spinner"></div></div>;
     if (!invoice) return null;
 
