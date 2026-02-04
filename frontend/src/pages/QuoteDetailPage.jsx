@@ -645,6 +645,132 @@ export default function QuoteDetailPage() {
                 </Card>
             )}
 
+            {/* Situations Section */}
+            {situationsSummary && situationsSummary.situations_count > 0 && (
+                <Card className="border-emerald-200 bg-emerald-50/30">
+                    <CardHeader>
+                        <CardTitle className="font-['Barlow_Condensed'] flex items-center gap-2">
+                            <HardHat className="w-5 h-5 text-emerald-600" />
+                            Situations de travaux ({situationsSummary.situations_count})
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {/* Progress bar */}
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-600">Avancement du chantier</span>
+                                <span className="font-medium">{situationsSummary.current_progress_percentage}% réalisé</span>
+                            </div>
+                            <Progress value={situationsSummary.current_progress_percentage} className="h-3 bg-emerald-100">
+                                <div 
+                                    className="h-full bg-emerald-500 transition-all" 
+                                    style={{ width: `${situationsSummary.current_progress_percentage}%` }}
+                                />
+                            </Progress>
+                        </div>
+
+                        {/* Situations list */}
+                        <div className="space-y-2">
+                            {situationsSummary.situations.map((situation) => (
+                                <Link key={situation.id} to={`/factures/${situation.id}`} className="block">
+                                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border hover:border-emerald-300 transition-colors">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                                situation.payment_status === 'paye' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'
+                                            }`}>
+                                                {situation.situation_number}
+                                            </div>
+                                            <div>
+                                                <p className="font-medium text-slate-900">{situation.invoice_number}</p>
+                                                <p className="text-sm text-slate-500 flex items-center gap-1">
+                                                    <TrendingUp className="w-3 h-3" />
+                                                    Cumul: {situation.cumulative_percentage}%
+                                                    <span className="text-xs text-slate-400">
+                                                        ({situation.situation_type === 'global' ? 'global' : 'par ligne'})
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-bold text-slate-900">{formatCurrency(situation.total_ttc)}</p>
+                                            <span className={`text-xs px-2 py-1 rounded ${
+                                                situation.payment_status === 'paye' 
+                                                    ? 'bg-green-100 text-green-700' 
+                                                    : 'bg-amber-100 text-amber-700'
+                                            }`}>
+                                                {situation.payment_status === 'paye' ? 'Payé' : 'En attente'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+
+                        {/* Summary */}
+                        <div className="border-t pt-4 space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span>Total facturé:</span>
+                                <span className="font-medium">{formatCurrency(situationsSummary.total_situations_ttc)}</span>
+                            </div>
+                            <div className="flex justify-between text-lg font-bold">
+                                <span className="text-slate-900">Reste à facturer:</span>
+                                <span className="text-emerald-600">{formatCurrency(situationsSummary.remaining_ttc)}</span>
+                            </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        {quote.status === "accepte" && situationsSummary.remaining_ttc > 0 && (
+                            <div className="flex gap-2 pt-2">
+                                <Button 
+                                    variant="outline"
+                                    onClick={() => setShowSituationModal(true)}
+                                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                                >
+                                    <TrendingUp className="w-4 h-4 mr-2" />
+                                    Nouvelle situation
+                                </Button>
+                                {situationsSummary.current_progress_percentage >= 100 && (
+                                    <Button 
+                                        className="bg-green-600 hover:bg-green-700"
+                                        onClick={handleCreateSituationFinalInvoice}
+                                        disabled={creatingSituationFinal}
+                                    >
+                                        <FileText className="w-4 h-4 mr-2" />
+                                        Décompte final
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                        
+                        {/* Final invoice button when 100% reached */}
+                        {quote.status === "accepte" && situationsSummary.current_progress_percentage >= 100 && (
+                            <div className="bg-emerald-100 border border-emerald-300 rounded-lg p-3">
+                                <p className="text-sm text-emerald-800 mb-2">
+                                    <strong>Chantier terminé !</strong> Vous pouvez créer le décompte final.
+                                </p>
+                                <Button 
+                                    className="bg-emerald-600 hover:bg-emerald-700 w-full"
+                                    onClick={handleCreateSituationFinalInvoice}
+                                    disabled={creatingSituationFinal}
+                                >
+                                    {creatingSituationFinal ? (
+                                        <span className="flex items-center gap-2">
+                                            <span className="spinner w-4 h-4"></span>
+                                            Création...
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <ClipboardList className="w-4 h-4 mr-2" />
+                                            Créer le décompte final
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Notes */}
             {quote.notes && (
                 <Card>
