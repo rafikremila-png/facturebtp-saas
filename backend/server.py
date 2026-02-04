@@ -255,6 +255,25 @@ class SituationResponse(BaseModel):
     chantier_ref: str
     created_at: str
 
+# ============== RETENUE DE GARANTIE MODELS ==============
+
+class RetenueGarantieCreate(BaseModel):
+    """Model for applying retention guarantee to an invoice"""
+    rate: float = 5.0  # Percentage (max 5% per French law)
+    warranty_months: int = 12  # Duration before release (default 1 year)
+
+class RetenueGarantieUpdate(BaseModel):
+    """Model for updating retention guarantee"""
+    rate: Optional[float] = None
+    release_date: Optional[str] = None
+
+class RetenueGarantieSummary(BaseModel):
+    """Summary of all retention guarantees for a quote/project"""
+    total_retained: float
+    total_released: float
+    pending_release: float
+    retentions: List[dict]
+
 class CompanySettings(BaseModel):
     company_name: str = ""
     address: str = ""
