@@ -1742,6 +1742,181 @@ async def get_quote_retenues_summary(quote_id: str, user: dict = Depends(get_cur
         "retentions": retentions
     }
 
+# ============== PROJECT FINANCIAL SUMMARY ==============
+
+async def calculate_project_financial_summary(quote_id: str):
+    """Calculate complete financial summary for a project/quote"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        return None
+    
+    # Get all invoices for this quote
+    all_invoices = await db.invoices.find(
+        {"parent_quote_id": quote_id},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Separate by type
+    acomptes = [inv for inv in all_invoices if inv.get("is_acompte")]
+    situations = [inv for inv in all_invoices if inv.get("is_situation")]
+    final_invoices = [inv for inv in all_invoices if inv.get("is_final_invoice") or inv.get("is_situation_final")]
+    regular_invoices = [inv for inv in all_invoices if not inv.get("is_acompte") and not inv.get("is_situation") and not inv.get("is_final_invoice")]
+    
+    # Calculate acomptes summary
+    acomptes_total = sum(a.get("total_ttc", 0) for a in acomptes)
+    acomptes_paid = sum(a.get("paid_amount", 0) for a in acomptes if a.get("payment_status") == "paye")
+    acomptes_pending = acomptes_total - acomptes_paid
+    
+    # Calculate situations summary
+    situations_total = sum(s.get("total_ttc", 0) for s in situations)
+    situations_paid = sum(s.get("paid_amount", 0) for s in situations if s.get("payment_status") == "paye")
+    situations_pending = situations_total - situations_paid
+    current_progress = situations[-1].get("situation_percentage", 0) if situations else 0
+    
+    # Calculate retenue de garantie
+    retenue_invoices = [inv for inv in all_invoices if inv.get("has_retenue_garantie")]
+    total_retenue = sum(inv.get("retenue_garantie_amount", 0) for inv in retenue_invoices)
+    retenue_released = sum(
+        inv.get("retenue_garantie_amount", 0) 
+        for inv in retenue_invoices 
+        if inv.get("retenue_garantie_released")
+    )
+    retenue_pending = total_retenue - retenue_released
+    
+    # Calculate final invoice if exists
+    final_total = sum(f.get("total_ttc", 0) for f in final_invoices)
+    final_paid = sum(f.get("paid_amount", 0) for f in final_invoices if f.get("payment_status") == "paye")
+    
+    # Total invoiced (excluding final which recaps everything)
+    total_invoiced = acomptes_total + situations_total
+    total_paid = acomptes_paid + situations_paid + final_paid
+    
+    # Calculate remaining to invoice (from quote total)
+    remaining_to_invoice = max(0, quote["total_ttc"] - total_invoiced)
+    
+    # Calculate remaining to pay
+    remaining_to_pay = total_invoiced - total_paid + retenue_pending
+    
+    # Build invoice list for display
+    invoices_list = []
+    for inv in sorted(all_invoices, key=lambda x: x.get("created_at", "")):
+        inv_type = "Facture"
+        if inv.get("is_acompte"):
+            inv_type = f"Acompte n°{inv.get('acompte_number', '?')}"
+        elif inv.get("is_situation"):
+            inv_type = f"Situation n°{inv.get('situation_number', '?')}"
+        elif inv.get("is_situation_final"):
+            inv_type = "Décompte final"
+        elif inv.get("is_final_invoice"):
+            inv_type = "Facture de solde"
+        
+        invoices_list.append({
+            "id": inv["id"],
+            "invoice_number": inv["invoice_number"],
+            "type": inv_type,
+            "date": inv.get("issue_date", "")[:10],
+            "total_ttc": inv.get("total_ttc", 0),
+            "paid_amount": inv.get("paid_amount", 0),
+            "payment_status": inv.get("payment_status", "impaye"),
+            "has_retenue": inv.get("has_retenue_garantie", False),
+            "retenue_amount": inv.get("retenue_garantie_amount", 0) if inv.get("has_retenue_garantie") else 0,
+            "retenue_released": inv.get("retenue_garantie_released", False)
+        })
+    
+    return {
+        "quote_id": quote_id,
+        "quote_number": quote["quote_number"],
+        "client_name": quote["client_name"],
+        "status": quote["status"],
+        
+        # Project totals
+        "project_total_ht": quote["total_ht"],
+        "project_total_vat": quote["total_vat"],
+        "project_total_ttc": quote["total_ttc"],
+        
+        # Progress
+        "progress_percentage": round(current_progress, 1),
+        
+        # Acomptes breakdown
+        "acomptes": {
+            "count": len(acomptes),
+            "total_invoiced": round(acomptes_total, 2),
+            "total_paid": round(acomptes_paid, 2),
+            "pending": round(acomptes_pending, 2)
+        },
+        
+        # Situations breakdown
+        "situations": {
+            "count": len(situations),
+            "total_invoiced": round(situations_total, 2),
+            "total_paid": round(situations_paid, 2),
+            "pending": round(situations_pending, 2),
+            "progress_percentage": round(current_progress, 1)
+        },
+        
+        # Retenue de garantie
+        "retenue_garantie": {
+            "total_retained": round(total_retenue, 2),
+            "total_released": round(retenue_released, 2),
+            "pending_release": round(retenue_pending, 2),
+            "next_release_date": min(
+                (inv.get("retenue_garantie_release_date") for inv in retenue_invoices 
+                 if not inv.get("retenue_garantie_released") and inv.get("retenue_garantie_release_date")),
+                default=None
+            )
+        },
+        
+        # Summary totals
+        "totals": {
+            "total_invoiced": round(total_invoiced, 2),
+            "total_paid": round(total_paid, 2),
+            "remaining_to_invoice": round(remaining_to_invoice, 2),
+            "remaining_to_pay": round(remaining_to_pay, 2),
+            "percentage_paid": round((total_paid / quote["total_ttc"] * 100) if quote["total_ttc"] > 0 else 0, 1)
+        },
+        
+        # Invoice list
+        "invoices": invoices_list
+    }
+
+@api_router.get("/quotes/{quote_id}/financial-summary")
+async def get_project_financial_summary(quote_id: str, user: dict = Depends(get_current_user)):
+    """Get complete financial summary for a project/quote"""
+    summary = await calculate_project_financial_summary(quote_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    return summary
+
+@api_router.get("/public/quote/{share_token}/financial-summary")
+async def get_public_project_financial_summary(share_token: str):
+    """Get complete financial summary for a project/quote (public access)"""
+    # Find the share token
+    token_doc = await db.share_tokens.find_one({"token": share_token}, {"_id": 0})
+    if not token_doc:
+        raise HTTPException(status_code=404, detail="Lien invalide ou expiré")
+    
+    # Check expiration
+    if token_doc.get("expires_at"):
+        expires = datetime.fromisoformat(token_doc["expires_at"].replace("Z", "+00:00"))
+        if datetime.now(timezone.utc) > expires:
+            raise HTTPException(status_code=404, detail="Lien expiré")
+    
+    # Get quote ID from token
+    if token_doc.get("doc_type") == "quote":
+        quote_id = token_doc.get("doc_id")
+    else:
+        # If it's an invoice token, get the parent quote
+        invoice = await db.invoices.find_one({"id": token_doc.get("doc_id")}, {"_id": 0})
+        if not invoice or not invoice.get("parent_quote_id"):
+            raise HTTPException(status_code=404, detail="Devis non trouvé")
+        quote_id = invoice.get("parent_quote_id")
+    
+    summary = await calculate_project_financial_summary(quote_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    return summary
+
 # ============== COMPANY SETTINGS ==============
 
 @api_router.get("/settings", response_model=CompanySettings)
