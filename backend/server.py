@@ -2700,11 +2700,49 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     
     elements = []
     
-    # ========== HEADER: Company Info ==========
+    # ========== HEADER: Logo + Company Info ==========
     company_name = company.company_name or "Votre Entreprise BTP"
-    elements.append(Paragraph(company_name, title_style))
     
-    # Company details (all required French legal info)
+    # Try to add logo if available
+    logo_image = None
+    if company.logo_base64:
+        try:
+            # Extract base64 data (remove data:image/xxx;base64, prefix)
+            logo_data = company.logo_base64
+            if ',' in logo_data:
+                logo_data = logo_data.split(',')[1]
+            
+            # Decode base64 to bytes
+            logo_bytes = base64.b64decode(logo_data)
+            logo_buffer = BytesIO(logo_bytes)
+            
+            # Create ReportLab Image with max dimensions
+            logo_image = Image(logo_buffer)
+            # Scale logo to fit (max 50mm width, 25mm height)
+            max_width = 50 * mm
+            max_height = 25 * mm
+            
+            # Calculate aspect ratio and scale
+            aspect = logo_image.imageWidth / logo_image.imageHeight
+            if logo_image.imageWidth > max_width or logo_image.imageHeight > max_height:
+                if aspect > (max_width / max_height):
+                    # Width is limiting factor
+                    logo_image.drawWidth = max_width
+                    logo_image.drawHeight = max_width / aspect
+                else:
+                    # Height is limiting factor
+                    logo_image.drawHeight = max_height
+                    logo_image.drawWidth = max_height * aspect
+            else:
+                # Scale up small logos proportionally
+                logo_image.drawWidth = min(logo_image.imageWidth, max_width)
+                logo_image.drawHeight = logo_image.drawWidth / aspect
+        except Exception as e:
+            # If logo fails to load, continue without it
+            logging.warning(f"Failed to load logo for PDF: {str(e)}")
+            logo_image = None
+    
+    # Build company info lines
     company_lines = []
     if company.address:
         company_lines.append(company.address)
@@ -2736,8 +2774,31 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     elif company.vat_number:
         company_lines.append(f"N° TVA Intracommunautaire: {company.vat_number}")
     
-    for line in company_lines:
-        elements.append(Paragraph(line, header_style))
+    # Create header with logo and company info side by side
+    if logo_image:
+        # Create a table with logo on left, company info on right
+        company_info_elements = [Paragraph(company_name, title_style)]
+        for line in company_lines:
+            company_info_elements.append(Paragraph(line, header_style))
+        
+        # Combine company info into a single cell
+        header_table_data = [[logo_image, company_info_elements]]
+        header_table = Table(header_table_data, colWidths=[55*mm, 120*mm])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+            ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        elements.append(header_table)
+    else:
+        # No logo - just display company name and info
+        elements.append(Paragraph(company_name, title_style))
+        for line in company_lines:
+            elements.append(Paragraph(line, header_style))
     
     elements.append(Spacer(1, 12*mm))
     
