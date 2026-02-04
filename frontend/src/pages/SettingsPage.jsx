@@ -325,14 +325,18 @@ export default function SettingsPage() {
             </div>
 
             <Tabs defaultValue="company" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="company" className="flex items-center gap-2">
                         <Building2 className="w-4 h-4" />
                         Entreprise
                     </TabsTrigger>
                     <TabsTrigger value="items" className="flex items-center gap-2">
                         <Package className="w-4 h-4" />
-                        Articles prédéfinis
+                        Articles
+                    </TabsTrigger>
+                    <TabsTrigger value="kits" className="flex items-center gap-2">
+                        <Layers className="w-4 h-4" />
+                        Kits
                     </TabsTrigger>
                 </TabsList>
 
