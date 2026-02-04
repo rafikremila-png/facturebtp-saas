@@ -273,6 +273,16 @@ export default function QuoteDetailPage() {
                             Modifier
                         </Button>
                     </Link>
+                    {(quote.status === "accepte" || quote.status === "envoye") && (
+                        <Button 
+                            className="bg-purple-600 hover:bg-purple-700"
+                            onClick={() => setShowAcompteModal(true)}
+                            data-testid="create-acompte-btn"
+                        >
+                            <CreditCard className="w-4 h-4 mr-2" />
+                            Créer un acompte
+                        </Button>
+                    )}
                     {quote.status === "accepte" && (
                         <Button 
                             className="bg-green-600 hover:bg-green-700"
