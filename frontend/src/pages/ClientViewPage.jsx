@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { getPublicQuote, getPublicInvoice, downloadPublicQuotePdf, downloadPublicInvoicePdf } from "@/lib/api";
+import { getPublicQuote, getPublicInvoice, downloadPublicQuotePdf, downloadPublicInvoicePdf, getPublicFinancialSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Download, Building2, Calendar, Euro, CheckCircle, Clock, XCircle, AlertCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FileText, Download, Building2, Calendar, Euro, CheckCircle, Clock, XCircle, AlertCircle, BarChart3 } from "lucide-react";
+import ProjectFinancialSummary from "@/components/ProjectFinancialSummary";
 
 export default function ClientViewPage() {
     const { type, token } = useParams();
@@ -12,9 +14,12 @@ export default function ClientViewPage() {
     const [error, setError] = useState(null);
     const [document, setDocument] = useState(null);
     const [downloading, setDownloading] = useState(false);
+    const [financialSummary, setFinancialSummary] = useState(null);
+    const [activeTab, setActiveTab] = useState("document");
 
     useEffect(() => {
         loadDocument();
+        loadFinancialSummary();
     }, [type, token]);
 
     const loadDocument = async () => {
@@ -36,6 +41,16 @@ export default function ClientViewPage() {
             setError(err.response?.data?.detail || "Document non trouvé ou lien expiré");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadFinancialSummary = async () => {
+        try {
+            const response = await getPublicFinancialSummary(token);
+            setFinancialSummary(response.data);
+        } catch (err) {
+            // Silently fail - summary is optional
+            console.log("Financial summary not available");
         }
     };
 
