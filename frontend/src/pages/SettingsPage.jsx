@@ -557,6 +557,85 @@ export default function SettingsPage() {
                             </CardContent>
                         </Card>
 
+                        {/* Retenue de Garantie Settings */}
+                        <Card className={formData.default_retenue_garantie_enabled ? "border-amber-300 bg-amber-50/50" : ""}>
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle className="font-['Barlow_Condensed'] flex items-center gap-2">
+                                            <AlertTriangle className="w-5 h-5 text-amber-600" />
+                                            Retenue de garantie (BTP)
+                                        </CardTitle>
+                                        <CardDescription>Paramètres par défaut pour la retenue de garantie</CardDescription>
+                                    </div>
+                                    <Switch 
+                                        checked={formData.default_retenue_garantie_enabled} 
+                                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, default_retenue_garantie_enabled: checked }))}
+                                        data-testid="retenue-garantie-toggle"
+                                    />
+                                </div>
+                            </CardHeader>
+                            {formData.default_retenue_garantie_enabled && (
+                                <CardContent className="space-y-4">
+                                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                        <div className="flex items-start gap-2">
+                                            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                                            <div className="text-sm text-amber-800">
+                                                <p className="font-medium">Loi n°75-1334 du 31 décembre 1975</p>
+                                                <p className="mt-1">La retenue de garantie ne peut excéder 5% du montant TTC des travaux. Elle peut être remplacée par une caution bancaire à la demande du prestataire.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="retenue_rate">Taux de retenue par défaut</Label>
+                                            <div className="flex items-center gap-2">
+                                                <Input 
+                                                    id="retenue_rate" 
+                                                    type="number" 
+                                                    min="0.5" 
+                                                    max="5" 
+                                                    step="0.5"
+                                                    value={formData.default_retenue_garantie_rate} 
+                                                    onChange={(e) => setFormData(prev => ({ 
+                                                        ...prev, 
+                                                        default_retenue_garantie_rate: Math.min(5, parseFloat(e.target.value) || 5)
+                                                    }))}
+                                                    className="w-24"
+                                                    data-testid="retenue-rate-input"
+                                                />
+                                                <span className="text-slate-500">% (max 5%)</span>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="retenue_duration">Durée de garantie par défaut</Label>
+                                            <Select
+                                                value={String(formData.default_retenue_garantie_duration_months)}
+                                                onValueChange={(v) => setFormData(prev => ({ ...prev, default_retenue_garantie_duration_months: parseInt(v) }))}
+                                            >
+                                                <SelectTrigger className="w-48" data-testid="retenue-duration-select">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="6">6 mois</SelectItem>
+                                                    <SelectItem value="12">12 mois (1 an)</SelectItem>
+                                                    <SelectItem value="24">24 mois (2 ans)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-white border rounded-lg p-3 text-sm text-slate-600">
+                                        <p><strong>Mention légale sur les factures :</strong></p>
+                                        <p className="mt-1 italic text-xs">
+                                            "Une retenue de garantie de X% est appliquée conformément à la loi n°75-1334 du 31 décembre 1975. Cette retenue sera libérée [date], sauf réserves non levées."
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            )}
+                        </Card>
+
                         {/* VAT Rates */}
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between">
