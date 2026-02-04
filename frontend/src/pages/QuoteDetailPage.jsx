@@ -553,7 +553,7 @@ export default function QuoteDetailPage() {
             {/* Financial Summary Section */}
             {showFinancialSummary && financialSummary && (
                 <div className="animate-in fade-in slide-in-from-top-4 duration-300">
-                    <ProjectFinancialSummary summary={financialSummary} isPublic={false} />
+                    <ProjectFinancialSummary summary={financialSummary} isPublic={false} quoteId={id} />
                 </div>
             )}
 
