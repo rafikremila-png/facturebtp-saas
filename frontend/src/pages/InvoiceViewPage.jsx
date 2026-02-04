@@ -53,6 +53,29 @@ function InvoiceViewPage() {
     function downloadPdf() { downloadInvoicePdf(invoice.id, invoice.invoice_number).catch(function() { toast.error("Erreur"); }); }
     function fmt(n) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2 }) + " €"; }
 
+    async function handleShare() {
+        try {
+            const response = await createInvoiceShareLink(invoice.id);
+            const baseUrl = window.location.origin;
+            const fullUrl = `${baseUrl}/client/facture/${response.data.share_token}`;
+            setShareUrl(fullUrl);
+            setShowShareModal(true);
+        } catch (error) {
+            toast.error("Erreur lors de la création du lien de partage");
+        }
+    }
+
+    async function copyToClipboard() {
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            setCopied(true);
+            toast.success("Lien copié");
+            setTimeout(() => setCopied(false), 2000);
+        } catch (error) {
+            toast.error("Erreur lors de la copie");
+        }
+    }
+
     if (loading) return <div className="flex justify-center py-20"><div className="spinner"></div></div>;
     if (!invoice) return null;
 
