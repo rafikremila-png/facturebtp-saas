@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { getQuote, updateQuote, convertQuoteToInvoice, downloadQuotePdf } from "@/lib/api";
+import { getQuote, updateQuote, convertQuoteToInvoice, downloadQuotePdf, createQuoteShareLink } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,7 +18,9 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, Download, Pencil, FileCheck, Calendar, User, Euro } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, Download, Pencil, FileCheck, Calendar, User, Euro, Share2, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 
 const statusLabels = {
