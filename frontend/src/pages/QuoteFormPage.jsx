@@ -23,6 +23,11 @@ export default function QuoteFormPage() {
     const [categories, setCategories] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState("");
     const [selectedItem, setSelectedItem] = useState("");
+    const [kits, setKits] = useState([]);
+    const [showKitModal, setShowKitModal] = useState(false);
+    const [showSaveKitModal, setShowSaveKitModal] = useState(false);
+    const [newKitName, setNewKitName] = useState("");
+    const [newKitDescription, setNewKitDescription] = useState("");
     
     const [formData, setFormData] = useState({
         client_id: "",
