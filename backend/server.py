@@ -3575,8 +3575,9 @@ async def send_invoice_email(invoice_id: str, request: SendDocumentEmailRequest,
 async def get_email_status(user: dict = Depends(get_current_user)):
     """Check if email service is configured"""
     return {
-        "configured": bool(RESEND_API_KEY),
-        "sender": SENDER_EMAIL if RESEND_API_KEY else None
+        "configured": RESEND_CONFIGURED,
+        "sender": SENDER_EMAIL if RESEND_CONFIGURED else None,
+        "setup_instructions": None if RESEND_CONFIGURED else "Pour activer l'envoi d'emails, ajoutez RESEND_API_KEY dans backend/.env (obtenez une clé sur https://resend.com)"
     }
 
 # ============== MAIN APP ==============
