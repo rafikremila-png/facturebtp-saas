@@ -93,6 +93,29 @@ export default function QuoteDetailPage() {
         }
     };
 
+    const handleShare = async () => {
+        try {
+            const response = await createQuoteShareLink(quote.id);
+            const baseUrl = window.location.origin;
+            const fullUrl = `${baseUrl}/client/devis/${response.data.share_token}`;
+            setShareUrl(fullUrl);
+            setShowShareModal(true);
+        } catch (error) {
+            toast.error("Erreur lors de la création du lien de partage");
+        }
+    };
+
+    const copyToClipboard = async () => {
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            setCopied(true);
+            toast.success("Lien copié dans le presse-papiers");
+            setTimeout(() => setCopied(false), 2000);
+        } catch (error) {
+            toast.error("Erreur lors de la copie");
+        }
+    };
+
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('fr-FR', {
             day: 'numeric',
