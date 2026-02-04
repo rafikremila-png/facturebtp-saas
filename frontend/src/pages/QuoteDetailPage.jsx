@@ -404,7 +404,17 @@ export default function QuoteDetailPage() {
                             data-testid="create-acompte-btn"
                         >
                             <CreditCard className="w-4 h-4 mr-2" />
-                            Créer un acompte
+                            Acompte
+                        </Button>
+                    )}
+                    {(quote.status === "accepte" || quote.status === "envoye") && (
+                        <Button 
+                            className="bg-emerald-600 hover:bg-emerald-700"
+                            onClick={() => setShowSituationModal(true)}
+                            data-testid="create-situation-btn"
+                        >
+                            <HardHat className="w-4 h-4 mr-2" />
+                            Situation
                         </Button>
                     )}
                     {quote.status === "accepte" && (
