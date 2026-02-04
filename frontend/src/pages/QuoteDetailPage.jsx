@@ -180,6 +180,15 @@ export default function QuoteDetailPage() {
                 <div className="flex gap-2">
                     <Button 
                         variant="outline"
+                        onClick={() => setShowEmailModal(true)}
+                        className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+                        data-testid="send-email-btn"
+                    >
+                        <Mail className="w-4 h-4 mr-2 text-blue-600" />
+                        Envoyer par email
+                    </Button>
+                    <Button 
+                        variant="outline"
                         onClick={handleShare}
                         data-testid="share-btn"
                     >
