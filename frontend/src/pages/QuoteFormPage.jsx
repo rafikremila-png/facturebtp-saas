@@ -543,7 +543,7 @@ export default function QuoteFormPage() {
                                 </div>
                             )}
                             <div className="flex justify-end gap-8 text-lg font-bold">
-                                <span className="text-slate-900">Total TTC:</span>
+                                <span className="text-slate-900">Total {isAutoEntrepreneur ? '' : 'TTC'}:</span>
                                 <span className="text-orange-600 w-24 text-right">{totals.totalTTC} €</span>
                             </div>
                         </div>
