@@ -150,6 +150,47 @@ function InvoiceViewPage() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Email Modal */}
+            <Dialog open={showEmailModal} onOpenChange={setShowEmailModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Mail className="w-5 h-5 text-blue-600" />
+                            Envoyer la facture par email
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                            <Label>Adresse email du destinataire *</Label>
+                            <Input
+                                type="email"
+                                placeholder="client@example.com"
+                                value={emailData.recipient_email}
+                                onChange={(e) => setEmailData(prev => ({ ...prev, recipient_email: e.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Message personnalisé (optionnel)</Label>
+                            <Textarea
+                                placeholder="Un message à ajouter à l'email..."
+                                value={emailData.custom_message}
+                                onChange={(e) => setEmailData(prev => ({ ...prev, custom_message: e.target.value }))}
+                                rows={3}
+                            />
+                        </div>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                            <strong>Contenu :</strong> Facture n° {invoice?.invoice_number}, PDF joint, lien de consultation
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button variant="outline" onClick={() => setShowEmailModal(false)}>Annuler</Button>
+                        <Button onClick={handleSendEmail} disabled={sendingEmail} className="bg-blue-600 hover:bg-blue-700">
+                            {sendingEmail ? <><span className="spinner w-4 h-4 mr-2"></span>Envoi...</> : <><Send className="w-4 h-4 mr-2" />Envoyer</>}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
