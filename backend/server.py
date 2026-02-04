@@ -2725,36 +2725,76 @@ async def get_company_settings():
 
 def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: dict):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
+    
+    # Increase bottom margin for footer
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=A4, 
+        topMargin=15*mm, 
+        bottomMargin=25*mm,  # Extra space for footer
+        leftMargin=15*mm, 
+        rightMargin=15*mm
+    )
     
     styles = getSampleStyleSheet()
+    
+    # Company name for header/footer
+    company_name = company.company_name or "Votre Entreprise BTP"
+    
+    # Footer callback function - called for each page
+    def add_footer(canvas, doc):
+        canvas.saveState()
+        
+        # Footer separator line
+        canvas.setStrokeColor(colors.HexColor('#E2E8F0'))
+        canvas.setLineWidth(0.5)
+        canvas.line(15*mm, 18*mm, A4[0] - 15*mm, 18*mm)
+        
+        # Footer text
+        footer_parts = [company_name]
+        if company.siret:
+            footer_parts.append(f"SIRET: {company.siret}")
+        if company.rcs_rm:
+            footer_parts.append(company.rcs_rm)
+        
+        footer_text = " | ".join(footer_parts)
+        
+        canvas.setFont('Helvetica', 7)
+        canvas.setFillColor(colors.HexColor('#64748B'))
+        
+        # Center the footer text
+        text_width = canvas.stringWidth(footer_text, 'Helvetica', 7)
+        x_position = (A4[0] - text_width) / 2
+        canvas.drawString(x_position, 12*mm, footer_text)
+        
+        canvas.restoreState()
     
     # Custom styles for professional layout
     company_name_style = ParagraphStyle(
         'CompanyName', 
         parent=styles['Heading1'], 
-        fontSize=16, 
+        fontSize=14, 
         fontName='Helvetica-Bold',
         textColor=colors.HexColor('#0F172A'), 
         alignment=TA_CENTER,
-        spaceAfter=4
+        spaceAfter=2
     )
     company_info_style = ParagraphStyle(
         'CompanyInfo', 
         parent=styles['Normal'], 
-        fontSize=9, 
+        fontSize=8, 
         textColor=colors.HexColor('#475569'), 
         alignment=TA_CENTER,
-        leading=12
+        leading=11
     )
     company_legal_style = ParagraphStyle(
         'CompanyLegal', 
         parent=styles['Normal'], 
-        fontSize=9, 
+        fontSize=8, 
         fontName='Helvetica-Bold',
         textColor=colors.HexColor('#1E293B'), 
         alignment=TA_CENTER,
-        leading=12
+        leading=11
     )
     
     # Other styles
@@ -2766,8 +2806,7 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     
     elements = []
     
-    # ========== HEADER: Centered Company Block ==========
-    company_name = company.company_name or "Votre Entreprise BTP"
+    # ========== HEADER: Logo LEFT + Company Info CENTER ==========
     
     # Try to load logo if available
     logo_image = None
@@ -2779,9 +2818,9 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
             logo_bytes = base64.b64decode(logo_data)
             logo_buffer = BytesIO(logo_bytes)
             logo_image = Image(logo_buffer)
-            # Scale logo (max 45mm width, 22mm height)
-            max_width = 45 * mm
-            max_height = 22 * mm
+            # Scale logo proportionally (max 35mm width, 18mm height - smaller for left placement)
+            max_width = 35 * mm
+            max_height = 18 * mm
             aspect = logo_image.imageWidth / logo_image.imageHeight
             if logo_image.imageWidth > max_width or logo_image.imageHeight > max_height:
                 if aspect > (max_width / max_height):
@@ -2797,39 +2836,26 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
             logging.warning(f"Failed to load logo for PDF: {str(e)}")
             logo_image = None
     
-    # Build centered header block
-    header_elements = []
+    # Build company info block (centered text)
+    company_info_content = []
     
-    # Logo (centered)
-    if logo_image:
-        logo_table = Table([[logo_image]], colWidths=[180*mm])
-        logo_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3*mm),
-        ]))
-        header_elements.append(logo_table)
+    # Company name (bold, larger)
+    company_info_content.append(Paragraph(company_name, company_name_style))
     
-    # Company name (bold, centered)
-    header_elements.append(Paragraph(company_name, company_name_style))
-    header_elements.append(Spacer(1, 2*mm))
-    
-    # Address (normal weight, centered)
+    # Address (normal weight)
     if company.address:
-        header_elements.append(Paragraph(company.address, company_info_style))
+        company_info_content.append(Paragraph(company.address, company_info_style))
     
-    # Contact info (normal weight, centered)
+    # Contact info (normal weight)
     contact_parts = []
     if company.phone:
         contact_parts.append(f"Tél: {company.phone}")
     if company.email:
         contact_parts.append(f"Email: {company.email}")
     if contact_parts:
-        header_elements.append(Paragraph(" | ".join(contact_parts), company_info_style))
+        company_info_content.append(Paragraph(" | ".join(contact_parts), company_info_style))
     
-    header_elements.append(Spacer(1, 2*mm))
-    
-    # Legal information (bold, centered) - SIRET, RCS/RM, Code APE
+    # Legal information (bold) - SIRET, RCS/RM, Code APE
     legal_line_parts = []
     if company.siret:
         legal_line_parts.append(f"SIRET: {company.siret}")
@@ -2838,21 +2864,38 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     if company.code_ape:
         legal_line_parts.append(f"Code APE: {company.code_ape}")
     if legal_line_parts:
-        header_elements.append(Paragraph(" | ".join(legal_line_parts), company_legal_style))
+        company_info_content.append(Paragraph(" | ".join(legal_line_parts), company_legal_style))
     
     # Capital social (bold)
     if company.capital_social:
-        header_elements.append(Paragraph(f"Capital social: {company.capital_social}", company_legal_style))
+        company_info_content.append(Paragraph(f"Capital social: {company.capital_social}", company_legal_style))
     
     # VAT number or auto-entrepreneur mention (bold)
     if company.is_auto_entrepreneur:
-        header_elements.append(Paragraph(company.auto_entrepreneur_mention, company_legal_style))
+        company_info_content.append(Paragraph(company.auto_entrepreneur_mention, company_legal_style))
     elif company.vat_number:
-        header_elements.append(Paragraph(f"N° TVA Intracommunautaire: {company.vat_number}", company_legal_style))
+        company_info_content.append(Paragraph(f"N° TVA: {company.vat_number}", company_legal_style))
     
-    # Add all header elements
-    for elem in header_elements:
-        elements.append(elem)
+    # Create header table: Logo on LEFT, Company info in CENTER
+    if logo_image:
+        # Three columns: Logo (left) | Company info (center) | Empty (right for balance)
+        header_table_data = [[logo_image, company_info_content, '']]
+        header_table = Table(header_table_data, colWidths=[40*mm, 100*mm, 40*mm])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (0, 0), 'LEFT'),      # Logo left
+            ('ALIGN', (1, 0), (1, 0), 'CENTER'),    # Company info center
+            ('ALIGN', (2, 0), (2, 0), 'RIGHT'),     # Empty right
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        elements.append(header_table)
+    else:
+        # No logo - just centered company info
+        for elem in company_info_content:
+            elements.append(elem)
     
     # Separator line
     elements.append(Spacer(1, 4*mm))
@@ -2861,7 +2904,7 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
         ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
     ]))
     elements.append(separator_table)
-    elements.append(Spacer(1, 8*mm))
+    elements.append(Spacer(1, 6*mm))
     
     # ========== DOCUMENT TITLE ==========
     if doc_type == "quote":
