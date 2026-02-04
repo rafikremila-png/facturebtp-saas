@@ -561,6 +561,95 @@ export default function SettingsPage() {
                         </CardContent>
                     </Card>
                 </TabsContent>
+
+                {/* Kits Tab */}
+                <TabsContent value="kits" className="space-y-6">
+                    {/* Create Kit Button */}
+                    <Card className="border-blue-200 bg-blue-50/50">
+                        <CardHeader>
+                            <CardTitle className="font-['Barlow_Condensed'] flex items-center gap-2">
+                                <Plus className="w-5 h-5 text-blue-600" />
+                                Créer un kit de rénovation
+                            </CardTitle>
+                            <CardDescription>
+                                Les kits permettent d'ajouter plusieurs lignes à un devis en un seul clic
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Button onClick={() => setShowNewKitModal(true)} className="bg-blue-600 hover:bg-blue-700" data-testid="create-kit-btn">
+                                <Plus className="w-4 h-4 mr-2" />Nouveau kit
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    {/* Kits List */}
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <CardTitle className="font-['Barlow_Condensed']">Kits disponibles ({kits.length})</CardTitle>
+                            <Button variant="outline" size="sm" onClick={() => setShowResetKitsDialog(true)} className="text-amber-600 border-amber-300 hover:bg-amber-50">
+                                <RefreshCw className="w-4 h-4 mr-2" />Réinitialiser
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            {kits.length === 0 ? (
+                                <p className="text-center text-slate-500 py-8">Aucun kit disponible</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {kits.map(kit => (
+                                        <div key={kit.id} className="border rounded-lg overflow-hidden">
+                                            <div 
+                                                className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50"
+                                                onClick={() => setExpandedKit(expandedKit === kit.id ? null : kit.id)}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    {expandedKit === kit.id ? (
+                                                        <ChevronUp className="w-4 h-4 text-slate-400" />
+                                                    ) : (
+                                                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                                                    )}
+                                                    <div>
+                                                        <h3 className="font-semibold">{kit.name}</h3>
+                                                        <p className="text-sm text-slate-500">
+                                                            {kit.items.length} lignes • {kit.is_default ? "Kit par défaut" : "Kit personnalisé"}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="font-medium text-orange-600">{calculateKitTotal(kit.items)} € HT</span>
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        onClick={(e) => { e.stopPropagation(); setShowDeleteKitDialog(kit.id); }}
+                                                        className="hover:bg-red-50 hover:text-red-600"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            {expandedKit === kit.id && (
+                                                <div className="border-t bg-slate-50 p-4">
+                                                    {kit.description && (
+                                                        <p className="text-sm text-slate-600 mb-3">{kit.description}</p>
+                                                    )}
+                                                    <div className="space-y-2">
+                                                        {kit.items.map((item, idx) => (
+                                                            <div key={idx} className="flex items-center gap-3 text-sm bg-white p-2 rounded">
+                                                                <span className="flex-1">{item.description}</span>
+                                                                <span className="text-slate-500 w-16">{item.quantity} {item.unit}</span>
+                                                                <span className="font-medium w-20 text-right">{item.unit_price.toFixed(2)} €</span>
+                                                                <span className="text-slate-400 w-16 text-right">{(item.quantity * item.unit_price).toFixed(2)} €</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
             </Tabs>
 
             {/* Delete Confirmation Dialog */}
