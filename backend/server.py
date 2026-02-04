@@ -1131,6 +1131,404 @@ async def create_final_invoice(quote_id: str, user: dict = Depends(get_current_u
     
     return InvoiceResponse(**invoice_doc)
 
+# ============== SITUATIONS (PROGRESSIVE BILLING) ==============
+
+@api_router.post("/quotes/{quote_id}/situation", response_model=SituationResponse)
+async def create_situation(quote_id: str, situation_data: SituationCreate, user: dict = Depends(get_current_user)):
+    """Create a situation invoice (progressive billing) from a quote"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    if quote["status"] not in ["accepte", "envoye"]:
+        raise HTTPException(status_code=400, detail="Le devis doit être accepté ou envoyé pour créer une situation")
+    
+    # Get company settings
+    settings = await get_company_settings()
+    
+    # Get existing situations for this quote to determine the number and previous %
+    existing_situations = await db.invoices.find(
+        {"parent_quote_id": quote_id, "is_situation": True},
+        {"_id": 0}
+    ).sort("situation_number", -1).to_list(100)
+    
+    situation_number = len(existing_situations) + 1
+    
+    # Calculate previous cumulative percentage
+    if existing_situations:
+        previous_percentage = existing_situations[0].get("situation_percentage", 0) or 0
+    else:
+        previous_percentage = 0
+    
+    # Calculate current situation based on type
+    if situation_data.situation_type == "global":
+        # Global percentage mode
+        if situation_data.global_percentage is None or situation_data.global_percentage <= 0:
+            raise HTTPException(status_code=400, detail="Le pourcentage global doit être supérieur à 0")
+        
+        if situation_data.global_percentage > 100:
+            raise HTTPException(status_code=400, detail="Le pourcentage ne peut pas dépasser 100%")
+        
+        if situation_data.global_percentage <= previous_percentage:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Le pourcentage ({situation_data.global_percentage}%) doit être supérieur au cumul précédent ({previous_percentage}%)"
+            )
+        
+        current_percentage = situation_data.global_percentage
+        situation_percentage = current_percentage - previous_percentage
+        
+        # Calculate amounts for this situation
+        situation_ht = quote["total_ht"] * (situation_percentage / 100)
+        situation_vat = quote["total_vat"] * (situation_percentage / 100) if not settings.is_auto_entrepreneur else 0
+        situation_ttc = situation_ht + situation_vat
+        
+        # Create situation items (proportional to situation %)
+        situation_items = []
+        for item in quote["items"]:
+            item_ht = item["quantity"] * item["unit_price"] * (situation_percentage / 100)
+            situation_items.append({
+                "description": item["description"],
+                "quantity": item["quantity"],
+                "unit_price": item["unit_price"],
+                "vat_rate": 0.0 if settings.is_auto_entrepreneur else item["vat_rate"],
+                "situation_percent": situation_percentage,
+                "original_total_ht": item["quantity"] * item["unit_price"],
+                "situation_amount_ht": round(item_ht, 2)
+            })
+    
+    else:  # per_line mode
+        if not situation_data.line_items or len(situation_data.line_items) == 0:
+            raise HTTPException(status_code=400, detail="Les lignes de situation sont requises pour le mode par ligne")
+        
+        if len(situation_data.line_items) != len(quote["items"]):
+            raise HTTPException(status_code=400, detail="Le nombre de lignes doit correspondre au devis")
+        
+        # Get previous line-by-line progress
+        previous_line_progress = {}
+        if existing_situations:
+            last_situation = existing_situations[0]
+            for item in last_situation.get("items", []):
+                previous_line_progress[item.get("description", "")] = item.get("cumulative_percent", 0)
+        
+        situation_items = []
+        total_situation_ht = 0
+        total_situation_vat = 0
+        
+        for i, (quote_item, sit_item) in enumerate(zip(quote["items"], situation_data.line_items)):
+            prev_progress = previous_line_progress.get(quote_item["description"], 0)
+            
+            if sit_item.progress_percent < prev_progress:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Ligne {i+1}: le % ({sit_item.progress_percent}%) ne peut pas être inférieur au cumul précédent ({prev_progress}%)"
+                )
+            
+            if sit_item.progress_percent > 100:
+                raise HTTPException(status_code=400, detail=f"Ligne {i+1}: le pourcentage ne peut pas dépasser 100%")
+            
+            line_situation_percent = sit_item.progress_percent - prev_progress
+            item_base_ht = quote_item["quantity"] * quote_item["unit_price"]
+            item_situation_ht = item_base_ht * (line_situation_percent / 100)
+            item_situation_vat = item_situation_ht * (quote_item["vat_rate"] / 100) if not settings.is_auto_entrepreneur else 0
+            
+            total_situation_ht += item_situation_ht
+            total_situation_vat += item_situation_vat
+            
+            situation_items.append({
+                "description": quote_item["description"],
+                "quantity": quote_item["quantity"],
+                "unit_price": quote_item["unit_price"],
+                "vat_rate": 0.0 if settings.is_auto_entrepreneur else quote_item["vat_rate"],
+                "situation_percent": line_situation_percent,
+                "cumulative_percent": sit_item.progress_percent,
+                "original_total_ht": item_base_ht,
+                "situation_amount_ht": round(item_situation_ht, 2)
+            })
+        
+        situation_ht = total_situation_ht
+        situation_vat = total_situation_vat
+        situation_ttc = situation_ht + situation_vat
+        
+        # Calculate average progress for current_percentage
+        total_weight = sum(item["original_total_ht"] for item in situation_items)
+        if total_weight > 0:
+            current_percentage = sum(
+                item["cumulative_percent"] * item["original_total_ht"] / total_weight 
+                for item in situation_items
+            )
+        else:
+            current_percentage = 0
+        
+        situation_percentage = current_percentage - previous_percentage
+    
+    # Generate invoice number
+    invoice_number = await get_next_invoice_number()
+    
+    # Calculate payment due date
+    issue_date = datetime.now(timezone.utc)
+    payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
+    
+    situation_doc = {
+        "id": str(uuid.uuid4()),
+        "invoice_number": invoice_number,
+        "client_id": quote["client_id"],
+        "client_name": quote["client_name"],
+        "quote_id": quote_id,
+        "parent_quote_id": quote_id,
+        "issue_date": issue_date.isoformat(),
+        "payment_due_date": payment_due_date.isoformat(),
+        "items": situation_items,
+        "total_ht": round(situation_ht, 2),
+        "total_vat": round(situation_vat, 2),
+        "total_ttc": round(situation_ttc, 2),
+        "payment_status": "impaye",
+        "payment_method": situation_data.payment_method,
+        "paid_amount": 0,
+        "notes": situation_data.notes,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        # Situation specific fields
+        "is_situation": True,
+        "situation_type": situation_data.situation_type,
+        "situation_number": situation_number,
+        "situation_percentage": round(current_percentage, 2),  # Cumulative %
+        "previous_percentage": round(previous_percentage, 2),
+        "chantier_ref": situation_data.chantier_ref or f"Chantier {quote['quote_number']}"
+    }
+    
+    await db.invoices.insert_one(situation_doc)
+    
+    return SituationResponse(
+        id=situation_doc["id"],
+        invoice_number=situation_doc["invoice_number"],
+        quote_id=quote_id,
+        quote_number=quote["quote_number"],
+        client_id=situation_doc["client_id"],
+        client_name=situation_doc["client_name"],
+        issue_date=situation_doc["issue_date"],
+        payment_due_date=situation_doc["payment_due_date"],
+        situation_type=situation_doc["situation_type"],
+        situation_number=situation_doc["situation_number"],
+        current_percentage=situation_doc["situation_percentage"],
+        previous_percentage=situation_doc["previous_percentage"],
+        situation_percentage=round(situation_percentage, 2),
+        items=situation_doc["items"],
+        total_ht=situation_doc["total_ht"],
+        total_vat=situation_doc["total_vat"],
+        total_ttc=situation_doc["total_ttc"],
+        payment_status=situation_doc["payment_status"],
+        payment_method=situation_doc["payment_method"],
+        paid_amount=situation_doc["paid_amount"],
+        notes=situation_doc["notes"],
+        chantier_ref=situation_doc["chantier_ref"],
+        created_at=situation_doc["created_at"]
+    )
+
+@api_router.get("/quotes/{quote_id}/situations", response_model=List[SituationResponse])
+async def list_quote_situations(quote_id: str, user: dict = Depends(get_current_user)):
+    """List all situations for a quote"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    situations = await db.invoices.find(
+        {"parent_quote_id": quote_id, "is_situation": True},
+        {"_id": 0}
+    ).sort("situation_number", 1).to_list(100)
+    
+    result = []
+    for i, s in enumerate(situations):
+        # Calculate situation_percentage (difference from previous)
+        prev_pct = situations[i-1].get("situation_percentage", 0) if i > 0 else 0
+        current_pct = s.get("situation_percentage", 0)
+        sit_pct = current_pct - prev_pct
+        
+        result.append(SituationResponse(
+            id=s["id"],
+            invoice_number=s["invoice_number"],
+            quote_id=quote_id,
+            quote_number=quote["quote_number"],
+            client_id=s["client_id"],
+            client_name=s["client_name"],
+            issue_date=s["issue_date"],
+            payment_due_date=s.get("payment_due_date", s["issue_date"]),
+            situation_type=s.get("situation_type", "global"),
+            situation_number=s["situation_number"],
+            current_percentage=current_pct,
+            previous_percentage=s.get("previous_percentage", prev_pct),
+            situation_percentage=round(sit_pct, 2),
+            items=s.get("items", []),
+            total_ht=s["total_ht"],
+            total_vat=s["total_vat"],
+            total_ttc=s["total_ttc"],
+            payment_status=s["payment_status"],
+            payment_method=s["payment_method"],
+            paid_amount=s.get("paid_amount", 0),
+            notes=s.get("notes", ""),
+            chantier_ref=s.get("chantier_ref", ""),
+            created_at=s["created_at"]
+        ))
+    
+    return result
+
+@api_router.get("/quotes/{quote_id}/situations/summary")
+async def get_situations_summary(quote_id: str, user: dict = Depends(get_current_user)):
+    """Get summary of situations for a quote (total progress, remaining)"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    situations = await db.invoices.find(
+        {"parent_quote_id": quote_id, "is_situation": True},
+        {"_id": 0}
+    ).sort("situation_number", 1).to_list(100)
+    
+    total_situations_ht = sum(s["total_ht"] for s in situations)
+    total_situations_vat = sum(s["total_vat"] for s in situations)
+    total_situations_ttc = sum(s["total_ttc"] for s in situations)
+    total_paid = sum(s.get("paid_amount", 0) for s in situations if s["payment_status"] == "paye")
+    
+    remaining_ht = quote["total_ht"] - total_situations_ht
+    remaining_vat = quote["total_vat"] - total_situations_vat
+    remaining_ttc = quote["total_ttc"] - total_situations_ttc
+    
+    # Get current progress percentage
+    current_progress = situations[-1].get("situation_percentage", 0) if situations else 0
+    
+    # Build line-by-line progress for per_line situations
+    line_progress = []
+    if situations:
+        last_situation = situations[-1]
+        for item in last_situation.get("items", []):
+            line_progress.append({
+                "description": item.get("description", ""),
+                "cumulative_percent": item.get("cumulative_percent", item.get("situation_percent", 0) + 
+                    (situations[-2].get("items", [{}])[0].get("cumulative_percent", 0) if len(situations) > 1 else 0))
+            })
+    
+    return {
+        "quote_total_ht": quote["total_ht"],
+        "quote_total_vat": quote["total_vat"],
+        "quote_total_ttc": quote["total_ttc"],
+        "situations_count": len(situations),
+        "current_progress_percentage": round(current_progress, 2),
+        "total_situations_ht": round(total_situations_ht, 2),
+        "total_situations_vat": round(total_situations_vat, 2),
+        "total_situations_ttc": round(total_situations_ttc, 2),
+        "total_paid": round(total_paid, 2),
+        "remaining_ht": round(max(0, remaining_ht), 2),
+        "remaining_vat": round(max(0, remaining_vat), 2),
+        "remaining_ttc": round(max(0, remaining_ttc), 2),
+        "percentage_invoiced": round(current_progress, 2),
+        "percentage_paid": round((total_paid / quote["total_ttc"] * 100) if quote["total_ttc"] > 0 else 0, 1),
+        "line_progress": line_progress,
+        "situations": [
+            {
+                "id": s["id"],
+                "invoice_number": s["invoice_number"],
+                "situation_number": s["situation_number"],
+                "situation_type": s.get("situation_type", "global"),
+                "cumulative_percentage": s.get("situation_percentage", 0),
+                "total_ttc": s["total_ttc"],
+                "payment_status": s["payment_status"],
+                "paid_amount": s.get("paid_amount", 0)
+            }
+            for s in situations
+        ]
+    }
+
+@api_router.post("/quotes/{quote_id}/situation/final-invoice", response_model=InvoiceResponse)
+async def create_situation_final_invoice(quote_id: str, user: dict = Depends(get_current_user)):
+    """Create final invoice from quote after situations, showing all previous situations"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    if quote["status"] != "accepte":
+        raise HTTPException(status_code=400, detail="Le devis doit être accepté pour créer la facture finale")
+    
+    # Get company settings
+    settings = await get_company_settings()
+    
+    # Get all situations
+    situations = await db.invoices.find(
+        {"parent_quote_id": quote_id, "is_situation": True},
+        {"_id": 0}
+    ).sort("situation_number", 1).to_list(100)
+    
+    if not situations:
+        raise HTTPException(status_code=400, detail="Aucune situation trouvée. Créez d'abord des situations.")
+    
+    # Calculate totals from situations
+    total_situations_ttc = sum(s["total_ttc"] for s in situations)
+    total_paid_situations = sum(s.get("paid_amount", 0) for s in situations if s["payment_status"] == "paye")
+    
+    invoice_id = str(uuid.uuid4())
+    invoice_number = await get_next_invoice_number()
+    
+    issue_date = datetime.now(timezone.utc)
+    payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
+    
+    # Handle auto-entrepreneur mode
+    items = quote["items"]
+    if settings.is_auto_entrepreneur:
+        items = [{**item, "vat_rate": 0.0} for item in items]
+        total_ht = sum(item["quantity"] * item["unit_price"] for item in items)
+        total_vat = 0.0
+        total_ttc = total_ht
+    else:
+        total_ht = quote["total_ht"]
+        total_vat = quote["total_vat"]
+        total_ttc = quote["total_ttc"]
+    
+    invoice_doc = {
+        "id": invoice_id,
+        "invoice_number": invoice_number,
+        "client_id": quote["client_id"],
+        "client_name": quote["client_name"],
+        "quote_id": quote_id,
+        "parent_quote_id": quote_id,
+        "issue_date": issue_date.isoformat(),
+        "payment_due_date": payment_due_date.isoformat(),
+        "items": items,
+        "total_ht": total_ht,
+        "total_vat": total_vat,
+        "total_ttc": total_ttc,
+        "payment_status": "impaye",
+        "payment_method": "virement",
+        "paid_amount": 0,
+        "notes": quote.get("notes", ""),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        # Final invoice specific
+        "is_acompte": False,
+        "is_final_invoice": True,
+        "is_situation_final": True,
+        "situations_deducted": total_situations_ttc,
+        "situations_recap": [
+            {
+                "invoice_number": s["invoice_number"],
+                "situation_number": s["situation_number"],
+                "percentage": s.get("situation_percentage", 0),
+                "total_ttc": s["total_ttc"],
+                "payment_status": s["payment_status"]
+            }
+            for s in situations
+        ],
+        "net_to_pay": round(total_ttc - total_situations_ttc, 2)
+    }
+    
+    await db.invoices.insert_one(invoice_doc)
+    
+    # Update quote status
+    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "facture"}})
+    
+    # Add default values for missing fields
+    invoice_doc["acompte_type"] = None
+    invoice_doc["acompte_value"] = None
+    invoice_doc["acompte_number"] = None
+    
+    return InvoiceResponse(**invoice_doc)
+
 # ============== COMPANY SETTINGS ==============
 
 @api_router.get("/settings", response_model=CompanySettings)
