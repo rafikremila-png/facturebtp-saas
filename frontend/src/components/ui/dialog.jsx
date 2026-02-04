@@ -16,15 +16,29 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
     {...props} />
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+// SafePortal wrapper for Dialog that handles unmount gracefully
+const SafeDialogPortal = ({ children }) => {
+  const [mounted, setMounted] = React.useState(false);
+  
+  React.useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  if (!mounted) return null;
+  
+  return <DialogPortal>{children}</DialogPortal>;
+};
+
 const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => (
-  <DialogPortal>
+  <SafeDialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
@@ -40,7 +54,7 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
-  </DialogPortal>
+  </SafeDialogPortal>
 ))
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
