@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getQuotes, deleteQuote, downloadQuotePdf } from "@/lib/api";
+import { getQuotes, deleteQuote, downloadQuotePdf, bulkDeleteQuotes } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Table,
     TableBody,
@@ -46,6 +47,8 @@ export default function QuotesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [deleteId, setDeleteId] = useState(null);
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
 
     useEffect(() => {
         loadQuotes();
@@ -55,6 +58,7 @@ export default function QuotesPage() {
         try {
             const response = await getQuotes();
             setQuotes(response.data);
+            setSelectedIds([]);
         } catch (error) {
             toast.error("Erreur lors du chargement des devis");
         } finally {
@@ -75,6 +79,19 @@ export default function QuotesPage() {
         }
     };
 
+    const handleBulkDelete = async () => {
+        if (selectedIds.length === 0) return;
+        try {
+            const response = await bulkDeleteQuotes(selectedIds);
+            toast.success(response.data.message);
+            loadQuotes();
+        } catch (error) {
+            toast.error("Erreur lors de la suppression des devis");
+        } finally {
+            setShowBulkDeleteDialog(false);
+        }
+    };
+
     const handleDownloadPdf = async (quote) => {
         try {
             await downloadQuotePdf(quote.id, quote.quote_number);
@@ -91,6 +108,25 @@ export default function QuotesPage() {
         const matchesStatus = statusFilter === "all" || quote.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
+
+    const handleSelectAll = (checked) => {
+        if (checked) {
+            setSelectedIds(filteredQuotes.map(q => q.id));
+        } else {
+            setSelectedIds([]);
+        }
+    };
+
+    const handleSelectOne = (id, checked) => {
+        if (checked) {
+            setSelectedIds(prev => [...prev, id]);
+        } else {
+            setSelectedIds(prev => prev.filter(i => i !== id));
+        }
+    };
+
+    const isAllSelected = filteredQuotes.length > 0 && selectedIds.length === filteredQuotes.length;
+    const isSomeSelected = selectedIds.length > 0 && selectedIds.length < filteredQuotes.length;
 
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('fr-FR');
@@ -118,12 +154,24 @@ export default function QuotesPage() {
                     </h1>
                     <p className="text-slate-500 mt-1">{quotes.length} devis</p>
                 </div>
-                <Link to="/devis/new">
-                    <Button className="bg-orange-600 hover:bg-orange-700" data-testid="add-quote-btn">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Nouveau devis
-                    </Button>
-                </Link>
+                <div className="flex gap-2">
+                    {selectedIds.length > 0 && (
+                        <Button 
+                            variant="destructive"
+                            onClick={() => setShowBulkDeleteDialog(true)}
+                            data-testid="bulk-delete-btn"
+                        >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Supprimer ({selectedIds.length})
+                        </Button>
+                    )}
+                    <Link to="/devis/new">
+                        <Button className="bg-orange-600 hover:bg-orange-700" data-testid="add-quote-btn">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Nouveau devis
+                        </Button>
+                    </Link>
+                </div>
             </div>
 
             {/* Filters */}
@@ -180,6 +228,17 @@ export default function QuotesPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-slate-900 hover:bg-slate-900">
+                                    <TableHead className="w-12">
+                                        <Checkbox
+                                            checked={isAllSelected}
+                                            ref={(el) => {
+                                                if (el) el.indeterminate = isSomeSelected;
+                                            }}
+                                            onCheckedChange={handleSelectAll}
+                                            className="border-white data-[state=checked]:bg-orange-600 data-[state=checked]:border-orange-600"
+                                            data-testid="select-all-checkbox"
+                                        />
+                                    </TableHead>
                                     <TableHead className="text-white font-semibold">N° Devis</TableHead>
                                     <TableHead className="text-white font-semibold">Client</TableHead>
                                     <TableHead className="text-white font-semibold">Date</TableHead>
@@ -192,9 +251,16 @@ export default function QuotesPage() {
                                 {filteredQuotes.map((quote, index) => (
                                     <TableRow 
                                         key={quote.id} 
-                                        className="table-row-hover"
+                                        className={`table-row-hover ${selectedIds.includes(quote.id) ? 'bg-orange-50' : ''}`}
                                         data-testid={`quote-row-${index}`}
                                     >
+                                        <TableCell>
+                                            <Checkbox
+                                                checked={selectedIds.includes(quote.id)}
+                                                onCheckedChange={(checked) => handleSelectOne(quote.id, checked)}
+                                                data-testid={`select-quote-${index}`}
+                                            />
+                                        </TableCell>
                                         <TableCell className="font-mono font-medium">{quote.quote_number}</TableCell>
                                         <TableCell className="font-medium">{quote.client_name}</TableCell>
                                         <TableCell className="text-slate-600">{formatDate(quote.issue_date)}</TableCell>
@@ -254,7 +320,7 @@ export default function QuotesPage() {
                 </Card>
             )}
 
-            {/* Delete Dialog */}
+            {/* Single Delete Dialog */}
             <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -271,6 +337,29 @@ export default function QuotesPage() {
                             data-testid="confirm-delete-btn"
                         >
                             Supprimer
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Bulk Delete Dialog */}
+            <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Suppression groupée</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Êtes-vous sûr de vouloir supprimer <strong>{selectedIds.length} devis</strong> ? 
+                            Cette action est irréversible et supprimera définitivement tous les devis sélectionnés.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={handleBulkDelete}
+                            className="bg-red-600 hover:bg-red-700"
+                            data-testid="confirm-bulk-delete-btn"
+                        >
+                            Supprimer {selectedIds.length} devis
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
