@@ -1181,6 +1181,189 @@ async def generate_invoice_pdf(invoice_id: str, user: dict = Depends(get_current
         headers={"Content-Disposition": f"attachment; filename=facture_{invoice['invoice_number']}.pdf"}
     )
 
+# ============== CLIENT SHARE LINKS (PUBLIC) ==============
+
+import secrets
+
+def generate_share_token():
+    """Generate a secure random token for document sharing"""
+    return secrets.token_urlsafe(32)
+
+@api_router.post("/quotes/{quote_id}/share")
+async def create_quote_share_link(quote_id: str, user: dict = Depends(get_current_user)):
+    """Create or refresh share token for a quote"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    share_token = generate_share_token()
+    await db.quotes.update_one(
+        {"id": quote_id},
+        {"$set": {"share_token": share_token}}
+    )
+    
+    return {"share_token": share_token, "share_url": f"/client/devis/{share_token}"}
+
+@api_router.delete("/quotes/{quote_id}/share")
+async def revoke_quote_share_link(quote_id: str, user: dict = Depends(get_current_user)):
+    """Revoke share link for a quote"""
+    result = await db.quotes.update_one(
+        {"id": quote_id},
+        {"$unset": {"share_token": ""}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    return {"message": "Lien de partage révoqué"}
+
+@api_router.post("/invoices/{invoice_id}/share")
+async def create_invoice_share_link(invoice_id: str, user: dict = Depends(get_current_user)):
+    """Create or refresh share token for an invoice"""
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+    
+    share_token = generate_share_token()
+    await db.invoices.update_one(
+        {"id": invoice_id},
+        {"$set": {"share_token": share_token}}
+    )
+    
+    return {"share_token": share_token, "share_url": f"/client/facture/{share_token}"}
+
+@api_router.delete("/invoices/{invoice_id}/share")
+async def revoke_invoice_share_link(invoice_id: str, user: dict = Depends(get_current_user)):
+    """Revoke share link for an invoice"""
+    result = await db.invoices.update_one(
+        {"id": invoice_id},
+        {"$unset": {"share_token": ""}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+    return {"message": "Lien de partage révoqué"}
+
+# Public endpoints (no auth required)
+@api_router.get("/public/quote/{share_token}")
+async def get_public_quote(share_token: str):
+    """Get quote details via share link - NO AUTH REQUIRED"""
+    quote = await db.quotes.find_one({"share_token": share_token}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Document non trouvé ou lien expiré")
+    
+    client = await db.clients.find_one({"id": quote["client_id"]}, {"_id": 0})
+    company = await get_company_settings()
+    
+    # Return limited data for client view
+    status_labels = {
+        "brouillon": "Devis",
+        "envoye": "Devis envoyé",
+        "accepte": "Devis accepté",
+        "refuse": "Devis refusé",
+        "facture": "Facturé"
+    }
+    
+    return {
+        "type": "devis",
+        "document_number": quote["quote_number"],
+        "client_name": quote["client_name"],
+        "issue_date": quote["issue_date"],
+        "validity_date": quote["validity_date"],
+        "items": quote["items"],
+        "total_ht": quote["total_ht"],
+        "total_vat": quote["total_vat"],
+        "total_ttc": quote["total_ttc"],
+        "status": quote["status"],
+        "status_label": status_labels.get(quote["status"], quote["status"]),
+        "notes": quote.get("notes", ""),
+        "company": {
+            "name": company.company_name,
+            "address": company.address,
+            "phone": company.phone,
+            "email": company.email,
+            "siret": company.siret,
+            "vat_number": company.vat_number
+        }
+    }
+
+@api_router.get("/public/quote/{share_token}/pdf")
+async def get_public_quote_pdf(share_token: str):
+    """Download quote PDF via share link - NO AUTH REQUIRED"""
+    quote = await db.quotes.find_one({"share_token": share_token}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Document non trouvé ou lien expiré")
+    
+    client = await db.clients.find_one({"id": quote["client_id"]}, {"_id": 0})
+    if not client:
+        client = {"name": quote["client_name"], "address": "", "email": ""}
+    
+    company = await get_company_settings()
+    pdf_buffer = create_pdf("quote", quote, company, client)
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=devis_{quote['quote_number']}.pdf"}
+    )
+
+@api_router.get("/public/invoice/{share_token}")
+async def get_public_invoice(share_token: str):
+    """Get invoice details via share link - NO AUTH REQUIRED"""
+    invoice = await db.invoices.find_one({"share_token": share_token}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Document non trouvé ou lien expiré")
+    
+    client = await db.clients.find_one({"id": invoice["client_id"]}, {"_id": 0})
+    company = await get_company_settings()
+    
+    payment_status_labels = {
+        "impaye": "En attente de paiement",
+        "partiel": "Partiellement payé",
+        "paye": "Payé"
+    }
+    
+    return {
+        "type": "facture",
+        "document_number": invoice["invoice_number"],
+        "client_name": invoice["client_name"],
+        "issue_date": invoice["issue_date"],
+        "items": invoice["items"],
+        "total_ht": invoice["total_ht"],
+        "total_vat": invoice["total_vat"],
+        "total_ttc": invoice["total_ttc"],
+        "payment_status": invoice["payment_status"],
+        "payment_status_label": payment_status_labels.get(invoice["payment_status"], invoice["payment_status"]),
+        "payment_method": invoice.get("payment_method", "virement"),
+        "paid_amount": invoice.get("paid_amount", 0),
+        "notes": invoice.get("notes", ""),
+        "company": {
+            "name": company.company_name,
+            "address": company.address,
+            "phone": company.phone,
+            "email": company.email,
+            "siret": company.siret,
+            "vat_number": company.vat_number
+        }
+    }
+
+@api_router.get("/public/invoice/{share_token}/pdf")
+async def get_public_invoice_pdf(share_token: str):
+    """Download invoice PDF via share link - NO AUTH REQUIRED"""
+    invoice = await db.invoices.find_one({"share_token": share_token}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Document non trouvé ou lien expiré")
+    
+    client = await db.clients.find_one({"id": invoice["client_id"]}, {"_id": 0})
+    if not client:
+        client = {"name": invoice["client_name"], "address": "", "email": ""}
+    
+    company = await get_company_settings()
+    pdf_buffer = create_pdf("invoice", invoice, company, client)
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=facture_{invoice['invoice_number']}.pdf"}
+    )
+
 # ============== MAIN APP ==============
 
 app.include_router(api_router)
