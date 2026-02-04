@@ -75,11 +75,16 @@ Build a production-ready MVP web application for a French construction company (
 - [x] PDF generation for quotes and invoices
 - [x] Company settings with logo upload
 - [x] Dashboard statistics
-- [x] **Predefined Items System** (NEW)
-  - 8 BTP categories: Menuiserie, Plomberie, Électricité, Peinture, Maçonnerie, Carrelage, Plâtrerie/Isolation, Rénovation générale
-  - ~50 default items with description, unit, default price
+- [x] **Predefined Items System** (EXTENDED - Feb 4, 2026)
+  - 8 BTP categories: Maçonnerie, Carrelage, Plâtrerie/Isolation, Peinture, Plomberie, Électricité, Menuiserie, Rénovation générale
+  - **226 articles prédéfinis** avec description, unité, prix par défaut et taux de TVA
+  - Taux de TVA différenciés selon les travaux:
+    - **5.5%** : Isolation, amélioration énergétique, fenêtres (rénovation)
+    - **10%** : Travaux de rénovation (logements > 2 ans)
+    - **20%** : Prestations standard (location, études)
   - CRUD API for custom items management
   - Auto-initialization on first use
+  - Reset to defaults option
 
 ### Frontend ✅
 - [x] Login/Register page with BTP theme
@@ -91,12 +96,12 @@ Build a production-ready MVP web application for a French construction company (
 - [x] Dark sidebar navigation
 - [x] French interface
 - [x] Responsive design
-- [x] **Predefined Items Selector** (NEW)
+- [x] **Predefined Items Selector**
   - Category dropdown in quote/invoice forms
-  - Item dropdown with price/unit preview
-  - Auto-populate line items on selection
+  - Item dropdown with price/unit/VAT preview
+  - Auto-populate line items on selection with correct VAT rate
   - Manual entry option preserved
-- [x] **Items Management in Settings** (NEW)
+- [x] **Items Management in Settings**
   - Add/Edit/Delete custom items
   - Category tabs with item count
   - Reset to defaults option
