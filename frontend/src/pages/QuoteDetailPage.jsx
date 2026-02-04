@@ -40,6 +40,9 @@ export default function QuoteDetailPage() {
     const [quote, setQuote] = useState(null);
     const [loading, setLoading] = useState(true);
     const [converting, setConverting] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [shareUrl, setShareUrl] = useState("");
+    const [copied, setCopied] = useState(false);
 
     useEffect(() => {
         loadQuote();
