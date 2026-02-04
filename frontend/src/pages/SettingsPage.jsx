@@ -6,10 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Building2, Save, Upload, Plus, Trash2, Package, RefreshCw, Pencil, Layers, ChevronDown, ChevronUp } from "lucide-react";
+import { Building2, Save, Upload, Plus, Trash2, Package, RefreshCw, Pencil, Layers, ChevronDown, ChevronUp, CreditCard, FileText, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 const UNIT_OPTIONS = ["unité", "m²", "ml", "m³", "heure", "jour", "forfait", "kg", "litre"];
@@ -40,7 +41,17 @@ export default function SettingsPage() {
         siret: "",
         vat_number: "",
         default_vat_rates: [20.0, 10.0, 5.5, 2.1],
-        logo_base64: null
+        logo_base64: null,
+        // New French legal fields
+        rcs_rm: "",
+        code_ape: "",
+        capital_social: "",
+        iban: "",
+        bic: "",
+        is_auto_entrepreneur: false,
+        auto_entrepreneur_mention: "TVA non applicable, art. 293B du CGI",
+        default_payment_delay_days: 30,
+        late_payment_rate: 3.0
     });
 
     // Predefined items
