@@ -1952,8 +1952,55 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     
     # ========== ITEMS TABLE ==========
     is_auto_entrepreneur = company.is_auto_entrepreneur
+    is_situation = doc_data.get('is_situation', False)
+    is_situation_final = doc_data.get('is_situation_final', False)
     
-    if is_auto_entrepreneur:
+    if is_situation:
+        # Special table format for situation invoices
+        if is_auto_entrepreneur:
+            table_data = [
+                [Paragraph("<b>Description</b>", bold_style), 
+                 Paragraph("<b>Base HT</b>", bold_style), 
+                 Paragraph("<b>%</b>", bold_style), 
+                 Paragraph("<b>Montant</b>", bold_style)]
+            ]
+            
+            for item in doc_data['items']:
+                base_ht = item.get('original_total_ht', item['quantity'] * item['unit_price'])
+                sit_pct = item.get('situation_percent', item.get('cumulative_percent', 0))
+                sit_amount = item.get('situation_amount_ht', base_ht * sit_pct / 100)
+                table_data.append([
+                    Paragraph(item['description'], normal_style),
+                    Paragraph(f"{base_ht:.2f} €", normal_style),
+                    Paragraph(f"{sit_pct:.1f}%", normal_style),
+                    Paragraph(f"{sit_amount:.2f} €", normal_style)
+                ])
+            
+            items_table = Table(table_data, colWidths=[80*mm, 35*mm, 20*mm, 35*mm])
+        else:
+            table_data = [
+                [Paragraph("<b>Description</b>", bold_style), 
+                 Paragraph("<b>Base HT</b>", bold_style),
+                 Paragraph("<b>TVA</b>", bold_style), 
+                 Paragraph("<b>% Sit.</b>", bold_style), 
+                 Paragraph("<b>Montant HT</b>", bold_style)]
+            ]
+            
+            for item in doc_data['items']:
+                base_ht = item.get('original_total_ht', item['quantity'] * item['unit_price'])
+                sit_pct = item.get('situation_percent', item.get('cumulative_percent', 0))
+                sit_amount = item.get('situation_amount_ht', base_ht * sit_pct / 100)
+                table_data.append([
+                    Paragraph(item['description'], normal_style),
+                    Paragraph(f"{base_ht:.2f} €", normal_style),
+                    Paragraph(f"{item['vat_rate']}%", normal_style),
+                    Paragraph(f"{sit_pct:.1f}%", normal_style),
+                    Paragraph(f"{sit_amount:.2f} €", normal_style)
+                ])
+            
+            items_table = Table(table_data, colWidths=[65*mm, 30*mm, 18*mm, 22*mm, 30*mm])
+    
+    elif is_auto_entrepreneur:
         # No VAT columns for auto-entrepreneur
         table_data = [
             [Paragraph("<b>Description</b>", bold_style), 
