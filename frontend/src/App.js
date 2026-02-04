@@ -15,6 +15,7 @@ import InvoicesPage from "@/pages/InvoicesPage";
 import InvoiceFormPage from "@/pages/InvoiceFormPage";
 import InvoiceDetailPage from "@/pages/InvoiceViewPage";
 import SettingsPage from "@/pages/SettingsPage";
+import ClientViewPage from "@/pages/ClientViewPage";
 import Layout from "@/components/Layout";
 
 const ProtectedRoute = ({ children }) => {
