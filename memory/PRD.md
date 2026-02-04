@@ -116,12 +116,16 @@ Build a production-ready MVP web application for a French construction company (
 - **Kits de rénovation** (Feb 2026)
 - **Vue client publique** (Feb 2026)
 - **Envoi email** (Feb 2026 - MOCKED, needs real Resend API key)
+- **Mode auto-entrepreneur** (Feb 2026)
+- **Informations légales étendues** (Feb 2026)
+- **Coordonnées bancaires IBAN/BIC** (Feb 2026)
+- **Délai de paiement configurable** (Feb 2026)
 
 ### P2 (Nice to Have) - Pending
 - Multi-user support with roles (Admin, Commercial, Comptable)
+- Attestations TVA réduite (10%/5.5%) - formulaire guidé
 - Accounting export
 - Online payments
-- Bank details (IBAN/BIC) in PDFs
 
 ## Out of Scope
 - Accounting export (deferred)
@@ -135,6 +139,24 @@ Build a production-ready MVP web application for a French construction company (
 - **Solution**: Patched the native `ResizeObserver` in `frontend/src/index.js` to use `requestAnimationFrame` for batching observations
 
 ## Changelog (Feb 2026)
+
+### Mode Auto-entrepreneur ✅ (NEW)
+- Toggle dans Paramètres > Entreprise
+- Quand activé : mention légale "TVA non applicable, art. 293B du CGI" sur tous les documents
+- Masquage automatique des colonnes TVA dans les formulaires
+- PDFs adaptés sans TVA
+
+### Informations légales étendues ✅ (NEW)
+- Champs ajoutés : RCS/RM, Code APE/NAF, Capital social
+- Coordonnées bancaires : IBAN + BIC/SWIFT
+- Affichage sur tous les PDFs conformément aux exigences françaises
+
+### Délai de paiement configurable ✅ (NEW)
+- Paramètre par défaut : 30 jours (configurable)
+- Date d'échéance calculée automatiquement sur les factures
+- Mentions légales automatiques sur les factures :
+  - Pénalités de retard (3x taux d'intérêt légal)
+  - Indemnité forfaitaire de recouvrement de 40€
 
 ### Kits de rénovation ✅
 - 3 kits par défaut : Rénovation salle de bain (~3466€), Installation cuisine (~2780€), Rénovation électrique (~3675€)
@@ -159,8 +181,5 @@ Build a production-ready MVP web application for a French construction company (
 
 ## Next Action Items
 1. Configurer une vraie clé API Resend pour l'envoi d'email en production
-2. Ajouter les coordonnées bancaires (IBAN/BIC) dans les paramètres et les PDFs
+2. Attestations TVA réduite (10%/5.5%) - formulaire guidé avec conditions
 3. Multi-utilisateurs avec rôles (Admin, Commercial, Comptable)
-3. Multi-user support with roles
-4. Monthly/yearly reports
-5. Bank details in PDF for payments
