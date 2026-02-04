@@ -1,0 +1,109 @@
+{
+  "summary": "Completed comprehensive testing of new BTP Invoice features: Auto-entrepreneur mode, Extended legal fields (RCS, Code APE, Capital, IBAN/BIC), and Configurable payment delay. All features working correctly.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  
+  "test_report_links": [
+    "/app/backend/tests/test_auto_entrepreneur_features.py",
+    "/app/test_reports/pytest/pytest_results_iteration4.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [],
+  
+  "updated_files": [
+    "/app/backend/tests/test_auto_entrepreneur_features.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% - 14/14 tests passed",
+    "frontend": "100% - All UI features verified"
+  },
+  
+  "test_credentials": {
+    "email": "test@btp.fr",
+    "password": "Test123!"
+  },
+  
+  "seed_data_creation": "Created test quote DEV-2026-0002 for PDF testing",
+  
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  
+  "context_for_next_testing_agent": "New features tested: 1) Auto-entrepreneur mode with TVA non applicable mention, 2) Extended legal fields (RCS, Code APE, Capital social, IBAN, BIC), 3) Configurable payment delay (default 30 days). All settings are in the 'Entreprise' tab of Settings page.",
+  
+  "features_tested": {
+    "settings_new_fields": {
+      "status": "PASS",
+      "tests": [
+        "✓ RCS ou RM field displayed and editable",
+        "✓ Code APE/NAF field displayed and editable",
+        "✓ Capital social field displayed and editable",
+        "✓ IBAN field displayed in 'Coordonnées bancaires' section",
+        "✓ BIC/SWIFT field displayed in 'Coordonnées bancaires' section",
+        "✓ Délai de paiement par défaut field (default 30 jours)",
+        "✓ Legal mentions preview shown (pénalités de retard, indemnité forfaitaire 40€)"
+      ]
+    },
+    "auto_entrepreneur_mode": {
+      "status": "PASS",
+      "tests": [
+        "✓ Toggle switch in Settings page",
+        "✓ Description: 'Activez si vous êtes auto-entrepreneur (TVA non applicable)'",
+        "✓ When enabled: Quote form shows banner 'Mode auto-entrepreneur actif - TVA non applicable, art. 293B du CGI'",
+        "✓ When enabled: TVA column hidden in quote form",
+        "✓ When enabled: Total section shows only 'Total' (no HT/TVA/TTC breakdown)",
+        "✓ When enabled: Invoice creation sets total_vat=0",
+        "✓ When disabled: TVA column visible with rate selector (20%, 10%, 5.5%, 2.1%)",
+        "✓ When disabled: Total section shows Total HT, Total TVA, Total TTC"
+      ]
+    },
+    "payment_delay": {
+      "status": "PASS",
+      "tests": [
+        "✓ Default payment delay configurable in Settings (default 30 days)",
+        "✓ Invoice creation calculates payment_due_date automatically",
+        "✓ Custom payment delay can be specified per invoice",
+        "✓ Payment due date displayed on invoice detail page"
+      ]
+    },
+    "pdf_generation": {
+      "status": "PASS",
+      "tests": [
+        "✓ Quote PDF endpoint works (/api/quotes/{id}/pdf)",
+        "✓ Invoice PDF endpoint works (/api/invoices/{id}/pdf)",
+        "✓ PDF includes company legal info (SIRET, RCS, Code APE, Capital)",
+        "✓ PDF includes auto-entrepreneur mention when applicable",
+        "✓ Invoice PDF includes bank details (IBAN/BIC)",
+        "✓ Invoice PDF includes payment due date",
+        "✓ Invoice PDF includes late payment penalties mention"
+      ]
+    },
+    "quote_detail_page": {
+      "status": "PASS",
+      "tests": [
+        "✓ Quote number displayed",
+        "✓ Client info displayed",
+        "✓ Issue date and validity date displayed",
+        "✓ Items table with Description, Qté, Prix unit. HT, TVA, Total HT",
+        "✓ Totals: Total HT, Total TVA, Total TTC",
+        "✓ Action buttons: Envoyer par email, Partager, Télécharger PDF, Modifier"
+      ]
+    }
+  },
+  
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Resend email API - uses test key re_123_test"]
+  }
+}
