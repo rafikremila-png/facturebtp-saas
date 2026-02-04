@@ -608,12 +608,13 @@ async def get_next_quote_number():
         return f"DEV-{year}-{str(last_num + 1).zfill(4)}"
     return f"DEV-{year}-0001"
 
-def calculate_totals(items: List[dict]):
+def calculate_totals(items: List[dict], is_auto_entrepreneur: bool = False):
+    """Calculate totals for items. If auto-entrepreneur mode, VAT is 0."""
     total_ht = 0
     total_vat = 0
     for item in items:
         line_ht = item["quantity"] * item["unit_price"]
-        line_vat = line_ht * (item["vat_rate"] / 100)
+        line_vat = 0 if is_auto_entrepreneur else line_ht * (item["vat_rate"] / 100)
         total_ht += line_ht
         total_vat += line_vat
     return round(total_ht, 2), round(total_vat, 2), round(total_ht + total_vat, 2)
