@@ -204,6 +204,18 @@ export default function InvoicesPage() {
                         data-testid="search-input"
                     />
                 </div>
+                <Select value={clientFilter} onValueChange={setClientFilter}>
+                    <SelectTrigger className="w-56" data-testid="client-filter">
+                        <Users className="w-4 h-4 mr-2 text-slate-400" />
+                        <SelectValue placeholder="Tous les clients" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Tous les clients</SelectItem>
+                        {clients.map(client => (
+                            <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-48" data-testid="status-filter">
                         <SelectValue placeholder="Tous les statuts" />
