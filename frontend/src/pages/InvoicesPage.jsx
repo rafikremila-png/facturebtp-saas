@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getInvoices, deleteInvoice, downloadInvoicePdf, bulkDeleteInvoices } from "@/lib/api";
+import { getInvoices, deleteInvoice, downloadInvoicePdf, bulkDeleteInvoices, getClients } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Search, Eye, Pencil, Trash2, Download, Receipt } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, Download, Receipt, Users } from "lucide-react";
 import { toast } from "sonner";
 
 const statusLabels = {
@@ -41,26 +41,47 @@ const statusLabels = {
 
 export default function InvoicesPage() {
     const [invoices, setInvoices] = useState([]);
+    const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
+    const [clientFilter, setClientFilter] = useState("all");
     const [deleteId, setDeleteId] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
     const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
 
     useEffect(() => {
-        loadInvoices();
+        loadData();
     }, []);
+
+    useEffect(() => {
+        loadInvoices();
+    }, [statusFilter, clientFilter]);
+
+    const loadData = async () => {
+        try {
+            const [invoicesRes, clientsRes] = await Promise.all([
+                getInvoices(),
+                getClients()
+            ]);
+            setInvoices(invoicesRes.data);
+            setClients(clientsRes.data);
+        } catch (error) {
+            toast.error("Erreur lors du chargement des données");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const loadInvoices = async () => {
         try {
-            const response = await getInvoices();
+            const status = statusFilter !== "all" ? statusFilter : undefined;
+            const clientId = clientFilter !== "all" ? clientFilter : undefined;
+            const response = await getInvoices(status, clientId);
             setInvoices(response.data);
             setSelectedIds([]);
         } catch (error) {
             toast.error("Erreur lors du chargement des factures");
-        } finally {
-            setLoading(false);
         }
     };
 
