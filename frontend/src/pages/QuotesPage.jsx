@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getQuotes, deleteQuote, downloadQuotePdf, bulkDeleteQuotes } from "@/lib/api";
+import { getQuotes, deleteQuote, downloadQuotePdf, bulkDeleteQuotes, getClients } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Search, Eye, Pencil, Trash2, Download, FileText } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, Download, FileText, Users } from "lucide-react";
 import { toast } from "sonner";
 
 const statusLabels = {
@@ -43,20 +43,43 @@ const statusLabels = {
 
 export default function QuotesPage() {
     const [quotes, setQuotes] = useState([]);
+    const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
+    const [clientFilter, setClientFilter] = useState("all");
     const [deleteId, setDeleteId] = useState(null);
     const [selectedIds, setSelectedIds] = useState([]);
     const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
 
     useEffect(() => {
-        loadQuotes();
+        loadData();
     }, []);
+
+    useEffect(() => {
+        loadQuotes();
+    }, [statusFilter, clientFilter]);
+
+    const loadData = async () => {
+        try {
+            const [quotesRes, clientsRes] = await Promise.all([
+                getQuotes(),
+                getClients()
+            ]);
+            setQuotes(quotesRes.data);
+            setClients(clientsRes.data);
+        } catch (error) {
+            toast.error("Erreur lors du chargement des données");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const loadQuotes = async () => {
         try {
-            const response = await getQuotes();
+            const status = statusFilter !== "all" ? statusFilter : undefined;
+            const clientId = clientFilter !== "all" ? clientFilter : undefined;
+            const response = await getQuotes(status, clientId);
             setQuotes(response.data);
             setSelectedIds([]);
         } catch (error) {
