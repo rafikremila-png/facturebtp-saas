@@ -3515,8 +3515,11 @@ async def send_quote_email(quote_id: str, request: SendDocumentEmailRequest, use
 @api_router.post("/invoices/{invoice_id}/send-email")
 async def send_invoice_email(invoice_id: str, request: SendDocumentEmailRequest, user: dict = Depends(get_current_user)):
     """Send invoice by email to client"""
-    if not RESEND_API_KEY:
-        raise HTTPException(status_code=500, detail="Service email non configuré. Ajoutez RESEND_API_KEY dans les paramètres.")
+    if not RESEND_CONFIGURED:
+        raise HTTPException(
+            status_code=503, 
+            detail="Service email non configuré. Pour activer l'envoi d'emails, ajoutez une clé API Resend valide (RESEND_API_KEY) dans le fichier backend/.env. Obtenez une clé sur https://resend.com"
+        )
     
     invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not invoice:
