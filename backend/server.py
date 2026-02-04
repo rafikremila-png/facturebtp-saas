@@ -169,6 +169,18 @@ class CompanySettings(BaseModel):
     vat_number: str = ""
     default_vat_rates: List[float] = [20.0, 10.0, 5.5, 2.1]
     logo_base64: Optional[str] = None
+    # New fields for French legal compliance
+    rcs_rm: str = ""  # RCS ou RM (Registre des Métiers)
+    code_ape: str = ""  # Code APE/NAF
+    capital_social: str = ""  # Capital social
+    iban: str = ""  # IBAN for bank payments
+    bic: str = ""  # BIC/SWIFT code
+    # Auto-entrepreneur mode
+    is_auto_entrepreneur: bool = False  # If true, hide TVA
+    auto_entrepreneur_mention: str = "TVA non applicable, art. 293B du CGI"
+    # Payment settings
+    default_payment_delay_days: int = 30  # Default payment delay
+    late_payment_rate: float = 3.0  # Late payment interest rate (x3 BCE rate)
 
 class DashboardStats(BaseModel):
     total_turnover: float
