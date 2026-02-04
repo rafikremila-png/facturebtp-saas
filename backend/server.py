@@ -276,6 +276,10 @@ class CompanySettings(BaseModel):
     # Payment settings
     default_payment_delay_days: int = 30  # Default payment delay
     late_payment_rate: float = 3.0  # Late payment interest rate (x3 BCE rate)
+    # Retenue de garantie settings (French BTP standard)
+    default_retenue_garantie_enabled: bool = False
+    default_retenue_garantie_rate: float = 5.0  # Max 5% per French law
+    default_retenue_garantie_duration_months: int = 12  # Warranty period (usually 1 year)
 
 class DashboardStats(BaseModel):
     total_turnover: float
