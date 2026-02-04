@@ -329,7 +329,7 @@ export default function QuoteFormPage() {
                                 <Label className="text-xs">Catégorie</Label>
                                 <Select value={selectedCategory} onValueChange={(v) => { setSelectedCategory(v); setSelectedItem(""); }}>
                                     <SelectTrigger data-testid="category-select">
-                                        <SelectValue placeholder={!selectedCategory ? "Choisir une catégorie" : undefined} />
+                                        <SelectValue placeholder="Choisir une catégorie" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {categories.map(cat => (
@@ -342,7 +342,7 @@ export default function QuoteFormPage() {
                                 <Label className="text-xs">Article</Label>
                                 <Select value={selectedItem} onValueChange={setSelectedItem} disabled={!selectedCategory}>
                                     <SelectTrigger data-testid="predefined-item-select">
-                                        <SelectValue placeholder={!selectedItem ? "Choisir un article" : undefined} />
+                                        <SelectValue placeholder="Choisir un article" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {selectedCategoryItems.map(item => (
