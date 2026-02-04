@@ -2339,13 +2339,24 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
             net_to_pay = doc_data.get('net_to_pay', doc_data['total_ttc'] - acomptes_deducted)
             totals_data.append(["NET À PAYER:", f"{net_to_pay:.2f} €"])
         
+        # Retenue de garantie handling
+        has_retenue = doc_data.get('has_retenue_garantie', False)
+        if has_retenue and not doc_data.get('retenue_garantie_released', False):
+            retenue_rate = doc_data.get('retenue_garantie_rate', 5)
+            retenue_amount = doc_data.get('retenue_garantie_amount', 0)
+            net_after_retenue = doc_data.get('net_a_payer', doc_data['total_ttc'] - retenue_amount)
+            
+            totals_data.append([f"Retenue de garantie ({retenue_rate}%):", f"-{retenue_amount:.2f} €"])
+            totals_data.append(["NET À PAYER (après retenue):", f"{net_after_retenue:.2f} €"])
+        
         payment_status_map = {"impaye": "Impayé", "paye": "Payé", "partiel": "Partiellement payé"}
         totals_data.append(["Statut:", payment_status_map.get(doc_data['payment_status'], doc_data['payment_status'])])
         
         if not is_final and not is_situation_final:
             if doc_data.get('paid_amount', 0) > 0:
                 totals_data.append(["Montant payé:", f"{doc_data['paid_amount']:.2f} €"])
-                remaining = doc_data['total_ttc'] - doc_data['paid_amount']
+                base_amount = doc_data.get('net_a_payer', doc_data['total_ttc'])
+                remaining = base_amount - doc_data['paid_amount']
                 totals_data.append(["Reste à payer:", f"{remaining:.2f} €"])
     
     totals_table = Table(totals_data, colWidths=[120*mm, 50*mm])
