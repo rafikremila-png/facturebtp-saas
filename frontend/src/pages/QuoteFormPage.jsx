@@ -42,13 +42,15 @@ export default function QuoteFormPage() {
 
     const loadData = async () => {
         try {
-            const [clientsRes, settingsRes, categoriesRes] = await Promise.all([
+            const [clientsRes, settingsRes, categoriesRes, kitsRes] = await Promise.all([
                 getClients(),
                 getSettings(),
-                getPredefinedCategories()
+                getPredefinedCategories(),
+                getKits()
             ]);
             setClients(clientsRes.data);
             setCategories(categoriesRes.data);
+            setKits(kitsRes.data);
             
             if (settingsRes.data.default_vat_rates?.length > 0) {
                 setVatRates(settingsRes.data.default_vat_rates);
