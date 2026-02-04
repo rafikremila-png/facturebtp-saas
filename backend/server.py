@@ -1578,12 +1578,23 @@ def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: 
     
     # Invoice-specific: payment info
     if doc_type == "invoice":
+        # For final invoice with acomptes deducted
+        is_final = doc_data.get('is_final_invoice', False)
+        acomptes_deducted = doc_data.get('acomptes_deducted', 0)
+        
+        if is_final and acomptes_deducted > 0:
+            totals_data.append(["Acomptes versés:", f"-{acomptes_deducted:.2f} €"])
+            net_to_pay = doc_data.get('net_to_pay', doc_data['total_ttc'] - acomptes_deducted)
+            totals_data.append(["NET À PAYER:", f"{net_to_pay:.2f} €"])
+        
         payment_status_map = {"impaye": "Impayé", "paye": "Payé", "partiel": "Partiellement payé"}
         totals_data.append(["Statut:", payment_status_map.get(doc_data['payment_status'], doc_data['payment_status'])])
-        if doc_data.get('paid_amount', 0) > 0:
-            totals_data.append(["Montant payé:", f"{doc_data['paid_amount']:.2f} €"])
-            remaining = doc_data['total_ttc'] - doc_data['paid_amount']
-            totals_data.append(["Reste à payer:", f"{remaining:.2f} €"])
+        
+        if not is_final:
+            if doc_data.get('paid_amount', 0) > 0:
+                totals_data.append(["Montant payé:", f"{doc_data['paid_amount']:.2f} €"])
+                remaining = doc_data['total_ttc'] - doc_data['paid_amount']
+                totals_data.append(["Reste à payer:", f"{remaining:.2f} €"])
     
     totals_table = Table(totals_data, colWidths=[120*mm, 50*mm])
     
