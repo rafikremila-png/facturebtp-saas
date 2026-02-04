@@ -141,7 +141,23 @@ Build a production-ready MVP web application for a French construction company (
 
 ## Changelog (Feb 2026)
 
-### Retenue de Garantie (Retention Guarantee) ✅ (NEW - Feb 4, 2026)
+### Tableau de Bord Financier du Projet ✅ (NEW - Feb 4, 2026)
+- **Dashboard complet** accessible depuis la page de détail du devis
+- **Double accès** :
+  - Admin : Bouton "Récapitulatif financier" avec liens cliquables
+  - Client : Onglet "Récapitulatif projet" sur la vue publique (lecture seule)
+- **Données affichées** :
+  - Montant total du projet (HT, TVA, TTC)
+  - Barre de progression des paiements
+  - 4 cartes de synthèse : Facturé, Encaissé, Reste à payer, Reste à facturer
+  - Détail par catégorie : Acomptes, Situations, Retenue de garantie
+  - Historique des factures avec statut de paiement
+- **API** :
+  - `GET /api/quotes/{id}/financial-summary` (authentifié)
+  - `GET /api/public/quote/{token}/financial-summary` (public)
+- **But** : Clarté absolue pour l'artisan ET le client
+
+### Retenue de Garantie (Retention Guarantee) ✅ (Feb 4, 2026)
 - **Conformité légale** : Loi n°75-1334 du 31 décembre 1975
 - **Taux maximum** : 5% du montant TTC (validation automatique)
 - **Durée de garantie** : 6, 12 ou 24 mois (défaut: 12 mois)
