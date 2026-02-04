@@ -110,18 +110,19 @@ Build a production-ready MVP web application for a French construction company (
 - Quote to invoice conversion
 - Payment status tracking
 - Company settings
+- **Kits de rénovation** (Feb 2026)
+- **Vue client publique** (Feb 2026)
+- **Envoi email** (Feb 2026 - MOCKED, needs real Resend API key)
 
-### P2 (Nice to Have) - Deferred
-- Multi-user support
-- Email notifications
+### P2 (Nice to Have) - Pending
+- Multi-user support with roles (Admin, Commercial, Comptable)
 - Accounting export
 - Online payments
-- Client portal
+- Bank details (IBAN/BIC) in PDFs
 
 ## Out of Scope
-- No accounting export
-- No online payments
-- No client portal
+- Accounting export (deferred)
+- Online payments (deferred)
 
 ## Bug Fixes Log (Feb 2026)
 
@@ -129,15 +130,34 @@ Build a production-ready MVP web application for a French construction company (
 - **Problem**: "ResizeObserver loop completed with undelivered notifications" and "removeChild" errors when using dropdown menus
 - **Root cause**: Radix UI Select component triggers rapid ResizeObserver callbacks that exceed the browser's rendering frame budget
 - **Solution**: Patched the native `ResizeObserver` in `frontend/src/index.js` to use `requestAnimationFrame` for batching observations
-- **Previous failed approaches**: 
-  - Multiple error handlers in index.js (caused removeChild conflicts)
-  - Scripts in index.html (duplicate handlers)
-  - Disabling FAST_REFRESH (not effective)
-- **Files modified**: `frontend/src/index.js`, `frontend/public/index.html`, `frontend/.env`
+
+## Changelog (Feb 2026)
+
+### Kits de rénovation ✅
+- 3 kits par défaut : Rénovation salle de bain (~3466€), Installation cuisine (~2780€), Rénovation électrique (~3675€)
+- Ajout rapide via boutons dans le formulaire de devis
+- Modal de sélection de kit complet
+- Bouton "Sauvegarder comme kit" pour créer des kits personnalisés
+- Gestion des kits dans Paramètres > Kits
+
+### Vue client publique ✅
+- Lien sécurisé unique par document (share_token)
+- Accès sans authentification via `/client/devis/{token}` ou `/client/facture/{token}`
+- Affichage des détails, statut, totaux
+- Téléchargement du PDF
+- Informations légales de l'entreprise en pied de page
+
+### Envoi email ✅ (MOCKED)
+- Bouton "Envoyer par email" sur devis et factures
+- Modal avec champ email et message personnalisé
+- PDF en pièce jointe
+- Lien de consultation en ligne
+- **NOTE**: Utilise une clé test Resend (re_123_test). Pour activer l'envoi réel, remplacer par une vraie clé Resend dans backend/.env
 
 ## Next Action Items
-1. Create "kits" or "templates" (e.g., "Bathroom renovation") to pre-fill multiple line items at once
-2. Add email notifications for quote/invoice sending
+1. Configurer une vraie clé API Resend pour l'envoi d'email en production
+2. Ajouter les coordonnées bancaires (IBAN/BIC) dans les paramètres et les PDFs
+3. Multi-utilisateurs avec rôles (Admin, Commercial, Comptable)
 3. Multi-user support with roles
 4. Monthly/yearly reports
 5. Bank details in PDF for payments
