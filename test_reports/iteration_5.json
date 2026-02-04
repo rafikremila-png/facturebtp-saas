@@ -1,0 +1,120 @@
+{
+  "summary": "Completed comprehensive testing of Situations (Progressive Billing / Factures de situation) feature. All 16 backend API tests passed. Frontend UI verified with modal, tabs, slider, and situations section working correctly.",
+  
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Situation Modal",
+        "issues": ["The 'Déjà facturé' field shows a minus sign prefix which can be confusing when displaying the amount (shows '-5 478,00 €' instead of '5 478,00 €'). This is intentional design but may confuse users."]
+      }
+    ]
+  },
+  
+  "test_report_links": [
+    "/app/backend/tests/test_situations.py",
+    "/app/test_reports/pytest/pytest_results_situations.xml"
+  ],
+  
+  "action_items": [],
+  
+  "critical_code_review_comments": [],
+  
+  "updated_files": [
+    "/app/backend/tests/test_situations.py"
+  ],
+  
+  "success_rate": {
+    "backend": "100% - 16/16 tests passed",
+    "frontend": "100% - All UI features verified"
+  },
+  
+  "test_credentials": {
+    "email": "test_sit@btp.fr",
+    "password": "test123"
+  },
+  
+  "seed_data_creation": "Created test quote with situations during pytest execution",
+  
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  
+  "context_for_next_testing_agent": "Situations feature fully tested. Two modes available: 'global' (same % for all items) and 'per_line' (different % per item). Quote DEV-2026-0003 has 3 situations at 80.46% progress. Quote DEV-2026-0001 has 1 acompte at 30%.",
+  
+  "features_tested": {
+    "backend_api_situations": {
+      "status": "PASS",
+      "tests": [
+        "✓ POST /api/quotes/{id}/situation - global mode creates situation correctly",
+        "✓ POST /api/quotes/{id}/situation - per_line mode creates situation correctly",
+        "✓ GET /api/quotes/{id}/situations - lists all situations for a quote",
+        "✓ GET /api/quotes/{id}/situations/summary - returns correct summary with progress %",
+        "✓ POST /api/quotes/{id}/situation/final-invoice - creates décompte final",
+        "✓ Validation: % must be > previous cumulative %",
+        "✓ Validation: % cannot exceed 100%",
+        "✓ Validation: Quote must be in accepte/envoye status",
+        "✓ Validation: per_line mode requires line_items",
+        "✓ Validation: global mode requires global_percentage",
+        "✓ Final invoice requires at least one situation",
+        "✓ 404 returned for non-existent quote",
+        "✓ 401/403 returned without authentication",
+        "✓ Situation invoices appear in invoices list with is_situation=true"
+      ]
+    },
+    "frontend_situation_button": {
+      "status": "PASS",
+      "tests": [
+        "✓ Situation button (green, with HardHat icon) visible on quote detail page",
+        "✓ Button only visible when quote status is 'accepte' or 'envoye'",
+        "✓ Button labeled 'Situation'"
+      ]
+    },
+    "frontend_situation_modal": {
+      "status": "PASS",
+      "tests": [
+        "✓ Modal opens when clicking Situation button",
+        "✓ Modal title: 'Créer une situation de travaux'",
+        "✓ Summary section shows: Total du devis, Avancement actuel, Déjà facturé, Restant",
+        "✓ Tabs: '% Global' and 'Par ligne'",
+        "✓ Global tab: Slider for percentage, input field, quick buttons (25%, 50%, 75%, 100%)",
+        "✓ Global tab: Preview shows 'Cette situation' and 'Après cette situation'",
+        "✓ Per ligne tab: Individual sliders for each quote line item",
+        "✓ Référence chantier field (optional)",
+        "✓ Notes field (optional)",
+        "✓ Buttons: Annuler, Créer la situation"
+      ]
+    },
+    "frontend_situations_section": {
+      "status": "PASS",
+      "tests": [
+        "✓ 'Situations de travaux' section visible on quote detail page when situations exist",
+        "✓ Progress bar showing 'Avancement du chantier' with percentage",
+        "✓ List of situations with: invoice number, cumul %, type (global/par ligne), amount TTC, status",
+        "✓ Each situation is clickable (links to invoice detail)",
+        "✓ Summary: Total facturé, Reste à facturer",
+        "✓ 'Nouvelle situation' button when remaining > 0",
+        "✓ 'Décompte final' button when progress >= 100%"
+      ]
+    },
+    "calculations": {
+      "status": "PASS",
+      "tests": [
+        "✓ HT/TVA/TTC amounts correctly calculated based on percentage",
+        "✓ Cumulative percentage tracked correctly across situations",
+        "✓ Remaining amount calculated correctly (quote total - situations total)",
+        "✓ Per-line mode calculates weighted average for overall progress"
+      ]
+    }
+  },
+  
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Email sending (Resend API - test key re_123_test)"]
+  }
+}
