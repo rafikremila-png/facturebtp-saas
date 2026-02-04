@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getInvoice, updateInvoice, downloadInvoicePdf } from "@/lib/api";
+import { getInvoice, updateInvoice, downloadInvoicePdf, createInvoiceShareLink } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Download, CheckCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowLeft, Download, CheckCircle, Share2, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 
 function InvoiceViewPage() {
@@ -16,6 +17,9 @@ function InvoiceViewPage() {
     var [invoice, setInvoice] = useState(null);
     var [loading, setLoading] = useState(true);
     var [paidAmount, setPaidAmount] = useState("0");
+    var [showShareModal, setShowShareModal] = useState(false);
+    var [shareUrl, setShareUrl] = useState("");
+    var [copied, setCopied] = useState(false);
 
     useEffect(function() {
         getInvoice(params.id).then(function(res) {
