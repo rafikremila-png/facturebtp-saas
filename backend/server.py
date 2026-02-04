@@ -955,11 +955,13 @@ async def create_acompte(quote_id: str, acompte_data: AcompteCreate, user: dict 
     payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
     
     # Create acompte items (simplified - shows as single line)
+    # For auto-entrepreneur, vat_rate is always 0
+    item_vat_rate = 0.0 if settings.is_auto_entrepreneur else ((acompte_vat / acompte_ht * 100) if acompte_ht > 0 else 0)
     acompte_items = [{
         "description": f"Acompte n°{acompte_number} - {acompte_data.value}{'%' if acompte_data.acompte_type == 'percentage' else '€'} sur devis {quote['quote_number']}",
         "quantity": 1,
         "unit_price": acompte_ht,
-        "vat_rate": (acompte_vat / acompte_ht * 100) if acompte_ht > 0 else 0,
+        "vat_rate": item_vat_rate,
         "unit": "forfait"
     }]
     
