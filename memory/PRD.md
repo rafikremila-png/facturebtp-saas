@@ -335,3 +335,5 @@ Build a production-ready MVP web application for a French construction company (
 - `/app/test_reports/iteration_7.json` - Financial summary testing
 - `/app/test_reports/iteration_8.json` - PDF export testing (Feb 4, 2026)
 - `/app/test_reports/iteration_9.json` - Select bug fix testing (Feb 4, 2026)
+- `/app/test_reports/iteration_10.json` - RBAC system testing (Feb 4, 2026)
+- `/app/backend/tests/test_rbac.py` - Tests unitaires RBAC
