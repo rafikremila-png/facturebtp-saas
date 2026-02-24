@@ -1434,6 +1434,15 @@ async def login(request: Request, user_data: UserLogin):
             logger.warning(f"Failed login attempt for email: {user_data.email}")
             raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
         
+        # Check if email is verified (except for super admin)
+        if not user.get("email_verified", False) and user.get("role") != ROLE_SUPER_ADMIN:
+            # Generate new OTP for verification
+            await generate_and_store_otp(user_data.email, OTP_TYPE_REGISTRATION)
+            raise HTTPException(
+                status_code=403, 
+                detail="Email non vérifié. Un nouveau code a été envoyé."
+            )
+        
         # Check if user account is active
         if not user.get("is_active", True):
             logger.warning(f"Login attempt on disabled account: {user_data.email}")
@@ -1459,7 +1468,14 @@ async def login(request: Request, user_data: UserLogin):
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            user=UserResponse(id=user["id"], email=user["email"], name=user["name"], role=user_role)
+            user=UserResponse(
+                id=user["id"], 
+                email=user["email"], 
+                name=user["name"], 
+                role=user_role,
+                phone=user.get("phone"),
+                email_verified=user.get("email_verified", False)
+            )
         )
         
     except HTTPException:
