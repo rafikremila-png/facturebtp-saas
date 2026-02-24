@@ -61,8 +61,20 @@ export default function SettingsPage() {
         default_retenue_garantie_rate: 5.0,
         default_retenue_garantie_duration_months: 12,
         // Website
-        website: ""
+        website: "",
+        // Document appearance
+        document_theme_color: "blue"
     });
+
+    // Theme color options
+    const THEME_COLOR_OPTIONS = [
+        { value: "blue", label: "Bleu", color: "#2563EB", preview: "bg-blue-600" },
+        { value: "light_blue", label: "Bleu clair", color: "#0EA5E9", preview: "bg-sky-500" },
+        { value: "green", label: "Vert", color: "#16A34A", preview: "bg-green-600" },
+        { value: "orange", label: "Orange", color: "#EA580C", preview: "bg-orange-600" },
+        { value: "burgundy", label: "Bordeaux", color: "#9F1239", preview: "bg-rose-800" },
+        { value: "dark_grey", label: "Gris foncé", color: "#475569", preview: "bg-slate-600" }
+    ];
 
     // Predefined items
     const [categories, setCategories] = useState([]);
