@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { getSettings, updateSettings, uploadLogo, getPredefinedCategories, createPredefinedItem, updatePredefinedItem, deletePredefinedItem, resetPredefinedItems, getKits, createKit, updateKit, deleteKit, resetKits } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Building2, Save, Upload, Plus, Trash2, Package, RefreshCw, Pencil, Layers, ChevronDown, ChevronUp, CreditCard, FileText, AlertTriangle } from "lucide-react";
+import { Building2, Save, Upload, Plus, Trash2, Package, RefreshCw, Pencil, Layers, ChevronDown, ChevronUp, CreditCard, FileText, AlertTriangle, Globe, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import WebsiteRequestDialog from "@/components/WebsiteRequestDialog";
 
 const UNIT_OPTIONS = ["unité", "m²", "ml", "m³", "heure", "jour", "forfait", "kg", "litre"];
 
@@ -27,9 +29,11 @@ const DEFAULT_CATEGORIES = [
 ];
 
 export default function SettingsPage() {
+    const { isAdmin } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [uploadingLogo, setUploadingLogo] = useState(false);
+    const [showWebsiteDialog, setShowWebsiteDialog] = useState(false);
     const fileInputRef = useRef(null);
     
     // Company settings
@@ -55,7 +59,9 @@ export default function SettingsPage() {
         // Retenue de garantie settings
         default_retenue_garantie_enabled: false,
         default_retenue_garantie_rate: 5.0,
-        default_retenue_garantie_duration_months: 12
+        default_retenue_garantie_duration_months: 12,
+        // Website
+        website: ""
     });
 
     // Predefined items
