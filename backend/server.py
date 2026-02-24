@@ -56,6 +56,17 @@ if not MONGO_URL:
 
 DB_NAME = os.environ.get('DB_NAME', 'btp_invoice')
 
+# ============== ADMIN CONFIGURATION ==============
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@btpfacture.com')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'Admin123!')
+ADMIN_NAME = os.environ.get('ADMIN_NAME', 'Super Admin')
+
+# Role constants
+ROLE_SUPER_ADMIN = "super_admin"
+ROLE_ADMIN = "admin"
+ROLE_USER = "user"
+VALID_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER]
+
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
 
