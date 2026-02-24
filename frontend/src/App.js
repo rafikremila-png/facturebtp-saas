@@ -122,6 +122,7 @@ function App() {
         <ErrorBoundary>
             <AuthProvider>
                 <BrowserRouter>
+                    <ImpersonationBanner />
                     <AppRoutes />
                     <Toaster position="top-right" richColors />
                 </BrowserRouter>
