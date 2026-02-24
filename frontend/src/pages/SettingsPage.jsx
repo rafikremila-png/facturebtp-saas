@@ -528,6 +528,66 @@ export default function SettingsPage() {
                             </CardContent>
                         </Card>
 
+                        {/* Website */}
+                        <Card className={!formData.website ? "border-orange-200 bg-orange-50/30" : ""}>
+                            <CardHeader>
+                                <CardTitle className="font-['Barlow_Condensed'] flex items-center gap-2">
+                                    <Globe className="w-5 h-5" />
+                                    Site web
+                                </CardTitle>
+                                <CardDescription>Votre présence en ligne</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="website">URL du site web</Label>
+                                    <div className="flex gap-2">
+                                        <Input 
+                                            id="website" 
+                                            type="url" 
+                                            placeholder="https://votre-entreprise.fr" 
+                                            value={formData.website} 
+                                            onChange={handleChange("website")} 
+                                            data-testid="website-input" 
+                                        />
+                                        {formData.website && (
+                                            <Button 
+                                                type="button" 
+                                                variant="outline" 
+                                                onClick={() => window.open(formData.website, '_blank')}
+                                            >
+                                                <ExternalLink className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {!formData.website && (
+                                    <div className="bg-orange-100 border border-orange-200 rounded-lg p-4">
+                                        <div className="flex items-start gap-3">
+                                            <Globe className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                                            <div>
+                                                <p className="font-medium text-orange-900">
+                                                    Votre entreprise ne possède pas encore de site web
+                                                </p>
+                                                <p className="text-sm text-orange-800 mt-1">
+                                                    Un site web professionnel vous permet d'être visible sur internet et d'attirer de nouveaux clients.
+                                                </p>
+                                                <Button 
+                                                    type="button"
+                                                    onClick={() => setShowWebsiteDialog(true)}
+                                                    className="mt-3 bg-orange-600 hover:bg-orange-700"
+                                                    data-testid="request-website-btn"
+                                                >
+                                                    <Globe className="w-4 h-4 mr-2" />
+                                                    Demander une création de site
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
                         {/* Payment Settings */}
                         <Card>
                             <CardHeader>
