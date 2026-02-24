@@ -5,6 +5,11 @@ const AuthContext = createContext(null);
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// Role constants (must match backend)
+export const ROLE_SUPER_ADMIN = "super_admin";
+export const ROLE_ADMIN = "admin";
+export const ROLE_USER = "user";
+
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(localStorage.getItem('token'));
@@ -51,6 +56,23 @@ export const AuthProvider = ({ children }) => {
         return userData;
     };
 
+    // Role helper functions
+    const isAdmin = () => {
+        return user?.role === ROLE_ADMIN || user?.role === ROLE_SUPER_ADMIN;
+    };
+
+    const isSuperAdmin = () => {
+        return user?.role === ROLE_SUPER_ADMIN;
+    };
+
+    const hasRole = (roles) => {
+        if (!user?.role) return false;
+        if (Array.isArray(roles)) {
+            return roles.includes(user.role);
+        }
+        return user.role === roles;
+    };
+
     const value = {
         user,
         token,
@@ -58,7 +80,11 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
-        isAuthenticated: !!user
+        isAuthenticated: !!user,
+        isAdmin,
+        isSuperAdmin,
+        hasRole,
+        userRole: user?.role || ROLE_USER
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
