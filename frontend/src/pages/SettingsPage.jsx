@@ -600,6 +600,83 @@ export default function SettingsPage() {
                             </CardContent>
                         </Card>
 
+                        {/* Document Appearance */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="font-['Barlow_Condensed'] flex items-center gap-2">
+                                    <Palette className="w-5 h-5" />
+                                    Apparence des documents
+                                </CardTitle>
+                                <CardDescription>Personnalisez la couleur de vos devis et factures</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-3">
+                                    <Label>Couleur principale</Label>
+                                    <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                                        {THEME_COLOR_OPTIONS.map((option) => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, document_theme_color: option.value }))}
+                                                className={`relative p-3 rounded-lg border-2 transition-all ${
+                                                    formData.document_theme_color === option.value
+                                                        ? 'border-slate-900 ring-2 ring-slate-900/20'
+                                                        : 'border-slate-200 hover:border-slate-300'
+                                                }`}
+                                                data-testid={`theme-color-${option.value}`}
+                                            >
+                                                <div 
+                                                    className={`w-full h-8 rounded-md ${option.preview}`}
+                                                    style={{ backgroundColor: option.color }}
+                                                />
+                                                <p className="text-xs text-center mt-2 font-medium text-slate-700">
+                                                    {option.label}
+                                                </p>
+                                                {formData.document_theme_color === option.value && (
+                                                    <div className="absolute top-1 right-1 w-5 h-5 bg-slate-900 rounded-full flex items-center justify-center">
+                                                        <Check className="w-3 h-3 text-white" />
+                                                    </div>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                
+                                {/* Preview */}
+                                <div className="mt-4 p-4 bg-slate-50 rounded-lg">
+                                    <p className="text-sm font-medium text-slate-500 mb-3">Aperçu</p>
+                                    <div className="bg-white border rounded-lg overflow-hidden shadow-sm">
+                                        <div 
+                                            className="h-3"
+                                            style={{ backgroundColor: THEME_COLOR_OPTIONS.find(o => o.value === formData.document_theme_color)?.color || '#2563EB' }}
+                                        />
+                                        <div className="p-4 space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <p className="font-bold text-sm">{formData.company_name || "Votre Entreprise"}</p>
+                                                    <p className="text-xs text-slate-500">DEVIS N° 2026-0001</p>
+                                                </div>
+                                                <div 
+                                                    className="px-3 py-1 rounded text-white text-xs font-medium"
+                                                    style={{ backgroundColor: THEME_COLOR_OPTIONS.find(o => o.value === formData.document_theme_color)?.color || '#2563EB' }}
+                                                >
+                                                    En attente
+                                                </div>
+                                            </div>
+                                            <div className="border-t pt-2">
+                                                <div 
+                                                    className="text-xs px-2 py-1 rounded text-white font-medium inline-block"
+                                                    style={{ backgroundColor: THEME_COLOR_OPTIONS.find(o => o.value === formData.document_theme_color)?.color || '#2563EB' }}
+                                                >
+                                                    Description | Qté | Prix
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         {/* Payment Settings */}
                         <Card>
                             <CardHeader>
