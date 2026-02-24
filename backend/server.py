@@ -4034,8 +4034,10 @@ async def startup_db_client():
         await client.admin.command('ping')
         logger.info("Connected to MongoDB")
         
+        # Create indexes
         await db.users.create_index("email", unique=True)
         await db.users.create_index("id", unique=True)
+        await db.users.create_index("role")  # Index for role-based queries
         await db.clients.create_index([("owner_id", 1), ("id", 1)], unique=True)
         await db.quotes.create_index([("owner_id", 1), ("id", 1)], unique=True)
         await db.invoices.create_index([("owner_id", 1), ("id", 1)], unique=True)
@@ -4044,6 +4046,10 @@ async def startup_db_client():
         
         logger.info("Database indexes created")
         
+        # Initialize super admin account
+        await init_super_admin()
+        
+        # Initialize default data
         await initialize_default_items()
         await initialize_default_kits()
         
