@@ -17,6 +17,7 @@ import InvoiceFormPage from "@/pages/InvoiceFormPage";
 import InvoiceDetailPage from "@/pages/InvoiceViewPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ClientViewPage from "@/pages/ClientViewPage";
+import UsersPage from "@/pages/UsersPage";
 import Layout from "@/components/Layout";
 
 const ProtectedRoute = ({ children }) => {
@@ -32,6 +33,29 @@ const ProtectedRoute = ({ children }) => {
     
     if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
+    }
+    
+    return children;
+};
+
+// Admin-only protected route
+const AdminRoute = ({ children }) => {
+    const { isAuthenticated, loading, isAdmin } = useAuth();
+    
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <div className="spinner"></div>
+            </div>
+        );
+    }
+    
+    if (!isAuthenticated) {
+        return <Navigate to="/login" replace />;
+    }
+    
+    if (!isAdmin()) {
+        return <Navigate to="/" replace />;
     }
     
     return children;
@@ -84,6 +108,7 @@ function AppRoutes() {
                 <Route path="factures/:id" element={<InvoiceDetailPage />} />
                 <Route path="factures/:id/edit" element={<InvoiceFormPage />} />
                 <Route path="parametres" element={<SettingsPage />} />
+                <Route path="utilisateurs" element={<UsersPage />} />
             </Route>
         </Routes>
     );
