@@ -923,6 +923,77 @@ async def get_optional_user(credentials: HTTPAuthorizationCredentials = Depends(
     except HTTPException:
         return None
 
+# ============== ROLE-BASED ACCESS CONTROL (RBAC) ==============
+
+def check_user_role(user: dict, required_roles: List[str]) -> bool:
+    """Check if user has one of the required roles"""
+    user_role = user.get("role", ROLE_USER)
+    return user_role in required_roles
+
+async def require_admin(user: dict = Depends(get_current_user)):
+    """Dependency that requires admin or super_admin role"""
+    user_role = user.get("role", ROLE_USER)
+    if user_role not in [ROLE_ADMIN, ROLE_SUPER_ADMIN]:
+        logger.warning(f"Access denied: user {user.get('id')} with role {user_role} attempted admin action")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé. Droits administrateur requis."
+        )
+    return user
+
+async def require_super_admin(user: dict = Depends(get_current_user)):
+    """Dependency that requires super_admin role only"""
+    user_role = user.get("role", ROLE_USER)
+    if user_role != ROLE_SUPER_ADMIN:
+        logger.warning(f"Access denied: user {user.get('id')} with role {user_role} attempted super_admin action")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé. Droits super-administrateur requis."
+        )
+    return user
+
+def is_admin(user: dict) -> bool:
+    """Helper function to check if user is admin or super_admin"""
+    return user.get("role", ROLE_USER) in [ROLE_ADMIN, ROLE_SUPER_ADMIN]
+
+def is_super_admin(user: dict) -> bool:
+    """Helper function to check if user is super_admin"""
+    return user.get("role", ROLE_USER) == ROLE_SUPER_ADMIN
+
+# ============== ADMIN ACCOUNT INITIALIZATION ==============
+
+async def init_super_admin():
+    """Create super admin account on startup if it doesn't exist"""
+    try:
+        existing_admin = await db.users.find_one({"email": ADMIN_EMAIL})
+        
+        if not existing_admin:
+            admin_id = str(uuid.uuid4())
+            admin_doc = {
+                "id": admin_id,
+                "email": ADMIN_EMAIL,
+                "password": hash_password(ADMIN_PASSWORD),
+                "name": ADMIN_NAME,
+                "role": ROLE_SUPER_ADMIN,
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "last_login": None,
+                "login_attempts": 0,
+                "locked_until": None
+            }
+            await db.users.insert_one(admin_doc)
+            logger.info(f"Super admin account created: {ADMIN_EMAIL}")
+        else:
+            # Ensure existing admin has super_admin role
+            if existing_admin.get("role") != ROLE_SUPER_ADMIN:
+                await db.users.update_one(
+                    {"email": ADMIN_EMAIL},
+                    {"$set": {"role": ROLE_SUPER_ADMIN, "is_active": True}}
+                )
+                logger.info(f"Super admin role restored for: {ADMIN_EMAIL}")
+    except Exception as e:
+        logger.error(f"Error initializing super admin: {str(e)}")
+
 # ============== AUTH ROUTES ==============
 
 @api_router.post("/auth/register", response_model=TokenResponse)
