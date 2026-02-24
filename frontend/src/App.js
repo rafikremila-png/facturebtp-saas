@@ -111,6 +111,7 @@ function AppRoutes() {
                 <Route path="factures/:id/edit" element={<InvoiceFormPage />} />
                 <Route path="parametres" element={<SettingsPage />} />
                 <Route path="utilisateurs" element={<UsersPage />} />
+                <Route path="profil" element={<ProfilePage />} />
             </Route>
         </Routes>
     );
