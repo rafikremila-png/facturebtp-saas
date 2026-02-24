@@ -1108,14 +1108,12 @@ class RefreshRequest(BaseModel):
 
 @api_router.post("/auth/refresh")
 async def refresh_token(data: RefreshRequest):
-
     try:
-payload = jwt.decode(
-    data.refresh_token,
-    JWT_SECRET,
-    algorithms=[JWT_ALGORITHM]
-)
-
+        payload = jwt.decode(
+            data.refresh_token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM]
+        )
         
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Type de token invalide")
