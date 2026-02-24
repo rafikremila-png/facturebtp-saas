@@ -208,6 +208,27 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+    role: str = ROLE_USER
+
+class UserListResponse(BaseModel):
+    """Response model for listing users (admin only)"""
+    id: str
+    email: str
+    name: str
+    role: str
+    created_at: str
+    last_login: Optional[str] = None
+    is_active: bool = True
+
+class UserRoleUpdate(BaseModel):
+    """Model for updating user role (admin only)"""
+    role: str
+    
+    @validator('role')
+    def validate_role(cls, v):
+        if v not in VALID_ROLES:
+            raise ValueError(f"Rôle invalide. Valeurs autorisées: {VALID_ROLES}")
+        return v
 
 class TokenResponse(BaseModel):
     access_token: str
