@@ -179,4 +179,24 @@ export const sendQuoteEmail = (quoteId, data) => api.post(`/quotes/${quoteId}/se
 export const sendInvoiceEmail = (invoiceId, data) => api.post(`/invoices/${invoiceId}/send-email`, data);
 export const getEmailStatus = () => api.get('/email/status');
 
+// ============== USER MANAGEMENT (ADMIN ONLY) ==============
+
+// List all users
+export const getUsers = () => api.get('/users');
+
+// Get single user
+export const getUser = (userId) => api.get(`/users/${userId}`);
+
+// Update user role
+export const updateUserRole = (userId, role) => api.patch(`/users/${userId}/role`, { role });
+
+// Activate user
+export const activateUser = (userId) => api.patch(`/users/${userId}/activate`);
+
+// Deactivate user
+export const deactivateUser = (userId) => api.patch(`/users/${userId}/deactivate`);
+
+// Delete user (super admin only)
+export const deleteUser = (userId) => api.delete(`/users/${userId}`);
+
 export default api;
