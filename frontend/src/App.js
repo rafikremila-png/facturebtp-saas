@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import ImpersonationBanner from "@/components/ImpersonationBanner";
 
 // Pages
 import LoginPage from "@/pages/LoginPage";
@@ -18,6 +19,7 @@ import InvoiceDetailPage from "@/pages/InvoiceViewPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ClientViewPage from "@/pages/ClientViewPage";
 import UsersPage from "@/pages/UsersPage";
+import ProfilePage from "@/pages/ProfilePage";
 import Layout from "@/components/Layout";
 
 const ProtectedRoute = ({ children }) => {
