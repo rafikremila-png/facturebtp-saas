@@ -1144,7 +1144,163 @@ async def logout(user: dict = Depends(get_current_user)):
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user: dict = Depends(get_current_user)):
-    return UserResponse(id=user["id"], email=user["email"], name=user["name"])
+    return UserResponse(
+        id=user["id"], 
+        email=user["email"], 
+        name=user["name"],
+        role=user.get("role", ROLE_USER)
+    )
+
+# ============== USER MANAGEMENT ROUTES (ADMIN ONLY) ==============
+
+@api_router.get("/users", response_model=List[UserListResponse])
+async def list_users(admin: dict = Depends(require_admin)):
+    """List all users - Admin only"""
+    try:
+        users_cursor = db.users.find(
+            {},
+            {"_id": 0, "password": 0, "login_attempts": 0, "locked_until": 0}
+        ).sort("created_at", -1)
+        
+        users = await users_cursor.to_list(length=100)
+        
+        return [
+            UserListResponse(
+                id=u["id"],
+                email=u["email"],
+                name=u["name"],
+                role=u.get("role", ROLE_USER),
+                created_at=u["created_at"],
+                last_login=u.get("last_login"),
+                is_active=u.get("is_active", True)
+            )
+            for u in users
+        ]
+    except Exception as e:
+        logger.error(f"Error listing users: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération des utilisateurs")
+
+@api_router.get("/users/{user_id}", response_model=UserListResponse)
+async def get_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Get a specific user - Admin only"""
+    if not validate_uuid(user_id):
+        raise HTTPException(status_code=400, detail="ID utilisateur invalide")
+    
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "password": 0, "login_attempts": 0, "locked_until": 0}
+    )
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    return UserListResponse(
+        id=user["id"],
+        email=user["email"],
+        name=user["name"],
+        role=user.get("role", ROLE_USER),
+        created_at=user["created_at"],
+        last_login=user.get("last_login"),
+        is_active=user.get("is_active", True)
+    )
+
+@api_router.patch("/users/{user_id}/role")
+async def update_user_role(user_id: str, role_data: UserRoleUpdate, admin: dict = Depends(require_admin)):
+    """Update user role - Admin only. Super admin role can only be assigned by super admin."""
+    if not validate_uuid(user_id):
+        raise HTTPException(status_code=400, detail="ID utilisateur invalide")
+    
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    # Prevent modifying super admin unless you are super admin
+    if target_user.get("role") == ROLE_SUPER_ADMIN and not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Impossible de modifier un super administrateur")
+    
+    # Only super admin can assign super_admin role
+    if role_data.role == ROLE_SUPER_ADMIN and not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Seul un super administrateur peut attribuer ce rôle")
+    
+    # Prevent removing your own admin role
+    if admin["id"] == user_id and role_data.role == ROLE_USER:
+        raise HTTPException(status_code=400, detail="Impossible de retirer vos propres droits administrateur")
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"role": role_data.role}}
+    )
+    
+    logger.info(f"User {admin['id']} changed role of user {user_id} to {role_data.role}")
+    
+    return {"message": f"Rôle modifié en '{role_data.role}'", "user_id": user_id, "new_role": role_data.role}
+
+@api_router.patch("/users/{user_id}/activate")
+async def activate_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Activate a user account - Admin only"""
+    if not validate_uuid(user_id):
+        raise HTTPException(status_code=400, detail="ID utilisateur invalide")
+    
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_active": True}}
+    )
+    
+    logger.info(f"User {admin['id']} activated user {user_id}")
+    return {"message": "Compte activé", "user_id": user_id}
+
+@api_router.patch("/users/{user_id}/deactivate")
+async def deactivate_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Deactivate a user account - Admin only. Cannot deactivate super admin."""
+    if not validate_uuid(user_id):
+        raise HTTPException(status_code=400, detail="ID utilisateur invalide")
+    
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    # Prevent deactivating super admin
+    if target_user.get("role") == ROLE_SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="Impossible de désactiver le compte super administrateur")
+    
+    # Prevent self-deactivation
+    if admin["id"] == user_id:
+        raise HTTPException(status_code=400, detail="Impossible de désactiver votre propre compte")
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_active": False}}
+    )
+    
+    logger.info(f"User {admin['id']} deactivated user {user_id}")
+    return {"message": "Compte désactivé", "user_id": user_id}
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, admin: dict = Depends(require_super_admin)):
+    """Delete a user - Super Admin only. Cannot delete super admin account."""
+    if not validate_uuid(user_id):
+        raise HTTPException(status_code=400, detail="ID utilisateur invalide")
+    
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    # Prevent deleting super admin
+    if target_user.get("role") == ROLE_SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="Impossible de supprimer le compte super administrateur")
+    
+    # Prevent self-deletion
+    if admin["id"] == user_id:
+        raise HTTPException(status_code=400, detail="Impossible de supprimer votre propre compte")
+    
+    await db.users.delete_one({"id": user_id})
+    
+    logger.info(f"Super admin {admin['id']} deleted user {user_id}")
+    return {"message": "Utilisateur supprimé", "user_id": user_id}
 
 # ============== CLIENT ROUTES ==============
 
