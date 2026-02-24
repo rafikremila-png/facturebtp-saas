@@ -177,12 +177,34 @@ def generate_secure_id() -> str:
 def generate_share_token() -> str:
     return secrets.token_urlsafe(32)
 
+def generate_otp() -> str:
+    """Generate a 6-digit OTP code"""
+    return ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+
+# ============== OTP TYPES ==============
+OTP_TYPE_REGISTRATION = "registration"
+OTP_TYPE_PASSWORD_RESET = "password_reset"
+OTP_TYPE_DELETE_USER = "delete_user"
+OTP_TYPE_PROMOTE_ADMIN = "promote_admin"
+OTP_TYPE_IMPERSONATION = "impersonation"
+
+OTP_EXPIRATION_MINUTES = {
+    OTP_TYPE_REGISTRATION: 10,
+    OTP_TYPE_PASSWORD_RESET: 5,
+    OTP_TYPE_DELETE_USER: 5,
+    OTP_TYPE_PROMOTE_ADMIN: 5,
+    OTP_TYPE_IMPERSONATION: 5
+}
+
 # ============== MODELS COMPLETS ==============
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     name: str = Field(..., min_length=2, max_length=100)
+    phone: str = Field(..., min_length=10, max_length=20)
+    company_name: Optional[str] = Field(None, max_length=200)
+    address: Optional[str] = Field(None, max_length=500)
     
     @validator('password')
     def validate_password(cls, v):
@@ -199,6 +221,29 @@ class UserCreate(BaseModel):
     @validator('name')
     def sanitize_name(cls, v):
         return sanitize_string(v, 100)
+    
+    @validator('phone')
+    def validate_phone(cls, v):
+        cleaned = re.sub(r'[\s\-\.]', '', v)
+        if not re.match(r'^(\+33|0)[1-9][0-9]{8}$', cleaned):
+            raise ValueError('Format de téléphone invalide (ex: 0612345678 ou +33612345678)')
+        return v
+
+class UserProfileUpdate(BaseModel):
+    """Model for user profile self-update"""
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    phone: Optional[str] = Field(None, min_length=10, max_length=20)
+    company_name: Optional[str] = Field(None, max_length=200)
+    address: Optional[str] = Field(None, max_length=500)
+    
+    @validator('phone')
+    def validate_phone(cls, v):
+        if v is None:
+            return v
+        cleaned = re.sub(r'[\s\-\.]', '', v)
+        if not re.match(r'^(\+33|0)[1-9][0-9]{8}$', cleaned):
+            raise ValueError('Format de téléphone invalide')
+        return v
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -209,6 +254,22 @@ class UserResponse(BaseModel):
     email: str
     name: str
     role: str = ROLE_USER
+    phone: Optional[str] = None
+    email_verified: bool = False
+
+class UserDetailResponse(BaseModel):
+    """Detailed user info for admin view"""
+    id: str
+    email: str
+    name: str
+    phone: str
+    company_name: Optional[str] = None
+    address: Optional[str] = None
+    role: str
+    created_at: str
+    last_login: Optional[str] = None
+    is_active: bool = True
+    email_verified: bool = False
 
 class UserListResponse(BaseModel):
     """Response model for listing users (admin only)"""
@@ -219,10 +280,12 @@ class UserListResponse(BaseModel):
     created_at: str
     last_login: Optional[str] = None
     is_active: bool = True
+    email_verified: bool = False
 
 class UserRoleUpdate(BaseModel):
     """Model for updating user role (admin only)"""
     role: str
+    otp_code: str = Field(..., min_length=6, max_length=6)
     
     @validator('role')
     def validate_role(cls, v):
