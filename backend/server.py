@@ -1012,6 +1012,8 @@ async def register(request: Request, user_data: UserCreate):
             "email": user_data.email,
             "password": hashed_password,
             "name": user_data.name,
+            "role": ROLE_USER,  # New users get 'user' role by default
+            "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_login": None,
             "login_attempts": 0,
@@ -1023,7 +1025,7 @@ async def register(request: Request, user_data: UserCreate):
         access_token = create_token(user_id, "access")
         refresh_token = create_token(user_id, "refresh")
         
-        logger.info(f"User registered: {user_id}")
+        logger.info(f"User registered: {user_id} with role: {ROLE_USER}")
         
         return TokenResponse(
             access_token=access_token,
