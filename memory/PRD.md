@@ -306,8 +306,7 @@ Build a production-ready MVP web application for a French construction company (
 
 ## Next Action Items
 1. **P1: Attestations TVA réduite (10%/5.5%)** - formulaire guidé avec conditions
-3. **P2: Multi-utilisateurs** avec rôles (Admin, Commercial, Comptable)
-4. **P3: Relances automatiques** pour factures impayées
+2. **P3: Relances automatiques** pour factures impayées
 
 ### Bug Select - Placeholder + Valeur concaténés ✅ (Feb 4, 2026)
 - **Problème** : Les composants Select affichaient le placeholder ET la valeur sélectionnée concaténés (ex: "Choisir une catégorieMaçonnerie")
@@ -318,6 +317,17 @@ Build a production-ready MVP web application for a French construction company (
   - Empêche la concaténation placeholder + valeur
 - **Pages corrigées** : `/devis/new`, `/factures/new`, `/parametres`
 - **Tests** : Tous les Selects vérifié - 100% de réussite
+
+### RBAC Multi-Utilisateurs ✅ (Feb 4, 2026)
+- **Fonctionnalité** : Système de rôles pour gestion multi-utilisateurs
+- **Rôles implémentés** :
+  - `super_admin` : Accès total, suppression utilisateurs, attribution tous rôles
+  - `admin` : Gestion utilisateurs (sauf super_admin), modification paramètres
+  - `user` : Accès standard (clients, devis, factures)
+- **Compte propriétaire** : admin@btpfacture.com / Admin123! (créé au démarrage)
+- **Backend** : Middlewares `require_admin`, `require_super_admin`, routes /api/users/*
+- **Frontend** : Section "Administration" conditionnelle, page /utilisateurs, badges de rôle
+- **Tests** : 100% de réussite (13 tests backend, tous tests frontend passés)
 
 ## Test Reports Created
 - `/app/test_reports/iteration_5.json` - Situations testing
