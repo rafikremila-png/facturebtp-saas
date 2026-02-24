@@ -1608,6 +1608,24 @@ async def update_profile(profile_data: UserProfileUpdate, user: dict = Depends(g
         email_verified=updated_user.get("email_verified", False)
     )
 
+@api_router.get("/auth/impersonation-status")
+async def get_impersonation_status(user: dict = Depends(get_current_user)):
+    """Check if current session is an impersonation session"""
+    is_impersonated = user.get("is_impersonated", False)
+    
+    if is_impersonated:
+        admin_id = user.get("impersonated_by")
+        admin_user = await db.users.find_one({"id": admin_id}, {"_id": 0, "password": 0})
+        return {
+            "is_impersonated": True,
+            "admin_name": admin_user["name"] if admin_user else "Admin",
+            "admin_email": admin_user["email"] if admin_user else "",
+            "user_name": user["name"],
+            "user_email": user["email"]
+        }
+    
+    return {"is_impersonated": False}
+
 # ============== USER MANAGEMENT ROUTES (ADMIN ONLY) ==============
 
 @api_router.get("/users", response_model=List[UserListResponse])
