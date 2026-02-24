@@ -1145,6 +1145,20 @@ def create_token(user_id: str, token_type: str = "access") -> str:
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
+def create_impersonation_token(admin_id: str, target_user_id: str) -> str:
+    """Create a special token for impersonation sessions"""
+    expires = timedelta(hours=2)  # Shorter expiration for impersonation
+    
+    payload = {
+        "sub": target_user_id,
+        "type": "impersonation",
+        "admin_id": admin_id,
+        "exp": int((datetime.now(timezone.utc) + expires).timestamp()),
+        "iat": int(datetime.now(timezone.utc).timestamp()),
+        "jti": secrets.token_urlsafe(16)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not credentials:
         raise HTTPException(
