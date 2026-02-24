@@ -1030,7 +1030,7 @@ async def register(request: Request, user_data: UserCreate):
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            user=UserResponse(id=user_id, email=user_data.email, name=user_data.name)
+            user=UserResponse(id=user_id, email=user_data.email, name=user_data.name, role=ROLE_USER)
         )
         
     except HTTPException:
