@@ -4193,7 +4193,7 @@ def create_pdf(doc_type: str, doc_data: dict, company: dict, client: dict):
     
     items_table = Table(table_data, colWidths=[80*mm, 20*mm, 35*mm, 35*mm])
     items_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EA580C')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(theme['header_bg'])),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -4219,7 +4219,7 @@ def create_pdf(doc_type: str, doc_data: dict, company: dict, client: dict):
         ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#EA580C')),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor(theme['header_bg'])),
         ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
     ]))
     elements.append(totals_table)
