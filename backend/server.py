@@ -787,6 +787,7 @@ class CompanySettings(BaseModel):
     default_retenue_garantie_rate: float = Field(5.0, ge=0, le=5)
     default_retenue_garantie_duration_months: int = Field(12, ge=1, le=60)
     website: Optional[str] = Field(default="", max_length=200)
+    document_theme_color: str = Field(default="blue", max_length=20)
     
     @validator('siret')
     def validate_siret(cls, v):
@@ -814,6 +815,13 @@ class CompanySettings(BaseModel):
             if not re.match(url_pattern, v):
                 raise ValueError('Format URL invalide (ex: https://exemple.com)')
         return v or ""
+    
+    @validator('document_theme_color')
+    def validate_theme_color(cls, v):
+        valid_colors = ["blue", "light_blue", "green", "orange", "burgundy", "dark_grey"]
+        if v not in valid_colors:
+            raise ValueError(f"Couleur invalide. Valeurs autorisées: {valid_colors}")
+        return v
 
 class DashboardStats(BaseModel):
     total_turnover: float
