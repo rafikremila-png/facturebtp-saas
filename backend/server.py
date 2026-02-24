@@ -1181,7 +1181,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         if not user_id:
             raise HTTPException(status_code=401, detail="Token invalide")
         
-        if token_type != "access":
+        # Accept both access and impersonation tokens
+        if token_type not in ["access", "impersonation"]:
             raise HTTPException(status_code=401, detail="Type de token invalide")
         
         if not validate_uuid(user_id):
@@ -1194,6 +1195,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         
         if not user:
             raise HTTPException(status_code=401, detail="Utilisateur non trouvé")
+        
+        # Add impersonation flag to user if applicable
+        if token_type == "impersonation":
+            user["is_impersonated"] = True
+            user["impersonated_by"] = payload.get("admin_id")
+        else:
+            user["is_impersonated"] = False
         
         return user
         
