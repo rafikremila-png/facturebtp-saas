@@ -14,20 +14,26 @@ Build a production-ready MVP web application for a French construction company (
 - **Design Theme**: Construction/BTP (orange/industrial tones), sober and professional
 - **Language**: French interface
 - **Logo**: Placeholder with optional upload
+- **Multi-tenant**: Mono-tenant with multi-user RBAC (single company, multiple users)
 
 ## Core Requirements (Static)
 
 ### Scope
 - Single company
-- Single admin user
-- No public signup
+- Multiple users with role-based access (RBAC)
+- Super admin account: admin@btpfacture.com
+
+### Roles (RBAC)
+1. **super_admin**: Full access, can manage all users, delete users, assign any role
+2. **admin**: Can manage users (except super_admin), update settings, full data access
+3. **user**: Standard access to clients, quotes, invoices. No access to user management or settings
 
 ### Features
 1. Client management (CRUD)
 2. Quotes (Devis) with automatic numbering, status management, conversion to invoice
 3. Invoices (Factures) with legal numbering, payment status tracking
 4. PDF generation with company details, legal mentions (SIRET, VAT)
-5. Company settings (logo, SIRET, VAT, default VAT rates)
+5. Company settings (logo, SIRET, VAT, default VAT rates) - **Admin only**
 6. Dashboard with KPIs
 7. **Kits de rénovation** - Predefined line item bundles
 8. **Vue client publique** - Share documents via secure link
@@ -36,28 +42,32 @@ Build a production-ready MVP web application for a French construction company (
 11. **Informations légales étendues** - RCS/RM, Code APE, Capital social, IBAN/BIC
 12. **Délai de paiement configurable** - Défaut 30 jours, mentions légales automatiques
 13. **Acomptes (Advance Payments)** - Factures d'acompte avec % ou montant fixe
+14. **User Management** - Admin page to list, activate/deactivate, and manage user roles
 
 ## Architecture
 
 ### Backend (FastAPI)
 - `/app/backend/server.py` - Main API with all endpoints
 - MongoDB for data persistence
-- JWT authentication
+- JWT authentication with role-based middleware (require_admin, require_super_admin)
 - ReportLab for PDF generation
 - Resend for email sending (MOCKED - needs real API key)
+- Rate limiting with SlowAPI
 
 ### Frontend (React)
 - `/app/frontend/src/` - React application
 - Shadcn UI components
 - Industrial Pro theme (orange/slate colors)
 - Barlow Condensed + Manrope fonts
+- Role-aware UI (admin sections hidden for regular users)
 
 ### API Endpoints
-- Auth: `/api/auth/register`, `/api/auth/login`, `/api/auth/me`
+- Auth: `/api/auth/register`, `/api/auth/login`, `/api/auth/me`, `/api/auth/refresh`
+- Users (Admin): `/api/users` (list), `/api/users/{id}` (get), `/api/users/{id}/role` (update role), `/api/users/{id}/activate`, `/api/users/{id}/deactivate`, `/api/users/{id}` (delete - super_admin only)
 - Clients: `/api/clients` (CRUD)
 - Quotes: `/api/quotes` (CRUD), `/api/quotes/{id}/convert`, `/api/quotes/{id}/pdf`, `/api/quotes/{id}/share`, `/api/quotes/{id}/send-email`
 - Invoices: `/api/invoices` (CRUD), `/api/invoices/{id}/pdf`, `/api/invoices/{id}/share`, `/api/invoices/{id}/send-email`
-- Settings: `/api/settings`, `/api/settings/logo`
+- Settings: `/api/settings` (GET for all, PUT for admin only), `/api/settings/logo` (admin only)
 - Dashboard: `/api/dashboard`
 - Kits: `/api/kits` (CRUD), `/api/kits/from-quote/{id}`, `/api/kits/reset`
 - Public: `/api/public/quote/{token}`, `/api/public/invoice/{token}` (no auth required)
