@@ -786,6 +786,7 @@ class CompanySettings(BaseModel):
     default_retenue_garantie_enabled: bool = False
     default_retenue_garantie_rate: float = Field(5.0, ge=0, le=5)
     default_retenue_garantie_duration_months: int = Field(12, ge=1, le=60)
+    website: Optional[str] = Field(default="", max_length=200)
     
     @validator('siret')
     def validate_siret(cls, v):
@@ -804,6 +805,15 @@ class CompanySettings(BaseModel):
         if v and not re.match(r'^[A-Z]{6}[A-Z0-9]{2,5}$', v):
             raise ValueError('Format BIC invalide')
         return v
+    
+    @validator('website')
+    def validate_website(cls, v):
+        if v and v.strip():
+            # Simple URL validation
+            url_pattern = r'^https?://[a-zA-Z0-9][-a-zA-Z0-9]*(\.[a-zA-Z0-9][-a-zA-Z0-9]*)+(/.*)?$'
+            if not re.match(url_pattern, v):
+                raise ValueError('Format URL invalide (ex: https://exemple.com)')
+        return v or ""
 
 class DashboardStats(BaseModel):
     total_turnover: float
