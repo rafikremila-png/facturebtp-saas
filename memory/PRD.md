@@ -385,9 +385,7 @@ Build a production-ready MVP web application for a French construction company (
 - **Audit logging** :
   - Actions sensibles enregistrées avec IP
   - Logs structurés
-- **Backend** : Middlewares `require_admin`, `require_super_admin`, routes /api/users/*
-- **Frontend** : Section "Administration" conditionnelle, page /utilisateurs, badges de rôle
-- **Tests** : 100% de réussite (13 tests backend, tous tests frontend passés)
+- **Tests** : 94-100% de réussite
 
 ## Test Reports Created
 - `/app/test_reports/iteration_5.json` - Situations testing
@@ -396,4 +394,6 @@ Build a production-ready MVP web application for a French construction company (
 - `/app/test_reports/iteration_8.json` - PDF export testing (Feb 4, 2026)
 - `/app/test_reports/iteration_9.json` - Select bug fix testing (Feb 4, 2026)
 - `/app/test_reports/iteration_10.json` - RBAC system testing (Feb 4, 2026)
+- `/app/test_reports/iteration_11.json` - OTP & Security features testing (Feb 24, 2026)
 - `/app/backend/tests/test_rbac.py` - Tests unitaires RBAC
+- `/app/backend/tests/test_otp_features.py` - Tests unitaires OTP
