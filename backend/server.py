@@ -1069,6 +1069,11 @@ async def login(request: Request, user_data: UserLogin):
             logger.warning(f"Failed login attempt for email: {user_data.email}")
             raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
         
+        # Check if user account is active
+        if not user.get("is_active", True):
+            logger.warning(f"Login attempt on disabled account: {user_data.email}")
+            raise HTTPException(status_code=403, detail="Compte désactivé. Contactez l'administrateur.")
+        
         await db.users.update_one(
             {"id": user["id"]},
             {
@@ -1083,12 +1088,13 @@ async def login(request: Request, user_data: UserLogin):
         access_token = create_token(user["id"], "access")
         refresh_token = create_token(user["id"], "refresh")
         
-        logger.info(f"User logged in: {user['id']}")
+        user_role = user.get("role", ROLE_USER)
+        logger.info(f"User logged in: {user['id']} with role: {user_role}")
         
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            user=UserResponse(id=user["id"], email=user["email"], name=user["name"])
+            user=UserResponse(id=user["id"], email=user["email"], name=user["name"], role=user_role)
         )
         
     except HTTPException:
