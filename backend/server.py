@@ -299,6 +299,99 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user: UserResponse
 
+# ============== OTP MODELS ==============
+
+class OTPRequest(BaseModel):
+    """Request to generate OTP"""
+    email: EmailStr
+    otp_type: str
+    target_user_id: Optional[str] = None  # For admin actions on other users
+    
+    @validator('otp_type')
+    def validate_otp_type(cls, v):
+        valid_types = [OTP_TYPE_REGISTRATION, OTP_TYPE_PASSWORD_RESET, 
+                      OTP_TYPE_DELETE_USER, OTP_TYPE_PROMOTE_ADMIN, OTP_TYPE_IMPERSONATION]
+        if v not in valid_types:
+            raise ValueError(f"Type OTP invalide. Valeurs: {valid_types}")
+        return v
+
+class OTPVerify(BaseModel):
+    """Verify OTP code"""
+    email: EmailStr
+    otp_code: str = Field(..., min_length=6, max_length=6)
+    otp_type: str
+
+class PasswordResetRequest(BaseModel):
+    """Request password reset with OTP"""
+    user_id: str
+    new_password: str
+    otp_code: str = Field(..., min_length=6, max_length=6)
+    
+    @validator('new_password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Le mot de passe doit contenir au moins 8 caractères')
+        if not any(c.isupper() for c in v):
+            raise ValueError('Le mot de passe doit contenir au moins une majuscule')
+        if not any(c.islower() for c in v):
+            raise ValueError('Le mot de passe doit contenir au moins une minuscule')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Le mot de passe doit contenir au moins un chiffre')
+        return v
+
+class UserDeleteRequest(BaseModel):
+    """Request to delete user with OTP"""
+    otp_code: str = Field(..., min_length=6, max_length=6)
+
+class ImpersonationRequest(BaseModel):
+    """Request to impersonate a user"""
+    target_user_id: str
+    otp_code: str = Field(..., min_length=6, max_length=6)
+
+# ============== WEBSITE REQUEST MODELS ==============
+
+class WebsiteRequestCreate(BaseModel):
+    """Request for website creation"""
+    activity_type: str = Field(..., min_length=2, max_length=200)
+    objective: str = Field(..., min_length=10, max_length=1000)
+    budget: str = Field(..., max_length=100)
+    timeline: str = Field(..., max_length=100)
+    additional_notes: Optional[str] = Field(None, max_length=2000)
+    
+    @validator('activity_type', 'objective')
+    def sanitize_text(cls, v):
+        return sanitize_string(v, 1000)
+
+class WebsiteRequestResponse(BaseModel):
+    id: str
+    user_id: str
+    user_name: str
+    user_email: str
+    user_phone: str
+    company_name: Optional[str]
+    activity_type: str
+    objective: str
+    budget: str
+    timeline: str
+    additional_notes: Optional[str]
+    status: str  # pending, contacted, in_progress, completed, cancelled
+    created_at: str
+    updated_at: Optional[str] = None
+
+# ============== AUDIT LOG MODEL ==============
+
+class AuditLogEntry(BaseModel):
+    """Audit log for sensitive actions"""
+    id: str
+    action: str
+    actor_id: str
+    actor_email: str
+    target_id: Optional[str] = None
+    target_email: Optional[str] = None
+    details: Optional[str] = None
+    ip_address: Optional[str] = None
+    timestamp: str
+
 class ClientCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     address: str = Field(default="", max_length=500)
