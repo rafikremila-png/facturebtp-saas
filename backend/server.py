@@ -3143,17 +3143,19 @@ async def reset_kits(user: dict = Depends(get_current_user)):
     await initialize_default_kits()
     return {"message": "Kits réinitialisés"}
 
-# ============== COMPANY SETTINGS ==============
+# ============== COMPANY SETTINGS (ADMIN ONLY) ==============
 
 @api_router.get("/settings", response_model=CompanySettings)
 async def get_settings(user: dict = Depends(get_current_user)):
+    """Get company settings - All authenticated users can view"""
     settings = await db.settings.find_one({"type": "company"}, {"_id": 0})
     if not settings:
         return CompanySettings()
     return CompanySettings(**{k: v for k, v in settings.items() if k != "type"})
 
 @api_router.put("/settings", response_model=CompanySettings)
-async def update_settings(settings_data: CompanySettings, user: dict = Depends(get_current_user)):
+async def update_settings(settings_data: CompanySettings, admin: dict = Depends(require_admin)):
+    """Update company settings - Admin only"""
     settings_doc = settings_data.dict()
     settings_doc["type"] = "company"
     
@@ -3163,12 +3165,13 @@ async def update_settings(settings_data: CompanySettings, user: dict = Depends(g
         upsert=True
     )
     
-    logger.info(f"Settings updated by user {user['id']}")
+    logger.info(f"Settings updated by admin {admin['id']}")
     
     return settings_data
 
 @api_router.post("/settings/logo")
-async def upload_logo(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+async def upload_logo(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+    """Upload company logo - Admin only"""
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Le fichier doit être une image")
     
@@ -3184,6 +3187,8 @@ async def upload_logo(file: UploadFile = File(...), user: dict = Depends(get_cur
         {"$set": {"logo_base64": logo_data}},
         upsert=True
     )
+    
+    logger.info(f"Logo updated by admin {admin['id']}")
     
     return {"message": "Logo téléchargé avec succès", "logo": logo_data}
 
