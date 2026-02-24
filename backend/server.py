@@ -3999,6 +3999,56 @@ async def upload_logo(file: UploadFile = File(...), admin: dict = Depends(requir
 
 # ============== PDF GENERATION ==============
 
+# Document Theme Colors Mapping
+DOCUMENT_THEME_COLORS = {
+    "blue": {
+        "primary": "#2563EB",      # Blue-600
+        "primary_dark": "#1D4ED8", # Blue-700
+        "header_bg": "#2563EB",
+        "accent": "#3B82F6",       # Blue-500
+        "text_dark": "#0F172A"
+    },
+    "light_blue": {
+        "primary": "#0EA5E9",      # Sky-500
+        "primary_dark": "#0284C7", # Sky-600
+        "header_bg": "#0EA5E9",
+        "accent": "#38BDF8",       # Sky-400
+        "text_dark": "#0F172A"
+    },
+    "green": {
+        "primary": "#16A34A",      # Green-600
+        "primary_dark": "#15803D", # Green-700
+        "header_bg": "#16A34A",
+        "accent": "#22C55E",       # Green-500
+        "text_dark": "#0F172A"
+    },
+    "orange": {
+        "primary": "#EA580C",      # Orange-600
+        "primary_dark": "#C2410C", # Orange-700
+        "header_bg": "#EA580C",
+        "accent": "#F97316",       # Orange-500
+        "text_dark": "#0F172A"
+    },
+    "burgundy": {
+        "primary": "#9F1239",      # Rose-800
+        "primary_dark": "#881337", # Rose-900
+        "header_bg": "#9F1239",
+        "accent": "#BE123C",       # Rose-700
+        "text_dark": "#0F172A"
+    },
+    "dark_grey": {
+        "primary": "#475569",      # Slate-600
+        "primary_dark": "#334155", # Slate-700
+        "header_bg": "#475569",
+        "accent": "#64748B",       # Slate-500
+        "text_dark": "#0F172A"
+    }
+}
+
+def get_theme_colors(theme_color: str) -> dict:
+    """Get theme color palette, defaults to blue if invalid"""
+    return DOCUMENT_THEME_COLORS.get(theme_color, DOCUMENT_THEME_COLORS["blue"])
+
 def create_pdf(doc_type: str, doc_data: dict, company: dict, client: dict):
     buffer = BytesIO()
     
@@ -4013,6 +4063,10 @@ def create_pdf(doc_type: str, doc_data: dict, company: dict, client: dict):
     
     styles = getSampleStyleSheet()
     company_name = company.get("company_name", "Votre Entreprise BTP")
+    
+    # Get theme colors
+    theme_color = company.get("document_theme_color", "blue")
+    theme = get_theme_colors(theme_color)
     
     def add_footer(canvas, doc):
         canvas.saveState()
@@ -4040,7 +4094,7 @@ def create_pdf(doc_type: str, doc_data: dict, company: dict, client: dict):
         parent=styles['Heading1'],
         fontSize=14,
         fontName='Helvetica-Bold',
-        textColor=colors.HexColor('#0F172A'),
+        textColor=colors.HexColor(theme['text_dark']),
         alignment=TA_CENTER,
         spaceAfter=2
     )
