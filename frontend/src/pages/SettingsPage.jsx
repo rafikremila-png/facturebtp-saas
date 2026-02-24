@@ -1100,6 +1100,12 @@ export default function SettingsPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Website Request Dialog */}
+            <WebsiteRequestDialog 
+                open={showWebsiteDialog} 
+                onOpenChange={setShowWebsiteDialog} 
+            />
         </div>
     );
 }
