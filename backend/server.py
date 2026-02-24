@@ -1607,7 +1607,8 @@ async def list_users(admin: dict = Depends(require_admin)):
                 role=u.get("role", ROLE_USER),
                 created_at=u["created_at"],
                 last_login=u.get("last_login"),
-                is_active=u.get("is_active", True)
+                is_active=u.get("is_active", True),
+                email_verified=u.get("email_verified", False)
             )
             for u in users
         ]
@@ -1615,9 +1616,9 @@ async def list_users(admin: dict = Depends(require_admin)):
         logger.error(f"Error listing users: {str(e)}")
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération des utilisateurs")
 
-@api_router.get("/users/{user_id}", response_model=UserListResponse)
+@api_router.get("/users/{user_id}", response_model=UserDetailResponse)
 async def get_user(user_id: str, admin: dict = Depends(require_admin)):
-    """Get a specific user - Admin only"""
+    """Get a specific user with full details - Admin only"""
     if not validate_uuid(user_id):
         raise HTTPException(status_code=400, detail="ID utilisateur invalide")
     
@@ -1629,25 +1630,56 @@ async def get_user(user_id: str, admin: dict = Depends(require_admin)):
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     
-    return UserListResponse(
+    return UserDetailResponse(
         id=user["id"],
         email=user["email"],
         name=user["name"],
+        phone=user.get("phone", ""),
+        company_name=user.get("company_name"),
+        address=user.get("address"),
         role=user.get("role", ROLE_USER),
         created_at=user["created_at"],
         last_login=user.get("last_login"),
-        is_active=user.get("is_active", True)
+        is_active=user.get("is_active", True),
+        email_verified=user.get("email_verified", False)
     )
 
-@api_router.patch("/users/{user_id}/role")
-async def update_user_role(user_id: str, role_data: UserRoleUpdate, admin: dict = Depends(require_admin)):
-    """Update user role - Admin only. Super admin role can only be assigned by super admin."""
+@api_router.post("/users/{user_id}/request-otp")
+async def request_admin_otp(user_id: str, otp_type: str, admin: dict = Depends(require_admin)):
+    """Request OTP for admin action on a user"""
+    if otp_type not in [OTP_TYPE_DELETE_USER, OTP_TYPE_PROMOTE_ADMIN, OTP_TYPE_PASSWORD_RESET, OTP_TYPE_IMPERSONATION]:
+        raise HTTPException(status_code=400, detail="Type OTP invalide pour cette action")
+    
     if not validate_uuid(user_id):
         raise HTTPException(status_code=400, detail="ID utilisateur invalide")
     
     target_user = await db.users.find_one({"id": user_id})
     if not target_user:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    # Generate OTP for admin's email
+    await generate_and_store_otp(admin["email"], otp_type, user_id)
+    
+    return {"message": "Code OTP envoyé à votre adresse email"}
+
+@api_router.patch("/users/{user_id}/role")
+async def update_user_role(user_id: str, role_data: UserRoleUpdate, request: Request, admin: dict = Depends(require_admin)):
+    """Update user role - Admin only. Requires OTP verification."""
+    if not validate_uuid(user_id):
+        raise HTTPException(status_code=400, detail="ID utilisateur invalide")
+    
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    # Verify OTP
+    otp_doc = await verify_otp(admin["email"], role_data.otp_code, OTP_TYPE_PROMOTE_ADMIN)
+    if not otp_doc:
+        raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré")
+    
+    # Verify target user matches OTP
+    if otp_doc.get("target_user_id") != user_id:
+        raise HTTPException(status_code=400, detail="OTP non valide pour cet utilisateur")
     
     # Prevent modifying super admin unless you are super admin
     if target_user.get("role") == ROLE_SUPER_ADMIN and not is_super_admin(admin):
@@ -1661,9 +1693,23 @@ async def update_user_role(user_id: str, role_data: UserRoleUpdate, admin: dict 
     if admin["id"] == user_id and role_data.role == ROLE_USER:
         raise HTTPException(status_code=400, detail="Impossible de retirer vos propres droits administrateur")
     
+    old_role = target_user.get("role", ROLE_USER)
+    
     await db.users.update_one(
         {"id": user_id},
         {"$set": {"role": role_data.role}}
+    )
+    
+    # Create audit log
+    client_ip = request.client.host if request.client else None
+    await create_audit_log(
+        action="ROLE_CHANGE",
+        actor_id=admin["id"],
+        actor_email=admin["email"],
+        target_id=user_id,
+        target_email=target_user["email"],
+        details=f"Role changed from {old_role} to {role_data.role}",
+        ip_address=client_ip
     )
     
     logger.info(f"User {admin['id']} changed role of user {user_id} to {role_data.role}")
