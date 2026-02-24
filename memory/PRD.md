@@ -9,7 +9,7 @@ Build a production-ready MVP web application for a French construction company (
 - **Use Case**: Create professional quotes, convert to invoices, track payments
 
 ## User Choices
-- **Authentication**: JWT custom auth (email/password)
+- **Authentication**: JWT custom auth with OTP email verification
 - **PDF Generation**: ReportLab
 - **Design Theme**: Construction/BTP (orange/industrial tones), sober and professional
 - **Language**: French interface
@@ -24,7 +24,7 @@ Build a production-ready MVP web application for a French construction company (
 - Super admin account: admin@btpfacture.com
 
 ### Roles (RBAC)
-1. **super_admin**: Full access, can manage all users, delete users, assign any role
+1. **super_admin**: Full access, can manage all users, delete users, assign any role, impersonation
 2. **admin**: Can manage users (except super_admin), update settings, full data access
 3. **user**: Standard access to clients, quotes, invoices. No access to user management or settings
 
@@ -33,7 +33,7 @@ Build a production-ready MVP web application for a French construction company (
 2. Quotes (Devis) with automatic numbering, status management, conversion to invoice
 3. Invoices (Factures) with legal numbering, payment status tracking
 4. PDF generation with company details, legal mentions (SIRET, VAT)
-5. Company settings (logo, SIRET, VAT, default VAT rates) - **Admin only**
+5. Company settings (logo, SIRET, VAT, default VAT rates, **website**) - **Admin only**
 6. Dashboard with KPIs
 7. **Kits de rénovation** - Predefined line item bundles
 8. **Vue client publique** - Share documents via secure link
@@ -42,7 +42,30 @@ Build a production-ready MVP web application for a French construction company (
 11. **Informations légales étendues** - RCS/RM, Code APE, Capital social, IBAN/BIC
 12. **Délai de paiement configurable** - Défaut 30 jours, mentions légales automatiques
 13. **Acomptes (Advance Payments)** - Factures d'acompte avec % ou montant fixe
-14. **User Management** - Admin page to list, activate/deactivate, and manage user roles
+14. **User Management** - Admin page with detailed user profiles
+15. **OTP Verification** - Email verification for registration and sensitive admin actions
+16. **Impersonation** - Super admin can connect as any user for support
+17. **Website Request** - Business CTA for users without website
+18. **User Profile** - Personal profile page with editable info
+
+## Security Features
+
+### OTP (One-Time Password)
+- **Registration**: 6-digit OTP sent via email, valid 10 minutes
+- **Admin Actions**: OTP required for role change, password reset, user deletion, impersonation (valid 5 minutes)
+- **Mode**: Development mode logs OTP to console, production sends via Resend email
+
+### Impersonation
+- Super admin only
+- Requires OTP verification
+- Banner visible during impersonation session
+- Audit log recorded for all impersonation actions
+
+### Audit Logging
+- Role changes
+- Password resets
+- User deletions
+- Impersonation start/end
 
 ## Architecture
 
