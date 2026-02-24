@@ -1761,14 +1761,23 @@ async def deactivate_user(user_id: str, admin: dict = Depends(require_admin)):
     return {"message": "Compte désactivé", "user_id": user_id}
 
 @api_router.delete("/users/{user_id}")
-async def delete_user(user_id: str, admin: dict = Depends(require_super_admin)):
-    """Delete a user - Super Admin only. Cannot delete super admin account."""
+async def delete_user(user_id: str, data: UserDeleteRequest, request: Request, admin: dict = Depends(require_super_admin)):
+    """Delete a user - Super Admin only. Requires OTP verification."""
     if not validate_uuid(user_id):
         raise HTTPException(status_code=400, detail="ID utilisateur invalide")
     
     target_user = await db.users.find_one({"id": user_id})
     if not target_user:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    # Verify OTP
+    otp_doc = await verify_otp(admin["email"], data.otp_code, OTP_TYPE_DELETE_USER)
+    if not otp_doc:
+        raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré")
+    
+    # Verify target user matches OTP
+    if otp_doc.get("target_user_id") != user_id:
+        raise HTTPException(status_code=400, detail="OTP non valide pour cet utilisateur")
     
     # Prevent deleting super admin
     if target_user.get("role") == ROLE_SUPER_ADMIN:
@@ -1780,8 +1789,275 @@ async def delete_user(user_id: str, admin: dict = Depends(require_super_admin)):
     
     await db.users.delete_one({"id": user_id})
     
+    # Create audit log
+    client_ip = request.client.host if request.client else None
+    await create_audit_log(
+        action="USER_DELETED",
+        actor_id=admin["id"],
+        actor_email=admin["email"],
+        target_id=user_id,
+        target_email=target_user["email"],
+        details="User account permanently deleted",
+        ip_address=client_ip
+    )
+    
     logger.info(f"Super admin {admin['id']} deleted user {user_id}")
     return {"message": "Utilisateur supprimé", "user_id": user_id}
+
+@api_router.post("/users/{user_id}/reset-password")
+async def reset_user_password(user_id: str, data: PasswordResetRequest, request: Request, admin: dict = Depends(require_admin)):
+    """Reset a user's password - Admin only. Requires OTP verification."""
+    if not validate_uuid(user_id):
+        raise HTTPException(status_code=400, detail="ID utilisateur invalide")
+    
+    if data.user_id != user_id:
+        raise HTTPException(status_code=400, detail="ID utilisateur ne correspond pas")
+    
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    # Verify OTP
+    otp_doc = await verify_otp(admin["email"], data.otp_code, OTP_TYPE_PASSWORD_RESET)
+    if not otp_doc:
+        raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré")
+    
+    if otp_doc.get("target_user_id") != user_id:
+        raise HTTPException(status_code=400, detail="OTP non valide pour cet utilisateur")
+    
+    # Cannot reset super admin password unless you are super admin
+    if target_user.get("role") == ROLE_SUPER_ADMIN and not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Impossible de modifier le mot de passe d'un super administrateur")
+    
+    # Hash and update password
+    hashed_password = hash_password(data.new_password)
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"password": hashed_password}}
+    )
+    
+    # Create audit log
+    client_ip = request.client.host if request.client else None
+    await create_audit_log(
+        action="PASSWORD_RESET",
+        actor_id=admin["id"],
+        actor_email=admin["email"],
+        target_id=user_id,
+        target_email=target_user["email"],
+        details="Password reset by admin",
+        ip_address=client_ip
+    )
+    
+    logger.info(f"Admin {admin['id']} reset password for user {user_id}")
+    return {"message": "Mot de passe réinitialisé avec succès"}
+
+# ============== IMPERSONATION (SUPER ADMIN ONLY) ==============
+
+@api_router.post("/admin/impersonate", response_model=TokenResponse)
+async def impersonate_user(data: ImpersonationRequest, request: Request, admin: dict = Depends(require_super_admin)):
+    """Impersonate a user - Super Admin only. Requires OTP verification."""
+    if not validate_uuid(data.target_user_id):
+        raise HTTPException(status_code=400, detail="ID utilisateur invalide")
+    
+    target_user = await db.users.find_one({"id": data.target_user_id}, {"_id": 0, "password": 0})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    # Verify OTP
+    otp_doc = await verify_otp(admin["email"], data.otp_code, OTP_TYPE_IMPERSONATION)
+    if not otp_doc:
+        raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré")
+    
+    if otp_doc.get("target_user_id") != data.target_user_id:
+        raise HTTPException(status_code=400, detail="OTP non valide pour cet utilisateur")
+    
+    # Cannot impersonate another super admin
+    if target_user.get("role") == ROLE_SUPER_ADMIN:
+        raise HTTPException(status_code=403, detail="Impossible d'usurper un autre super administrateur")
+    
+    # Create impersonation token with special flag
+    impersonation_token = create_impersonation_token(admin["id"], target_user["id"])
+    
+    # Create audit log
+    client_ip = request.client.host if request.client else None
+    await create_audit_log(
+        action="IMPERSONATION_START",
+        actor_id=admin["id"],
+        actor_email=admin["email"],
+        target_id=target_user["id"],
+        target_email=target_user["email"],
+        details="Super admin started impersonation session",
+        ip_address=client_ip
+    )
+    
+    # Store impersonation session
+    session_id = str(uuid.uuid4())
+    await db.impersonation_sessions.insert_one({
+        "id": session_id,
+        "admin_id": admin["id"],
+        "target_user_id": target_user["id"],
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "active": True
+    })
+    
+    logger.info(f"Super admin {admin['id']} started impersonating user {target_user['id']}")
+    
+    return TokenResponse(
+        access_token=impersonation_token,
+        refresh_token=None,  # No refresh token for impersonation
+        user=UserResponse(
+            id=target_user["id"],
+            email=target_user["email"],
+            name=target_user["name"],
+            role=target_user.get("role", ROLE_USER),
+            phone=target_user.get("phone"),
+            email_verified=target_user.get("email_verified", False)
+        )
+    )
+
+@api_router.post("/admin/stop-impersonation")
+async def stop_impersonation(request: Request, user: dict = Depends(get_current_user)):
+    """Stop impersonation session and return to admin"""
+    # Check if this is an impersonation session
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        
+        if payload.get("type") != "impersonation":
+            raise HTTPException(status_code=400, detail="Pas de session d'usurpation active")
+        
+        admin_id = payload.get("admin_id")
+        target_id = payload.get("sub")
+        
+        # End impersonation session
+        await db.impersonation_sessions.update_one(
+            {"admin_id": admin_id, "target_user_id": target_id, "active": True},
+            {"$set": {"active": False, "ended_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        # Get admin user
+        admin_user = await db.users.find_one({"id": admin_id}, {"_id": 0, "password": 0})
+        if not admin_user:
+            raise HTTPException(status_code=404, detail="Admin non trouvé")
+        
+        # Create audit log
+        client_ip = request.client.host if request.client else None
+        await create_audit_log(
+            action="IMPERSONATION_END",
+            actor_id=admin_id,
+            actor_email=admin_user["email"],
+            target_id=target_id,
+            target_email=user["email"],
+            details="Super admin ended impersonation session",
+            ip_address=client_ip
+        )
+        
+        # Generate new admin token
+        access_token = create_token(admin_id, "access")
+        refresh_token = create_token(admin_id, "refresh")
+        
+        logger.info(f"Super admin {admin_id} stopped impersonating user {target_id}")
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user=UserResponse(
+                id=admin_user["id"],
+                email=admin_user["email"],
+                name=admin_user["name"],
+                role=admin_user.get("role", ROLE_USER),
+                phone=admin_user.get("phone"),
+                email_verified=admin_user.get("email_verified", False)
+            )
+        )
+        
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=400, detail="Token invalide")
+
+# ============== WEBSITE REQUEST ROUTES ==============
+
+ADMIN_NOTIFICATION_EMAIL = os.environ.get("ADMIN_NOTIFICATION_EMAIL", "admin@btpfacture.com")
+
+@api_router.post("/website-requests", response_model=WebsiteRequestResponse)
+async def create_website_request(data: WebsiteRequestCreate, user: dict = Depends(get_current_user)):
+    """Create a website creation request"""
+    request_id = str(uuid.uuid4())
+    
+    request_doc = {
+        "id": request_id,
+        "user_id": user["id"],
+        "user_name": user["name"],
+        "user_email": user["email"],
+        "user_phone": user.get("phone", ""),
+        "company_name": user.get("company_name"),
+        "activity_type": data.activity_type,
+        "objective": data.objective,
+        "budget": data.budget,
+        "timeline": data.timeline,
+        "additional_notes": data.additional_notes,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": None
+    }
+    
+    await db.website_requests.insert_one(request_doc)
+    
+    # Log the request (email notification in production)
+    logger.info(f"[WEBSITE REQUEST] New request from {user['email']}: {data.activity_type}")
+    
+    # Send email notification if configured
+    if RESEND_CONFIGURED:
+        try:
+            resend.emails.send({
+                "from": SENDER_EMAIL,
+                "to": [ADMIN_NOTIFICATION_EMAIL],
+                "subject": f"Nouvelle demande de site web - {user['name']}",
+                "html": f"""
+                <h2>Nouvelle demande de création de site web</h2>
+                <p><strong>Client:</strong> {user['name']} ({user['email']})</p>
+                <p><strong>Téléphone:</strong> {user.get('phone', 'Non renseigné')}</p>
+                <p><strong>Entreprise:</strong> {user.get('company_name', 'Non renseigné')}</p>
+                <hr>
+                <p><strong>Type d'activité:</strong> {data.activity_type}</p>
+                <p><strong>Objectif:</strong> {data.objective}</p>
+                <p><strong>Budget:</strong> {data.budget}</p>
+                <p><strong>Délai souhaité:</strong> {data.timeline}</p>
+                <p><strong>Notes:</strong> {data.additional_notes or 'Aucune'}</p>
+                """
+            })
+        except Exception as e:
+            logger.error(f"Failed to send website request notification: {str(e)}")
+    
+    return WebsiteRequestResponse(**{k: v for k, v in request_doc.items() if k != "_id"})
+
+@api_router.get("/website-requests", response_model=List[WebsiteRequestResponse])
+async def list_website_requests(admin: dict = Depends(require_admin)):
+    """List all website requests - Admin only"""
+    requests_cursor = db.website_requests.find(
+        {},
+        {"_id": 0}
+    ).sort("created_at", -1)
+    
+    requests = await requests_cursor.to_list(length=100)
+    return [WebsiteRequestResponse(**r) for r in requests]
+
+@api_router.patch("/website-requests/{request_id}/status")
+async def update_website_request_status(request_id: str, status: str, admin: dict = Depends(require_admin)):
+    """Update website request status - Admin only"""
+    valid_statuses = ["pending", "contacted", "in_progress", "completed", "cancelled"]
+    if status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Statut invalide. Valeurs: {valid_statuses}")
+    
+    result = await db.website_requests.update_one(
+        {"id": request_id},
+        {"$set": {"status": status, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Demande non trouvée")
+    
+    return {"message": "Statut mis à jour", "status": status}
 
 # ============== CLIENT ROUTES ==============
 
