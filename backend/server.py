@@ -1,6 +1,7 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -8,8 +9,8 @@ import os
 import logging
 import asyncio
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
-from typing import List, Optional
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, validator
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
@@ -17,6 +18,11 @@ import bcrypt
 from io import BytesIO
 import base64
 import resend
+import secrets
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import re
 
 # ReportLab imports for PDF
 from reportlab.lib import colors
@@ -26,46 +32,162 @@ from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 
+# Rate limiting setup
+limiter = Limiter(key_func=get_remote_address)
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# Resend configuration
+# ============== ENVIRONMENT VALIDATION ==============
+
+JWT_SECRET = os.environ.get('JWT_SECRET')
+ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
+
+if not JWT_SECRET:
+    if ENVIRONMENT == 'production':
+        raise ValueError("JWT_SECRET must be set in production environment")
+    else:
+        JWT_SECRET = 'dev-secret-key-change-in-production'
+        logging.warning("Using default JWT secret in development - DO NOT USE IN PRODUCTION")
+
+MONGO_URL = os.environ.get('MONGO_URL')
+if not MONGO_URL:
+    raise ValueError("MONGO_URL must be set in environment")
+
+DB_NAME = os.environ.get('DB_NAME', 'btp_invoice')
+
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
 
-# Validate Resend API key (test keys start with re_123 or similar test patterns)
 RESEND_CONFIGURED = False
 if RESEND_API_KEY and not RESEND_API_KEY.startswith("re_123"):
     resend.api_key = RESEND_API_KEY
     RESEND_CONFIGURED = True
 else:
     logging.warning("Resend API key not configured or using test key. Email sending disabled.")
-    logging.warning("To enable email: Add a valid RESEND_API_KEY to backend/.env (get one at https://resend.com)")
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+FRONTEND_URL = os.environ.get("FRONTEND_URL")
+if not FRONTEND_URL and RESEND_CONFIGURED:
+    logging.warning("FRONTEND_URL not set. Email links may not work correctly.")
 
-# JWT settings
-JWT_SECRET = os.environ.get('JWT_SECRET', 'btp-invoice-secret-key-change-in-production')
+client = AsyncIOMotorClient(
+    MONGO_URL,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    maxPoolSize=10,
+    minPoolSize=1
+)
+db = client[DB_NAME]
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+JWT_REFRESH_EXPIRATION_DAYS = 7
 
-app = FastAPI()
+app = FastAPI(
+    title="BTP Invoice API",
+    version="1.0.0"
+)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+if ENVIRONMENT == 'production':
+    allowed_hosts = os.environ.get('ALLOWED_HOSTS', '').split(',')
+    if allowed_hosts and allowed_hosts[0]:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
 api_router = APIRouter(prefix="/api")
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# ============== LOGGING CONFIGURATION ==============
+
+class SensitiveDataFilter(logging.Filter):
+    def filter(self, record):
+        sensitive_patterns = ['password', 'token', 'authorization', 'key', 'secret']
+        msg = record.getMessage()
+        for pattern in sensitive_patterns:
+            if pattern in msg.lower():
+                words = msg.split()
+                filtered_words = []
+                for word in words:
+                    if pattern in word.lower() and '=' in word:
+                        parts = word.split('=')
+                        if len(parts) == 2:
+                            filtered_words.append(f"{parts[0]}=***FILTERED***")
+                        else:
+                            filtered_words.append(word)
+                    else:
+                        filtered_words.append(word)
+                record.msg = ' '.join(filtered_words)
+                break
+        return True
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+logger.addFilter(SensitiveDataFilter())
 
-# ============== MODELS ==============
+# ============== VALIDATION HELPERS ==============
+
+def validate_uuid(uuid_str: str) -> bool:
+    try:
+        uuid.UUID(uuid_str)
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+def sanitize_string(s: str, max_length: int = 500) -> str:
+    if not s or not isinstance(s, str):
+        return s
+    cleaned = ''.join(char for char in s if ord(char) >= 32 or char in '\n\r\t')
+    return cleaned[:max_length]
+
+def validate_positive_float(value: float) -> float:
+    if not isinstance(value, (int, float)):
+        raise ValueError("Value must be a number")
+    if value < 0:
+        raise ValueError("Value must be positive")
+    if value > 1_000_000_000:
+        raise ValueError("Value too large")
+    return float(value)
+
+def validate_percentage(value: float) -> float:
+    if not isinstance(value, (int, float)):
+        raise ValueError("Value must be a number")
+    if value < 0 or value > 100:
+        raise ValueError("Percentage must be between 0 and 100")
+    return float(value)
+
+def generate_secure_id() -> str:
+    return secrets.token_urlsafe(16)
+
+def generate_share_token() -> str:
+    return secrets.token_urlsafe(32)
+
+# ============== MODELS COMPLETS ==============
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
-    name: str
+    name: str = Field(..., min_length=2, max_length=100)
+    
+    @validator('password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Le mot de passe doit contenir au moins 8 caractères')
+        if not any(c.isupper() for c in v):
+            raise ValueError('Le mot de passe doit contenir au moins une majuscule')
+        if not any(c.islower() for c in v):
+            raise ValueError('Le mot de passe doit contenir au moins une minuscule')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Le mot de passe doit contenir au moins un chiffre')
+        return v
+    
+    @validator('name')
+    def sanitize_name(cls, v):
+        return sanitize_string(v, 100)
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -78,20 +200,55 @@ class UserResponse(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: UserResponse
 
 class ClientCreate(BaseModel):
-    name: str
-    address: str = ""
-    phone: str = ""
-    email: str = ""
+    name: str = Field(..., min_length=1, max_length=200)
+    address: str = Field(default="", max_length=500)
+    phone: str = Field(default="", max_length=50)
+    email: EmailStr = ""
+    
+    @validator('name')
+    def sanitize_name(cls, v):
+        return sanitize_string(v, 200)
+    
+    @validator('address')
+    def sanitize_address(cls, v):
+        return sanitize_string(v, 500)
+    
+    @validator('phone')
+    def validate_phone(cls, v):
+        if v and not re.match(r'^[0-9+\-\s()]{0,50}$', v):
+            raise ValueError('Format de téléphone invalide')
+        return v
 
 class ClientUpdate(BaseModel):
-    name: Optional[str] = None
-    address: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    address: Optional[str] = Field(None, max_length=500)
+    phone: Optional[str] = Field(None, max_length=50)
+    email: Optional[EmailStr] = None
+    
+    @validator('name')
+    def sanitize_name(cls, v):
+        if v is None:
+            return v
+        return sanitize_string(v, 200)
+    
+    @validator('address')
+    def sanitize_address(cls, v):
+        if v is None:
+            return v
+        return sanitize_string(v, 500)
+    
+    @validator('phone')
+    def validate_phone(cls, v):
+        if v is None:
+            return v
+        if v and not re.match(r'^[0-9+\-\s()]{0,50}$', v):
+            raise ValueError('Format de téléphone invalide')
+        return v
 
 class ClientResponse(BaseModel):
     id: str
@@ -102,23 +259,68 @@ class ClientResponse(BaseModel):
     created_at: str
 
 class LineItem(BaseModel):
-    description: str
-    quantity: float
-    unit_price: float
-    vat_rate: float = 20.0
+    description: str = Field(..., max_length=500)
+    quantity: float = Field(..., gt=0, le=1_000_000)
+    unit_price: float = Field(..., ge=0, le=1_000_000)
+    vat_rate: float = Field(20.0, ge=0, le=100)
+    unit: str = Field(default="unité", max_length=50)
+    
+    @validator('description')
+    def sanitize_description(cls, v):
+        return sanitize_string(v, 500)
+    
+    @validator('quantity')
+    def validate_quantity(cls, v):
+        return validate_positive_float(v)
+    
+    @validator('unit_price')
+    def validate_unit_price(cls, v):
+        return validate_positive_float(v)
+    
+    @validator('vat_rate')
+    def validate_vat_rate(cls, v):
+        return validate_percentage(v)
 
 class QuoteCreate(BaseModel):
     client_id: str
-    validity_days: int = 30
-    items: List[LineItem]
-    notes: str = ""
+    validity_days: int = Field(30, ge=1, le=365)
+    items: List[LineItem] = Field(..., max_items=100)
+    notes: str = Field(default="", max_length=2000)
+    
+    @validator('client_id')
+    def validate_client_id(cls, v):
+        if not validate_uuid(v):
+            raise ValueError('ID client invalide')
+        return v
+    
+    @validator('notes')
+    def sanitize_notes(cls, v):
+        return sanitize_string(v, 2000)
 
 class QuoteUpdate(BaseModel):
     client_id: Optional[str] = None
-    validity_days: Optional[int] = None
-    items: Optional[List[LineItem]] = None
-    notes: Optional[str] = None
-    status: Optional[str] = None
+    validity_days: Optional[int] = Field(None, ge=1, le=365)
+    items: Optional[List[LineItem]] = Field(None, max_items=100)
+    notes: Optional[str] = Field(None, max_length=2000)
+    status: Optional[str] = Field(
+        None,
+        pattern="^(brouillon|envoye|accepte|refuse|facture)$"
+    )
+
+    @validator("client_id")
+    def validate_client_id(cls, v):
+        if v is None:
+            return v
+        if not validate_uuid(v):
+            raise ValueError("ID client invalide")
+        return v
+
+    
+    @validator('notes')
+    def sanitize_notes(cls, v):
+        if v is None:
+            return v
+        return sanitize_string(v, 2000)
 
 class QuoteResponse(BaseModel):
     id: str
@@ -139,16 +341,58 @@ class QuoteResponse(BaseModel):
 class InvoiceCreate(BaseModel):
     client_id: str
     quote_id: Optional[str] = None
-    items: List[LineItem]
-    notes: str = ""
-    payment_method: str = "virement"
-    payment_delay_days: Optional[int] = None  # If None, use company default
+    items: List[LineItem] = Field(..., max_items=100)
+    notes: str = Field(default="", max_length=2000)
+    payment_method: str = Field(
+    "virement",
+    pattern="^(virement|especes|cheque|carte)$"
+)
+
+    payment_delay_days: Optional[int] = Field(None, ge=0, le=365)
+    
+    @validator('client_id')
+    def validate_client_id(cls, v):
+        if not validate_uuid(v):
+            raise ValueError('ID client invalide')
+        return v
+    
+    @validator('quote_id')
+    def validate_quote_id(cls, v):
+        if v is None:
+            return v
+        if not validate_uuid(v):
+            raise ValueError('ID devis invalide')
+        return v
+    
+    @validator('notes')
+    def sanitize_notes(cls, v):
+        return sanitize_string(v, 2000)
 
 class InvoiceUpdate(BaseModel):
-    payment_status: Optional[str] = None
-    payment_method: Optional[str] = None
-    paid_amount: Optional[float] = None
-    notes: Optional[str] = None
+    payment_status: Optional[str] = Field(
+    None,
+    pattern="^(impaye|partiel|paye)$"
+)
+
+    payment_method: str = Field(
+    "virement",
+    pattern="^(virement|especes|cheque|carte)$"
+)
+
+    paid_amount: Optional[float] = Field(None, ge=0)
+    notes: Optional[str] = Field(None, max_length=2000)
+    
+    @validator('paid_amount')
+    def validate_paid_amount(cls, v):
+        if v is None:
+            return v
+        return validate_positive_float(v)
+    
+    @validator('notes')
+    def sanitize_notes(cls, v):
+        if v is None:
+            return v
+        return sanitize_string(v, 2000)
 
 class InvoiceResponse(BaseModel):
     id: str
@@ -168,34 +412,50 @@ class InvoiceResponse(BaseModel):
     notes: str
     created_at: str
     share_token: Optional[str] = None
-    # Acompte fields
     is_acompte: bool = False
     acompte_type: Optional[str] = None
     acompte_value: Optional[float] = None
     parent_quote_id: Optional[str] = None
     acompte_number: Optional[int] = None
-    # Situation fields
     is_situation: bool = False
     situation_number: Optional[int] = None
-    situation_percentage: Optional[float] = None  # Current cumulative %
-    previous_percentage: Optional[float] = None  # Previous cumulative %
+    situation_percentage: Optional[float] = None
+    previous_percentage: Optional[float] = None
     chantier_ref: Optional[str] = None
-    # Retenue de garantie fields (French BTP standard)
     has_retenue_garantie: bool = False
-    retenue_garantie_rate: float = 5.0  # Default 5% (max legal)
+    retenue_garantie_rate: float = 0.0
     retenue_garantie_amount: float = 0.0
     retenue_garantie_release_date: Optional[str] = None
     retenue_garantie_released: bool = False
-    net_a_payer: Optional[float] = None  # TTC minus retention
-
-# ============== ACOMPTE MODELS ==============
+    net_a_payer: Optional[float] = None
 
 class AcompteCreate(BaseModel):
     quote_id: str
-    acompte_type: str  # "percentage" or "amount"
-    value: float  # percentage (e.g., 30) or amount (e.g., 1000)
-    notes: str = ""
-    payment_method: str = "virement"
+    acompte_type: str = Field(
+    ...,
+    pattern="^(percentage|amount)$"
+)
+
+    value: float = Field(..., gt=0)
+    notes: str = Field(default="", max_length=2000)
+    payment_method: str = Field(
+    "virement",
+    pattern="^(virement|especes|cheque|carte)$"
+)
+
+    
+    @validator('quote_id')
+    def validate_quote_id(cls, v):
+        if not validate_uuid(v):
+            raise ValueError('ID devis invalide')
+        return v
+    
+    @validator('value')
+    def validate_value(cls, v, values):
+        if 'acompte_type' in values:
+            if values['acompte_type'] == 'percentage' and v > 100:
+                raise ValueError('Le pourcentage ne peut pas dépasser 100%')
+        return validate_positive_float(v)
 
 class AcompteResponse(BaseModel):
     id: str
@@ -218,24 +478,55 @@ class AcompteResponse(BaseModel):
     notes: str
     created_at: str
 
-# ============== SITUATION MODELS ==============
-
 class SituationLineItem(BaseModel):
-    """Line item with progress percentage for per-line situation"""
-    description: str
-    quantity: float
-    unit_price: float
-    vat_rate: float = 20.0
-    progress_percent: float  # % of this line completed in this situation
+    description: str = Field(..., max_length=500)
+    quantity: float = Field(..., gt=0, le=1_000_000)
+    unit_price: float = Field(..., ge=0, le=1_000_000)
+    vat_rate: float = Field(20.0, ge=0, le=100)
+    progress_percent: float = Field(..., ge=0, le=100)
+    
+    @validator('description')
+    def sanitize_description(cls, v):
+        return sanitize_string(v, 500)
+    
+    @validator('progress_percent')
+    def validate_progress(cls, v):
+        return validate_percentage(v)
 
 class SituationCreate(BaseModel):
     quote_id: str
-    situation_type: str  # "global" or "per_line"
-    global_percentage: Optional[float] = None  # For global type: cumulative %
-    line_items: Optional[List[SituationLineItem]] = None  # For per_line type
-    notes: str = ""
-    payment_method: str = "virement"
-    chantier_ref: str = ""  # Optional site reference
+    situation_type: str = Field(
+    ...,
+    pattern="^(global|per_line)$"
+)
+
+    global_percentage: Optional[float] = Field(None, ge=0, le=100)
+    line_items: Optional[List[SituationLineItem]] = Field(None, max_items=100)
+    notes: str = Field(default="", max_length=2000)
+    payment_method: str = Field("virement", pattern=
+'^(virement|especes|cheque|carte)$')
+    chantier_ref: str = Field(default="", max_length=200)
+    
+    @validator('quote_id')
+    def validate_quote_id(cls, v):
+        if not validate_uuid(v):
+            raise ValueError('ID devis invalide')
+        return v
+    
+    @validator('global_percentage')
+    def validate_global_percentage(cls, v, values):
+        if 'situation_type' in values and values['situation_type'] == 'global':
+            if v is None:
+                raise ValueError('Le pourcentage global est requis')
+            return validate_percentage(v)
+        return v
+    
+    @validator('line_items')
+    def validate_line_items(cls, v, values):
+        if 'situation_type' in values and values['situation_type'] == 'per_line':
+            if not v:
+                raise ValueError('Les lignes de situation sont requises')
+        return v
 
 class SituationResponse(BaseModel):
     id: str
@@ -248,9 +539,9 @@ class SituationResponse(BaseModel):
     payment_due_date: str
     situation_type: str
     situation_number: int
-    current_percentage: float  # Current cumulative %
-    previous_percentage: float  # Previous cumulative %
-    situation_percentage: float  # % for this situation only (current - previous)
+    current_percentage: float
+    previous_percentage: float
+    situation_percentage: float
     items: List[dict]
     total_ht: float
     total_vat: float
@@ -262,50 +553,69 @@ class SituationResponse(BaseModel):
     chantier_ref: str
     created_at: str
 
-# ============== RETENUE DE GARANTIE MODELS ==============
-
 class RetenueGarantieCreate(BaseModel):
-    """Model for applying retention guarantee to an invoice"""
-    rate: float = 5.0  # Percentage (max 5% per French law)
-    warranty_months: int = 12  # Duration before release (default 1 year)
+    rate: float = Field(5.0, ge=0, le=5)
+    warranty_months: int = Field(12, ge=1, le=60)
+    
+    @validator('rate')
+    def validate_rate(cls, v):
+        return validate_percentage(v)
 
 class RetenueGarantieUpdate(BaseModel):
-    """Model for updating retention guarantee"""
-    rate: Optional[float] = None
+    rate: Optional[float] = Field(None, ge=0, le=5)
     release_date: Optional[str] = None
+    
+    @validator('rate')
+    def validate_rate(cls, v):
+        if v is None:
+            return v
+        return validate_percentage(v)
 
 class RetenueGarantieSummary(BaseModel):
-    """Summary of all retention guarantees for a quote/project"""
     total_retained: float
     total_released: float
     pending_release: float
     retentions: List[dict]
 
 class CompanySettings(BaseModel):
-    company_name: str = ""
-    address: str = ""
-    phone: str = ""
-    email: str = ""
-    siret: str = ""
-    vat_number: str = ""
+    company_name: str = Field(default="", max_length=200)
+    address: str = Field(default="", max_length=500)
+    phone: str = Field(default="", max_length=50)
+    email: EmailStr = ""
+    siret: str = Field(default="", max_length=14)
+    vat_number: str = Field(default="", max_length=20)
     default_vat_rates: List[float] = [20.0, 10.0, 5.5, 2.1]
     logo_base64: Optional[str] = None
-    # New fields for French legal compliance
-    rcs_rm: str = ""  # RCS ou RM (Registre des Métiers)
-    code_ape: str = ""  # Code APE/NAF
-    capital_social: str = ""  # Capital social
-    iban: str = ""  # IBAN for bank payments
-    bic: str = ""  # BIC/SWIFT code
-    # Auto-entrepreneur mode
-    is_auto_entrepreneur: bool = False  # If true, hide TVA
+    rcs_rm: str = Field(default="", max_length=50)
+    code_ape: str = Field(default="", max_length=10)
+    capital_social: str = Field(default="", max_length=50)
+    iban: str = Field(default="", max_length=34)
+    bic: str = Field(default="", max_length=11)
+    is_auto_entrepreneur: bool = False
     auto_entrepreneur_mention: str = "TVA non applicable, art. 293B du CGI"
-    # Payment settings
-    default_payment_delay_days: int = 30  # Default payment delay
-    late_payment_rate: float = 3.0  # Late payment interest rate (x3 BCE rate)
-    # Retenue de garantie settings (French BTP standard)
+    default_payment_delay_days: int = Field(30, ge=0, le=365)
+    late_payment_rate: float = Field(3.0, ge=0, le=100)
     default_retenue_garantie_enabled: bool = False
-    default_retenue_garantie_rate: float = 5.0  # Max 5% per French law
-    default_retenue_garantie_duration_months: int = 12  # Warranty period (usually 1 year)
+    default_retenue_garantie_rate: float = Field(5.0, ge=0, le=5)
+    default_retenue_garantie_duration_months: int = Field(12, ge=1, le=60)
+    
+    @validator('siret')
+    def validate_siret(cls, v):
+        if v and not re.match(r'^\d{14}$', v):
+            raise ValueError('SIRET doit contenir 14 chiffres')
+        return v
+    
+    @validator('iban')
+    def validate_iban(cls, v):
+        if v and len(v) > 34:
+            raise ValueError('IBAN trop long')
+        return v
+    
+    @validator('bic')
+    def validate_bic(cls, v):
+        if v and not re.match(r'^[A-Z]{6}[A-Z0-9]{2,5}$', v):
+            raise ValueError('Format BIC invalide')
+        return v
 
 class DashboardStats(BaseModel):
     total_turnover: float
@@ -316,25 +626,27 @@ class DashboardStats(BaseModel):
     total_quotes: int
     total_invoices: int
 
-# ============== RENOVATION KITS MODELS ==============
-
 class KitItem(BaseModel):
-    description: str
-    unit: str = "unité"
-    quantity: float = 1.0
-    unit_price: float = 0.0
-    vat_rate: float = 20.0
+    description: str = Field(..., max_length=500)
+    unit: str = Field("unité", max_length=50)
+    quantity: float = Field(1.0, gt=0, le=1_000_000)
+    unit_price: float = Field(0.0, ge=0, le=1_000_000)
+    vat_rate: float = Field(20.0, ge=0, le=100)
+    
+    @validator('description')
+    def sanitize_description(cls, v):
+        return sanitize_string(v, 500)
 
 class KitCreate(BaseModel):
-    name: str
-    description: str = ""
-    items: List[KitItem]
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(default="", max_length=1000)
+    items: List[KitItem] = Field(..., max_items=100)
     is_default: bool = False
 
 class KitUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    items: Optional[List[KitItem]] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    items: Optional[List[KitItem]] = Field(None, max_items=100)
 
 class KitResponse(BaseModel):
     id: str
@@ -344,7 +656,43 @@ class KitResponse(BaseModel):
     is_default: bool
     created_at: str
 
-# Default renovation kits
+class PredefinedItemCreate(BaseModel):
+    category: str = Field(..., max_length=100)
+    description: str = Field(..., max_length=500)
+    unit: str = Field("unité", max_length=50)
+    default_price: float = Field(0.0, ge=0, le=1_000_000)
+    default_vat_rate: float = Field(20.0, ge=0, le=100)
+
+class PredefinedItemUpdate(BaseModel):
+    category: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    unit: Optional[str] = Field(None, max_length=50)
+    default_price: Optional[float] = Field(None, ge=0, le=1_000_000)
+    default_vat_rate: Optional[float] = Field(None, ge=0, le=100)
+
+class PredefinedItemResponse(BaseModel):
+    id: str
+    category: str
+    description: str
+    unit: str
+    default_price: float
+    default_vat_rate: float
+
+class CategoryResponse(BaseModel):
+    name: str
+    items: List[PredefinedItemResponse]
+
+class SendDocumentEmailRequest(BaseModel):
+    recipient_email: EmailStr
+    recipient_name: str = Field(default="", max_length=200)
+    custom_message: str = Field(default="", max_length=2000)
+    
+    @validator('custom_message')
+    def sanitize_message(cls, v):
+        return sanitize_string(v, 2000)
+
+# ============== DEFAULT DATA (COMPLETE) ==============
+
 DEFAULT_RENOVATION_KITS = [
     {
         "name": "Rénovation salle de bain",
@@ -383,39 +731,8 @@ DEFAULT_RENOVATION_KITS = [
     }
 ]
 
-# ============== PREDEFINED ITEMS MODELS ==============
-
-class PredefinedItemCreate(BaseModel):
-    category: str
-    description: str
-    unit: str = "unité"
-    default_price: float = 0.0
-    default_vat_rate: float = 20.0
-
-class PredefinedItemUpdate(BaseModel):
-    category: Optional[str] = None
-    description: Optional[str] = None
-    unit: Optional[str] = None
-    default_price: Optional[float] = None
-    default_vat_rate: Optional[float] = None
-
-class PredefinedItemResponse(BaseModel):
-    id: str
-    category: str
-    description: str
-    unit: str
-    default_price: float
-    default_vat_rate: float
-
-class CategoryResponse(BaseModel):
-    name: str
-    items: List[PredefinedItemResponse]
-
-# Default BTP categories and items
 DEFAULT_BTP_CATEGORIES = {
-    # ==================== MAÇONNERIE ====================
     "Maçonnerie": [
-        # Démolitions
         {"description": "Démolition cloison légère", "unit": "m²", "default_price": 25.0, "default_vat_rate": 10.0},
         {"description": "Démolition cloison en briques/parpaings", "unit": "m²", "default_price": 45.0, "default_vat_rate": 10.0},
         {"description": "Démolition mur porteur (avec étaiement)", "unit": "forfait", "default_price": 1500.0, "default_vat_rate": 10.0},
@@ -423,76 +740,59 @@ DEFAULT_BTP_CATEGORIES = {
         {"description": "Création ouverture dans cloison", "unit": "unité", "default_price": 350.0, "default_vat_rate": 10.0},
         {"description": "Dépose de carrelage existant", "unit": "m²", "default_price": 18.0, "default_vat_rate": 10.0},
         {"description": "Évacuation gravats", "unit": "m³", "default_price": 85.0, "default_vat_rate": 10.0},
-        # Construction
         {"description": "Montage mur en parpaings (20cm)", "unit": "m²", "default_price": 85.0, "default_vat_rate": 10.0},
         {"description": "Montage mur en parpaings (15cm)", "unit": "m²", "default_price": 75.0, "default_vat_rate": 10.0},
         {"description": "Montage mur en briques", "unit": "m²", "default_price": 95.0, "default_vat_rate": 10.0},
         {"description": "Montage cloison en carreaux de plâtre", "unit": "m²", "default_price": 55.0, "default_vat_rate": 10.0},
-        # Béton et chapes
         {"description": "Coffrage béton", "unit": "m²", "default_price": 45.0, "default_vat_rate": 10.0},
         {"description": "Coulage dalle béton armé (10cm)", "unit": "m²", "default_price": 75.0, "default_vat_rate": 10.0},
         {"description": "Coulage dalle béton armé (15cm)", "unit": "m²", "default_price": 95.0, "default_vat_rate": 10.0},
         {"description": "Chape traditionnelle (5cm)", "unit": "m²", "default_price": 35.0, "default_vat_rate": 10.0},
         {"description": "Chape liquide autonivelante", "unit": "m²", "default_price": 28.0, "default_vat_rate": 10.0},
         {"description": "Ragréage sol (P3)", "unit": "m²", "default_price": 22.0, "default_vat_rate": 10.0},
-        # Enduits
         {"description": "Enduit intérieur plâtre", "unit": "m²", "default_price": 28.0, "default_vat_rate": 10.0},
         {"description": "Enduit intérieur ciment", "unit": "m²", "default_price": 25.0, "default_vat_rate": 10.0},
         {"description": "Enduit extérieur monocouche", "unit": "m²", "default_price": 45.0, "default_vat_rate": 10.0},
         {"description": "Ravalement façade complet", "unit": "m²", "default_price": 65.0, "default_vat_rate": 10.0},
         {"description": "Réparation fissures façade", "unit": "ml", "default_price": 35.0, "default_vat_rate": 10.0},
-        # Seuils et appuis
         {"description": "Pose appui de fenêtre béton", "unit": "ml", "default_price": 55.0, "default_vat_rate": 10.0},
         {"description": "Pose seuil de porte", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
     ],
-    
-    # ==================== CARRELAGE ====================
     "Carrelage": [
-        # Dépose
         {"description": "Dépose carrelage existant", "unit": "m²", "default_price": 18.0, "default_vat_rate": 10.0},
         {"description": "Dépose faïence murale", "unit": "m²", "default_price": 15.0, "default_vat_rate": 10.0},
-        # Préparation
         {"description": "Ragréage sol avant carrelage", "unit": "m²", "default_price": 22.0, "default_vat_rate": 10.0},
         {"description": "Primaire d'accrochage", "unit": "m²", "default_price": 6.0, "default_vat_rate": 10.0},
         {"description": "Étanchéité SPEC sous carrelage", "unit": "m²", "default_price": 25.0, "default_vat_rate": 10.0},
-        # Pose sol
         {"description": "Pose carrelage sol (petit format <30x30)", "unit": "m²", "default_price": 42.0, "default_vat_rate": 10.0},
         {"description": "Pose carrelage sol (format standard 30x30 à 60x60)", "unit": "m²", "default_price": 48.0, "default_vat_rate": 10.0},
         {"description": "Pose carrelage sol (grand format >60x60)", "unit": "m²", "default_price": 58.0, "default_vat_rate": 10.0},
         {"description": "Pose carrelage imitation parquet", "unit": "m²", "default_price": 55.0, "default_vat_rate": 10.0},
         {"description": "Pose mosaïque sol", "unit": "m²", "default_price": 75.0, "default_vat_rate": 10.0},
-        # Pose murale
         {"description": "Pose faïence murale (format standard)", "unit": "m²", "default_price": 52.0, "default_vat_rate": 10.0},
         {"description": "Pose faïence murale métro", "unit": "m²", "default_price": 58.0, "default_vat_rate": 10.0},
         {"description": "Pose mosaïque murale", "unit": "m²", "default_price": 78.0, "default_vat_rate": 10.0},
         {"description": "Pose crédence cuisine", "unit": "ml", "default_price": 85.0, "default_vat_rate": 10.0},
-        # Finitions
         {"description": "Joints carrelage (pose comprise)", "unit": "m²", "default_price": 12.0, "default_vat_rate": 10.0},
         {"description": "Joints époxy (pièces humides)", "unit": "m²", "default_price": 18.0, "default_vat_rate": 10.0},
         {"description": "Pose plinthes carrelées", "unit": "ml", "default_price": 15.0, "default_vat_rate": 10.0},
         {"description": "Barre de seuil", "unit": "unité", "default_price": 25.0, "default_vat_rate": 10.0},
         {"description": "Nez de marche carrelé", "unit": "ml", "default_price": 45.0, "default_vat_rate": 10.0},
     ],
-    
-    # ==================== PLÂTRERIE / ISOLATION ====================
     "Plâtrerie / Isolation": [
-        # Cloisons
         {"description": "Cloison placo BA13 simple (72mm)", "unit": "m²", "default_price": 38.0, "default_vat_rate": 10.0},
         {"description": "Cloison placo BA13 double (98mm)", "unit": "m²", "default_price": 52.0, "default_vat_rate": 10.0},
         {"description": "Cloison placo hydrofuge (pièces humides)", "unit": "m²", "default_price": 48.0, "default_vat_rate": 10.0},
         {"description": "Cloison placo phonique", "unit": "m²", "default_price": 55.0, "default_vat_rate": 10.0},
         {"description": "Cloison placo coupe-feu", "unit": "m²", "default_price": 62.0, "default_vat_rate": 10.0},
-        # Plafonds
         {"description": "Faux plafond placo BA13", "unit": "m²", "default_price": 45.0, "default_vat_rate": 10.0},
         {"description": "Faux plafond placo suspendu", "unit": "m²", "default_price": 55.0, "default_vat_rate": 10.0},
         {"description": "Faux plafond dalles 60x60", "unit": "m²", "default_price": 42.0, "default_vat_rate": 10.0},
         {"description": "Faux plafond acoustique", "unit": "m²", "default_price": 65.0, "default_vat_rate": 10.0},
         {"description": "Création coffrage technique", "unit": "ml", "default_price": 55.0, "default_vat_rate": 10.0},
-        # Doublages
         {"description": "Doublage murs placo + isolant (10+40)", "unit": "m²", "default_price": 42.0, "default_vat_rate": 10.0},
         {"description": "Doublage murs placo + isolant (10+80)", "unit": "m²", "default_price": 52.0, "default_vat_rate": 10.0},
         {"description": "Doublage murs placo + isolant (13+100)", "unit": "m²", "default_price": 58.0, "default_vat_rate": 10.0},
-        # Isolation
         {"description": "Isolation laine de verre (100mm)", "unit": "m²", "default_price": 18.0, "default_vat_rate": 5.5},
         {"description": "Isolation laine de verre (200mm)", "unit": "m²", "default_price": 28.0, "default_vat_rate": 5.5},
         {"description": "Isolation laine de roche (100mm)", "unit": "m²", "default_price": 22.0, "default_vat_rate": 5.5},
@@ -500,291 +800,236 @@ DEFAULT_BTP_CATEGORIES = {
         {"description": "Isolation polystyrène expansé (80mm)", "unit": "m²", "default_price": 25.0, "default_vat_rate": 5.5},
         {"description": "Isolation combles perdus soufflée", "unit": "m²", "default_price": 22.0, "default_vat_rate": 5.5},
         {"description": "Isolation rampants sous toiture", "unit": "m²", "default_price": 45.0, "default_vat_rate": 5.5},
-        # Finitions
         {"description": "Bandes et joints placo", "unit": "m²", "default_price": 12.0, "default_vat_rate": 10.0},
         {"description": "Enduit de lissage placo", "unit": "m²", "default_price": 8.0, "default_vat_rate": 10.0},
         {"description": "Pose corniche décorative", "unit": "ml", "default_price": 25.0, "default_vat_rate": 10.0},
         {"description": "Trappe de visite plafond", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
-    ],
-    
-    # ==================== PEINTURE ====================
-    "Peinture": [
-        # Préparation
-        {"description": "Lessivage murs/plafonds", "unit": "m²", "default_price": 5.0, "default_vat_rate": 10.0},
-        {"description": "Décapage peinture ancienne", "unit": "m²", "default_price": 15.0, "default_vat_rate": 10.0},
-        {"description": "Ponçage et dépoussiérage", "unit": "m²", "default_price": 6.0, "default_vat_rate": 10.0},
-        {"description": "Rebouchage trous et fissures", "unit": "forfait", "default_price": 120.0, "default_vat_rate": 10.0},
-        {"description": "Enduit de rebouchage (par m²)", "unit": "m²", "default_price": 12.0, "default_vat_rate": 10.0},
-        {"description": "Enduit de lissage complet", "unit": "m²", "default_price": 18.0, "default_vat_rate": 10.0},
-        {"description": "Application impression/sous-couche", "unit": "m²", "default_price": 8.0, "default_vat_rate": 10.0},
-        # Peinture murs
-        {"description": "Peinture murs (2 couches acrylique)", "unit": "m²", "default_price": 18.0, "default_vat_rate": 10.0},
-        {"description": "Peinture murs (2 couches glycéro)", "unit": "m²", "default_price": 22.0, "default_vat_rate": 10.0},
-        {"description": "Peinture murs lessivable cuisine/SDB", "unit": "m²", "default_price": 24.0, "default_vat_rate": 10.0},
-        {"description": "Peinture décorative (effet béton, velours...)", "unit": "m²", "default_price": 35.0, "default_vat_rate": 10.0},
-        # Peinture plafonds
-        {"description": "Peinture plafond (2 couches mat)", "unit": "m²", "default_price": 22.0, "default_vat_rate": 10.0},
-        {"description": "Peinture plafond salle de bain (anti-humidité)", "unit": "m²", "default_price": 28.0, "default_vat_rate": 10.0},
-        # Boiseries
-        {"description": "Peinture portes (2 faces)", "unit": "unité", "default_price": 95.0, "default_vat_rate": 10.0},
-        {"description": "Peinture fenêtres bois", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
-        {"description": "Peinture plinthes bois", "unit": "ml", "default_price": 12.0, "default_vat_rate": 10.0},
-        {"description": "Peinture radiateurs (fonte)", "unit": "unité", "default_price": 65.0, "default_vat_rate": 10.0},
-        {"description": "Peinture escalier bois", "unit": "forfait", "default_price": 450.0, "default_vat_rate": 10.0},
-        # Forfaits
-        {"description": "Rénovation peinture complète pièce (jusqu'à 12m²)", "unit": "forfait", "default_price": 650.0, "default_vat_rate": 10.0},
-        {"description": "Rénovation peinture complète pièce (12 à 20m²)", "unit": "forfait", "default_price": 950.0, "default_vat_rate": 10.0},
-        {"description": "Rénovation peinture appartement T2", "unit": "forfait", "default_price": 2800.0, "default_vat_rate": 10.0},
-        {"description": "Rénovation peinture appartement T3", "unit": "forfait", "default_price": 3800.0, "default_vat_rate": 10.0},
-    ],
-    
-    # ==================== PLOMBERIE ====================
-    "Plomberie": [
-        # Dépose
-        {"description": "Dépose installation sanitaire complète", "unit": "forfait", "default_price": 350.0, "default_vat_rate": 10.0},
-        {"description": "Dépose WC", "unit": "unité", "default_price": 80.0, "default_vat_rate": 10.0},
-        {"description": "Dépose lavabo/vasque", "unit": "unité", "default_price": 65.0, "default_vat_rate": 10.0},
-        {"description": "Dépose baignoire", "unit": "unité", "default_price": 150.0, "default_vat_rate": 10.0},
-        {"description": "Dépose douche/receveur", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
-        # WC
-        {"description": "Pose WC à poser (fourni par client)", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
-        {"description": "Pose WC complet (fourniture incluse)", "unit": "unité", "default_price": 450.0, "default_vat_rate": 10.0},
-        {"description": "Pose WC suspendu avec bâti-support", "unit": "unité", "default_price": 750.0, "default_vat_rate": 10.0},
-        {"description": "Pose lave-mains", "unit": "unité", "default_price": 220.0, "default_vat_rate": 10.0},
-        # Lavabos et vasques
-        {"description": "Pose lavabo sur colonne", "unit": "unité", "default_price": 280.0, "default_vat_rate": 10.0},
-        {"description": "Pose vasque à poser", "unit": "unité", "default_price": 320.0, "default_vat_rate": 10.0},
-        {"description": "Pose meuble vasque complet", "unit": "unité", "default_price": 450.0, "default_vat_rate": 10.0},
-        {"description": "Pose double vasque", "unit": "unité", "default_price": 650.0, "default_vat_rate": 10.0},
-        # Douches
-        {"description": "Pose receveur de douche", "unit": "unité", "default_price": 350.0, "default_vat_rate": 10.0},
-        {"description": "Pose douche italienne complète", "unit": "unité", "default_price": 1200.0, "default_vat_rate": 10.0},
-        {"description": "Pose cabine de douche intégrale", "unit": "unité", "default_price": 550.0, "default_vat_rate": 10.0},
-        {"description": "Pose colonne de douche", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
-        {"description": "Pose paroi de douche fixe", "unit": "unité", "default_price": 250.0, "default_vat_rate": 10.0},
-        # Baignoires
-        {"description": "Pose baignoire acrylique", "unit": "unité", "default_price": 450.0, "default_vat_rate": 10.0},
-        {"description": "Pose baignoire fonte", "unit": "unité", "default_price": 650.0, "default_vat_rate": 10.0},
-        {"description": "Pose baignoire balnéo", "unit": "unité", "default_price": 850.0, "default_vat_rate": 10.0},
-        {"description": "Habillage baignoire (tablier)", "unit": "unité", "default_price": 280.0, "default_vat_rate": 10.0},
-        # Réseaux
-        {"description": "Création alimentation eau froide", "unit": "point", "default_price": 180.0, "default_vat_rate": 10.0},
-        {"description": "Création alimentation eau chaude", "unit": "point", "default_price": 220.0, "default_vat_rate": 10.0},
-        {"description": "Création évacuation eaux usées", "unit": "point", "default_price": 250.0, "default_vat_rate": 10.0},
-        {"description": "Réseau PER multicouche (fourniture + pose)", "unit": "ml", "default_price": 28.0, "default_vat_rate": 10.0},
-        {"description": "Réseau cuivre (fourniture + pose)", "unit": "ml", "default_price": 45.0, "default_vat_rate": 10.0},
-        {"description": "Réseau PVC évacuation (fourniture + pose)", "unit": "ml", "default_price": 35.0, "default_vat_rate": 10.0},
-        # Eau chaude sanitaire
-        {"description": "Remplacement ballon ECS électrique (jusqu'à 150L)", "unit": "unité", "default_price": 650.0, "default_vat_rate": 10.0},
-        {"description": "Remplacement ballon ECS électrique (200L)", "unit": "unité", "default_price": 850.0, "default_vat_rate": 10.0},
-        {"description": "Pose chauffe-eau thermodynamique", "unit": "unité", "default_price": 2500.0, "default_vat_rate": 5.5},
-        {"description": "Remplacement groupe de sécurité", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
-        # Robinetterie
-        {"description": "Remplacement robinet lavabo/vasque", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
-        {"description": "Remplacement mitigeur douche", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
-        {"description": "Remplacement mitigeur baignoire", "unit": "unité", "default_price": 220.0, "default_vat_rate": 10.0},
-        {"description": "Pose robinet machine à laver", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
-    ],
-    
-    # ==================== ÉLECTRICITÉ ====================
-    "Électricité": [
-        # Dépose
-        {"description": "Dépose ancienne installation électrique", "unit": "forfait", "default_price": 450.0, "default_vat_rate": 10.0},
-        {"description": "Dépose tableau électrique", "unit": "unité", "default_price": 150.0, "default_vat_rate": 10.0},
-        # Tableau électrique
-        {"description": "Tableau électrique 1 rangée (jusqu'à 13 modules)", "unit": "unité", "default_price": 650.0, "default_vat_rate": 10.0},
-        {"description": "Tableau électrique 2 rangées", "unit": "unité", "default_price": 950.0, "default_vat_rate": 10.0},
-        {"description": "Tableau électrique 3 rangées", "unit": "unité", "default_price": 1250.0, "default_vat_rate": 10.0},
-        {"description": "Tableau électrique 4 rangées", "unit": "unité", "default_price": 1550.0, "default_vat_rate": 10.0},
-        {"description": "Remplacement disjoncteur de branchement", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
-        {"description": "Ajout disjoncteur divisionnaire", "unit": "unité", "default_price": 65.0, "default_vat_rate": 10.0},
-        {"description": "Ajout interrupteur différentiel 30mA", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
-        # Mise aux normes
-        {"description": "Mise aux normes NFC 15-100 studio/T1", "unit": "forfait", "default_price": 1800.0, "default_vat_rate": 10.0},
-        {"description": "Mise aux normes NFC 15-100 T2/T3", "unit": "forfait", "default_price": 2800.0, "default_vat_rate": 10.0},
-        {"description": "Mise aux normes NFC 15-100 T4/T5", "unit": "forfait", "default_price": 3800.0, "default_vat_rate": 10.0},
-        {"description": "Mise en sécurité électrique", "unit": "forfait", "default_price": 850.0, "default_vat_rate": 10.0},
-        {"description": "Diagnostic électrique", "unit": "forfait", "default_price": 150.0, "default_vat_rate": 10.0},
-        # Prises et interrupteurs
-        {"description": "Pose prise électrique 16A", "unit": "unité", "default_price": 65.0, "default_vat_rate": 10.0},
-        {"description": "Pose prise électrique 32A (cuisinière)", "unit": "unité", "default_price": 95.0, "default_vat_rate": 10.0},
-        {"description": "Pose prise RJ45 (réseau)", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
-        {"description": "Pose prise TV/SAT", "unit": "unité", "default_price": 75.0, "default_vat_rate": 10.0},
-        {"description": "Pose interrupteur simple allumage", "unit": "unité", "default_price": 55.0, "default_vat_rate": 10.0},
-        {"description": "Pose interrupteur va-et-vient", "unit": "unité", "default_price": 75.0, "default_vat_rate": 10.0},
-        {"description": "Pose interrupteur variateur", "unit": "unité", "default_price": 95.0, "default_vat_rate": 10.0},
-        {"description": "Pose détecteur de mouvement", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
-        # Éclairage
-        {"description": "Pose point lumineux simple", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
-        {"description": "Pose spot encastré LED", "unit": "unité", "default_price": 55.0, "default_vat_rate": 10.0},
-        {"description": "Pose applique murale", "unit": "unité", "default_price": 75.0, "default_vat_rate": 10.0},
-        {"description": "Pose plafonnier", "unit": "unité", "default_price": 95.0, "default_vat_rate": 10.0},
-        {"description": "Pose bandeau LED", "unit": "ml", "default_price": 45.0, "default_vat_rate": 10.0},
-        # Câblage
-        {"description": "Tirage de câble électrique (gaine existante)", "unit": "ml", "default_price": 12.0, "default_vat_rate": 10.0},
-        {"description": "Tirage de câble avec saignée", "unit": "ml", "default_price": 28.0, "default_vat_rate": 10.0},
-        {"description": "Câblage complet pièce (prises + éclairage)", "unit": "pièce", "default_price": 450.0, "default_vat_rate": 10.0},
-        {"description": "Câblage complet logement T2", "unit": "forfait", "default_price": 2200.0, "default_vat_rate": 10.0},
-        {"description": "Câblage complet logement T3", "unit": "forfait", "default_price": 3200.0, "default_vat_rate": 10.0},
-        # VMC
-        {"description": "Pose VMC simple flux", "unit": "unité", "default_price": 450.0, "default_vat_rate": 10.0},
-        {"description": "Pose VMC double flux", "unit": "unité", "default_price": 2500.0, "default_vat_rate": 5.5},
-        {"description": "Pose extracteur salle de bain", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
-        {"description": "Remplacement bouches VMC", "unit": "unité", "default_price": 45.0, "default_vat_rate": 10.0},
-    ],
-    
-    # ==================== MENUISERIE ====================
-    "Menuiserie": [
-        # Portes intérieures
-        {"description": "Dépose porte intérieure", "unit": "unité", "default_price": 45.0, "default_vat_rate": 10.0},
-        {"description": "Pose porte intérieure (fournie par client)", "unit": "unité", "default_price": 180.0, "default_vat_rate": 10.0},
-        {"description": "Pose porte intérieure (fourniture incluse standard)", "unit": "unité", "default_price": 350.0, "default_vat_rate": 10.0},
-        {"description": "Pose porte intérieure (fourniture incluse qualité)", "unit": "unité", "default_price": 550.0, "default_vat_rate": 10.0},
-        {"description": "Pose bloc-porte acoustique", "unit": "unité", "default_price": 750.0, "default_vat_rate": 10.0},
-        {"description": "Pose porte coulissante à galandage", "unit": "unité", "default_price": 950.0, "default_vat_rate": 10.0},
-        {"description": "Pose porte coulissante en applique", "unit": "unité", "default_price": 650.0, "default_vat_rate": 10.0},
-        # Portes d'entrée
-        {"description": "Dépose porte d'entrée", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
-        {"description": "Pose porte d'entrée (fournie par client)", "unit": "unité", "default_price": 350.0, "default_vat_rate": 10.0},
-        {"description": "Pose porte d'entrée bois (fourniture incluse)", "unit": "unité", "default_price": 1500.0, "default_vat_rate": 10.0},
-        {"description": "Pose porte d'entrée aluminium (fourniture incluse)", "unit": "unité", "default_price": 2200.0, "default_vat_rate": 10.0},
-        {"description": "Pose porte blindée", "unit": "unité", "default_price": 2800.0, "default_vat_rate": 10.0},
-        # Fenêtres
-        {"description": "Dépose fenêtre", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
-        {"description": "Pose fenêtre PVC (fournie par client)", "unit": "unité", "default_price": 250.0, "default_vat_rate": 10.0},
-        {"description": "Pose fenêtre PVC double vitrage (fourniture incluse)", "unit": "unité", "default_price": 550.0, "default_vat_rate": 5.5},
-        {"description": "Pose fenêtre aluminium (fourniture incluse)", "unit": "unité", "default_price": 750.0, "default_vat_rate": 5.5},
-        {"description": "Pose fenêtre bois (fourniture incluse)", "unit": "unité", "default_price": 850.0, "default_vat_rate": 5.5},
-        {"description": "Pose porte-fenêtre PVC", "unit": "unité", "default_price": 750.0, "default_vat_rate": 5.5},
-        {"description": "Pose baie vitrée coulissante", "unit": "unité", "default_price": 1200.0, "default_vat_rate": 5.5},
-        {"description": "Pose velux/fenêtre de toit", "unit": "unité", "default_price": 850.0, "default_vat_rate": 5.5},
-        {"description": "Pose volet roulant électrique", "unit": "unité", "default_price": 550.0, "default_vat_rate": 5.5},
-        {"description": "Pose volet roulant manuel", "unit": "unité", "default_price": 380.0, "default_vat_rate": 5.5},
-        # Parquets et sols
-        {"description": "Dépose parquet/sol existant", "unit": "m²", "default_price": 12.0, "default_vat_rate": 10.0},
-        {"description": "Pose parquet flottant (fourni par client)", "unit": "m²", "default_price": 25.0, "default_vat_rate": 10.0},
-        {"description": "Pose parquet flottant (fourniture incluse standard)", "unit": "m²", "default_price": 45.0, "default_vat_rate": 10.0},
-        {"description": "Pose parquet flottant (fourniture incluse qualité)", "unit": "m²", "default_price": 65.0, "default_vat_rate": 10.0},
-        {"description": "Pose parquet massif collé", "unit": "m²", "default_price": 75.0, "default_vat_rate": 10.0},
-        {"description": "Pose parquet massif cloué", "unit": "m²", "default_price": 85.0, "default_vat_rate": 10.0},
-        {"description": "Pose sol stratifié", "unit": "m²", "default_price": 35.0, "default_vat_rate": 10.0},
-        {"description": "Pose sol PVC/vinyle", "unit": "m²", "default_price": 28.0, "default_vat_rate": 10.0},
-        {"description": "Pose moquette", "unit": "m²", "default_price": 22.0, "default_vat_rate": 10.0},
-        {"description": "Pose plinthes bois", "unit": "ml", "default_price": 12.0, "default_vat_rate": 10.0},
-        {"description": "Pose plinthes MDF", "unit": "ml", "default_price": 8.0, "default_vat_rate": 10.0},
-        # Rangements
-        {"description": "Pose placard sur mesure (sans fourniture)", "unit": "ml", "default_price": 250.0, "default_vat_rate": 10.0},
-        {"description": "Pose placard sur mesure (fourniture incluse)", "unit": "ml", "default_price": 550.0, "default_vat_rate": 10.0},
-        {"description": "Pose penderie/dressing", "unit": "forfait", "default_price": 850.0, "default_vat_rate": 10.0},
-        {"description": "Pose étagères", "unit": "ml", "default_price": 45.0, "default_vat_rate": 10.0},
-        # Divers
-        {"description": "Ajustement porte (rabot, serrure)", "unit": "unité", "default_price": 65.0, "default_vat_rate": 10.0},
-        {"description": "Remplacement serrure", "unit": "unité", "default_price": 120.0, "default_vat_rate": 10.0},
-        {"description": "Pose de vitrage (simple)", "unit": "unité", "default_price": 85.0, "default_vat_rate": 10.0},
-    ],
-    
-    # ==================== RÉNOVATION GÉNÉRALE ====================
-    "Rénovation générale": [
-        # Protection et préparation
-        {"description": "Protection de chantier (bâches, cartons)", "unit": "forfait", "default_price": 150.0, "default_vat_rate": 10.0},
-        {"description": "Protection sols lourde", "unit": "m²", "default_price": 5.0, "default_vat_rate": 10.0},
-        {"description": "Installation base vie chantier", "unit": "forfait", "default_price": 250.0, "default_vat_rate": 10.0},
-        {"description": "Déménagement mobilier (par pièce)", "unit": "pièce", "default_price": 80.0, "default_vat_rate": 10.0},
-        # Main d'œuvre
-        {"description": "Main d'œuvre qualifiée", "unit": "heure", "default_price": 45.0, "default_vat_rate": 10.0},
-        {"description": "Main d'œuvre spécialisée", "unit": "heure", "default_price": 55.0, "default_vat_rate": 10.0},
-        {"description": "Main d'œuvre aide", "unit": "heure", "default_price": 32.0, "default_vat_rate": 10.0},
-        # Déplacements et transports
-        {"description": "Déplacement (zone urbaine)", "unit": "forfait", "default_price": 45.0, "default_vat_rate": 10.0},
-        {"description": "Déplacement (hors zone)", "unit": "km", "default_price": 0.85, "default_vat_rate": 10.0},
-        {"description": "Approvisionnement matériaux", "unit": "forfait", "default_price": 120.0, "default_vat_rate": 10.0},
-        # Évacuation et nettoyage
-        {"description": "Évacuation gravats en déchetterie", "unit": "m³", "default_price": 85.0, "default_vat_rate": 10.0},
-        {"description": "Location benne 8m³ (1 semaine)", "unit": "unité", "default_price": 350.0, "default_vat_rate": 20.0},
-        {"description": "Location benne 15m³ (1 semaine)", "unit": "unité", "default_price": 450.0, "default_vat_rate": 20.0},
-        {"description": "Nettoyage fin de chantier sommaire", "unit": "forfait", "default_price": 150.0, "default_vat_rate": 10.0},
-        {"description": "Nettoyage fin de chantier complet", "unit": "forfait", "default_price": 350.0, "default_vat_rate": 10.0},
-        {"description": "Nettoyage après travaux (par m²)", "unit": "m²", "default_price": 8.0, "default_vat_rate": 10.0},
-        # Coordination
-        {"description": "Coordination de travaux", "unit": "jour", "default_price": 350.0, "default_vat_rate": 10.0},
-        {"description": "Gestion de chantier (maîtrise d'œuvre)", "unit": "%", "default_price": 8.0, "default_vat_rate": 20.0},
-        {"description": "Études techniques préalables", "unit": "forfait", "default_price": 450.0, "default_vat_rate": 20.0},
-        # Forfaits rénovation
-        {"description": "Rénovation complète salle de bain (jusqu'à 5m²)", "unit": "forfait", "default_price": 8500.0, "default_vat_rate": 10.0},
-        {"description": "Rénovation complète salle de bain (5 à 8m²)", "unit": "forfait", "default_price": 12000.0, "default_vat_rate": 10.0},
-        {"description": "Rénovation complète cuisine (hors meubles)", "unit": "forfait", "default_price": 6500.0, "default_vat_rate": 10.0},
-        {"description": "Rénovation complète studio/T1", "unit": "forfait", "default_price": 18000.0, "default_vat_rate": 10.0},
-        {"description": "Rénovation complète T2", "unit": "forfait", "default_price": 28000.0, "default_vat_rate": 10.0},
-        {"description": "Rénovation complète T3", "unit": "forfait", "default_price": 38000.0, "default_vat_rate": 10.0},
-    ],
+    ]
 }
 
-# ============== AUTH HELPERS ==============
+# ============== SECURITY HELPERS ==============
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    salt = bcrypt.gensalt(rounds=12)
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    except Exception:
+        return False
 
-def create_token(user_id: str) -> str:
+def create_token(user_id: str, token_type: str = "access") -> str:
+    if token_type == "access":
+        expires = timedelta(hours=JWT_EXPIRATION_HOURS)
+    else:
+        expires = timedelta(days=JWT_REFRESH_EXPIRATION_DAYS)
+    
     payload = {
         "sub": user_id,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS),
-        "iat": datetime.now(timezone.utc)
+        "type": token_type,
+        "exp": int((datetime.now(timezone.utc) + expires).timestamp()),
+        "iat": int(datetime.now(timezone.utc).timestamp()),
+        "jti": secrets.token_urlsafe(16)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Non authentifié",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(
+            credentials.credentials,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM],
+            options={"verify_exp": True}
+        )
+        
         user_id = payload.get("sub")
+        token_type = payload.get("type", "access")
+        
         if not user_id:
             raise HTTPException(status_code=401, detail="Token invalide")
-        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        
+        if token_type != "access":
+            raise HTTPException(status_code=401, detail="Type de token invalide")
+        
+        if not validate_uuid(user_id):
+            raise HTTPException(status_code=401, detail="ID utilisateur invalide")
+        
+        user = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "password": 0}
+        )
+        
         if not user:
             raise HTTPException(status_code=401, detail="Utilisateur non trouvé")
+        
         return user
+        
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expiré")
+        raise HTTPException(
+            status_code=401,
+            detail="Token expiré",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Token invalide")
+        raise HTTPException(
+            status_code=401,
+            detail="Token invalide",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+async def get_optional_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        return await get_current_user(credentials)
+    except HTTPException:
+        return None
 
 # ============== AUTH ROUTES ==============
 
 @api_router.post("/auth/register", response_model=TokenResponse)
-async def register(user_data: UserCreate):
-    existing = await db.users.find_one({"email": user_data.email})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email déjà utilisé")
-    
-    user_id = str(uuid.uuid4())
-    user_doc = {
-        "id": user_id,
-        "email": user_data.email,
-        "password": hash_password(user_data.password),
-        "name": user_data.name,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.users.insert_one(user_doc)
-    
-    token = create_token(user_id)
-    return TokenResponse(
-        access_token=token,
-        user=UserResponse(id=user_id, email=user_data.email, name=user_data.name)
-    )
+@limiter.limit("5/hour")
+async def register(request: Request, user_data: UserCreate):
+    try:
+        existing = await db.users.find_one({"email": user_data.email})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email déjà utilisé")
+        
+        user_id = str(uuid.uuid4())
+        hashed_password = hash_password(user_data.password)
+        
+        user_doc = {
+            "id": user_id,
+            "email": user_data.email,
+            "password": hashed_password,
+            "name": user_data.name,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_login": None,
+            "login_attempts": 0,
+            "locked_until": None
+        }
+        
+        await db.users.insert_one(user_doc)
+        
+        access_token = create_token(user_id, "access")
+        refresh_token = create_token(user_id, "refresh")
+        
+        logger.info(f"User registered: {user_id}")
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user=UserResponse(id=user_id, email=user_data.email, name=user_data.name)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de l'inscription")
 
 @api_router.post("/auth/login", response_model=TokenResponse)
-async def login(user_data: UserLogin):
-    user = await db.users.find_one({"email": user_data.email})
-    if not user or not verify_password(user_data.password, user["password"]):
-        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
-    
-    token = create_token(user["id"])
-    return TokenResponse(
-        access_token=token,
-        user=UserResponse(id=user["id"], email=user["email"], name=user["name"])
-    )
+@limiter.limit("5/minute")
+async def login(request: Request, user_data: UserLogin):
+    try:
+        user = await db.users.find_one({"email": user_data.email})
+        
+        if user and user.get("locked_until"):
+            if datetime.fromisoformat(user["locked_until"]) > datetime.now(timezone.utc):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Compte bloqué. Réessayez plus tard."
+                )
+        
+        if not user or not verify_password(user_data.password, user["password"]):
+            if user:
+                attempts = user.get("login_attempts", 0) + 1
+                update_data = {"login_attempts": attempts}
+                
+                if attempts >= 5:
+                    lock_time = datetime.now(timezone.utc) + timedelta(minutes=30)
+                    update_data["locked_until"] = lock_time.isoformat()
+                
+                await db.users.update_one(
+                    {"id": user["id"]},
+                    {"$set": update_data}
+                )
+            
+            logger.warning(f"Failed login attempt for email: {user_data.email}")
+            raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+        
+        await db.users.update_one(
+            {"id": user["id"]},
+            {
+                "$set": {
+                    "last_login": datetime.now(timezone.utc).isoformat(),
+                    "login_attempts": 0,
+                    "locked_until": None
+                }
+            }
+        )
+        
+        access_token = create_token(user["id"], "access")
+        refresh_token = create_token(user["id"], "refresh")
+        
+        logger.info(f"User logged in: {user['id']}")
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user=UserResponse(id=user["id"], email=user["email"], name=user["name"])
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la connexion")
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+@api_router.post("/auth/refresh")
+async def refresh_token(data: RefreshRequest):
+
+    try:
+payload = jwt.decode(
+    data.refresh_token,
+    JWT_SECRET,
+    algorithms=[JWT_ALGORITHM]
+)
+
+        
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Type de token invalide")
+        
+        user_id = payload.get("sub")
+        if not user_id or not validate_uuid(user_id):
+            raise HTTPException(status_code=401, detail="Token invalide")
+        
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+        if not user:
+            raise HTTPException(status_code=401, detail="Utilisateur non trouvé")
+        
+        access_token = create_token(user_id, "access")
+        
+        return {"access_token": access_token, "token_type": "bearer"}
+        
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token de rafraîchissement expiré")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token de rafraîchissement invalide")
+
+@api_router.post("/auth/logout")
+async def logout(user: dict = Depends(get_current_user)):
+    logger.info(f"User logged out: {user['id']}")
+    return {"message": "Déconnexion réussie"}
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_me(user: dict = Depends(get_current_user)):
@@ -794,141 +1039,262 @@ async def get_me(user: dict = Depends(get_current_user)):
 
 @api_router.post("/clients", response_model=ClientResponse)
 async def create_client(client_data: ClientCreate, user: dict = Depends(get_current_user)):
-    client_id = str(uuid.uuid4())
-    client_doc = {
-        "id": client_id,
-        "name": client_data.name,
-        "address": client_data.address,
-        "phone": client_data.phone,
-        "email": client_data.email,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.clients.insert_one(client_doc)
-    return ClientResponse(**client_doc)
+    try:
+        client_id = str(uuid.uuid4())
+        client_doc = {
+            "id": client_id,
+            "owner_id": user["id"],
+            "name": client_data.name,
+            "address": client_data.address,
+            "phone": client_data.phone,
+            "email": client_data.email,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.clients.insert_one(client_doc)
+        
+        logger.info(f"Client created: {client_id}")
+        
+        return ClientResponse(**client_doc)
+        
+    except Exception as e:
+        logger.error(f"Client creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création du client")
 
 @api_router.get("/clients", response_model=List[ClientResponse])
 async def list_clients(user: dict = Depends(get_current_user)):
-    clients = await db.clients.find({}, {"_id": 0}).to_list(1000)
-    return [ClientResponse(**c) for c in clients]
+    try:
+        clients = await db.clients.find(
+            {"owner_id": user["id"]},
+            {"_id": 0}
+        ).to_list(1000)
+        
+        return [ClientResponse(**c) for c in clients]
+        
+    except Exception as e:
+        logger.error(f"List clients error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération des clients")
 
 @api_router.get("/clients/{client_id}", response_model=ClientResponse)
 async def get_client(client_id: str, user: dict = Depends(get_current_user)):
-    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not validate_uuid(client_id):
+        raise HTTPException(status_code=400, detail="ID client invalide")
+    
+    client = await db.clients.find_one(
+        {"id": client_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not client:
         raise HTTPException(status_code=404, detail="Client non trouvé")
+    
     return ClientResponse(**client)
 
 @api_router.put("/clients/{client_id}", response_model=ClientResponse)
 async def update_client(client_id: str, client_data: ClientUpdate, user: dict = Depends(get_current_user)):
-    update_data = {k: v for k, v in client_data.model_dump().items() if v is not None}
+    if not validate_uuid(client_id):
+        raise HTTPException(status_code=400, detail="ID client invalide")
+    
+    update_data = {k: v for k, v in client_data.dict().items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="Aucune donnée à mettre à jour")
     
-    result = await db.clients.update_one({"id": client_id}, {"$set": update_data})
+    result = await db.clients.update_one(
+        {"id": client_id, "owner_id": user["id"]},
+        {"$set": update_data}
+    )
+    
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Client non trouvé")
     
-    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    client = await db.clients.find_one(
+        {"id": client_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     return ClientResponse(**client)
 
 @api_router.delete("/clients/{client_id}")
 async def delete_client(client_id: str, user: dict = Depends(get_current_user)):
-    result = await db.clients.delete_one({"id": client_id})
+    if not validate_uuid(client_id):
+        raise HTTPException(status_code=400, detail="ID client invalide")
+    
+    result = await db.clients.delete_one(
+        {"id": client_id, "owner_id": user["id"]}
+    )
+    
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Client non trouvé")
+    
+    logger.info(f"Client deleted: {client_id}")
+    
     return {"message": "Client supprimé"}
 
 # ============== QUOTE HELPERS ==============
 
 async def get_next_quote_number():
     year = datetime.now().year
-    last_quote = await db.quotes.find_one(
-        {"quote_number": {"$regex": f"^DEV-{year}"}},
-        sort=[("quote_number", -1)]
+    counter = await db.counters.find_one_and_update(
+        {"_id": f"quote_{year}"},
+        {"$inc": {"sequence": 1}},
+        upsert=True,
+        return_document=True
     )
-    if last_quote:
-        last_num = int(last_quote["quote_number"].split("-")[-1])
-        return f"DEV-{year}-{str(last_num + 1).zfill(4)}"
-    return f"DEV-{year}-0001"
+    sequence = counter.get("sequence", 1)
+    return f"DEV-{year}-{str(sequence).zfill(4)}"
 
-def calculate_totals(items: List[dict], is_auto_entrepreneur: bool = False):
-    """Calculate totals for items. If auto-entrepreneur mode, VAT is 0."""
-    total_ht = 0
-    total_vat = 0
-    for item in items:
-        line_ht = item["quantity"] * item["unit_price"]
-        line_vat = 0 if is_auto_entrepreneur else line_ht * (item["vat_rate"] / 100)
-        total_ht += line_ht
-        total_vat += line_vat
-    return round(total_ht, 2), round(total_vat, 2), round(total_ht + total_vat, 2)
+async def get_next_invoice_number():
+    year = datetime.now().year
+    counter = await db.counters.find_one_and_update(
+        {"_id": f"invoice_{year}"},
+        {"$inc": {"sequence": 1}},
+        upsert=True,
+        return_document=True
+    )
+    sequence = counter.get("sequence", 1)
+    return f"FAC-{year}-{str(sequence).zfill(4)}"
+
+def calculate_totals(items: List[dict], is_auto_entrepreneur: bool = False) -> tuple:
+    total_ht = sum(item["quantity"] * item["unit_price"] for item in items)
+    
+    if is_auto_entrepreneur:
+        total_vat = 0.0
+    else:
+        total_vat = sum(item["quantity"] * item["unit_price"] * item["vat_rate"] / 100 for item in items)
+    
+    total_ttc = total_ht + total_vat
+    
+    return round(total_ht, 2), round(total_vat, 2), round(total_ttc, 2)
+
+async def get_company_settings():
+    settings = await db.settings.find_one(
+        {"type": "company"},
+        {"_id": 0}
+    )
+    return settings or {}
 
 # ============== QUOTE ROUTES ==============
 
 @api_router.post("/quotes", response_model=QuoteResponse)
 async def create_quote(quote_data: QuoteCreate, user: dict = Depends(get_current_user)):
-    client = await db.clients.find_one({"id": quote_data.client_id}, {"_id": 0})
-    if not client:
-        raise HTTPException(status_code=404, detail="Client non trouvé")
-    
-    # Get company settings to check auto-entrepreneur mode
-    settings = await get_company_settings()
-    
-    quote_id = str(uuid.uuid4())
-    quote_number = await get_next_quote_number()
-    issue_date = datetime.now(timezone.utc)
-    validity_date = issue_date + timedelta(days=quote_data.validity_days)
-    
-    items = [item.model_dump() for item in quote_data.items]
-    # Apply auto-entrepreneur mode: set vat_rate to 0 for all items
-    if settings.is_auto_entrepreneur:
-        items = [{**item, "vat_rate": 0.0} for item in items]
-    
-    total_ht, total_vat, total_ttc = calculate_totals(items, settings.is_auto_entrepreneur)
-    
-    quote_doc = {
-        "id": quote_id,
-        "quote_number": quote_number,
-        "client_id": quote_data.client_id,
-        "client_name": client["name"],
-        "issue_date": issue_date.isoformat(),
-        "validity_date": validity_date.isoformat(),
-        "items": items,
-        "total_ht": total_ht,
-        "total_vat": total_vat,
-        "total_ttc": total_ttc,
-        "status": "brouillon",
-        "notes": quote_data.notes,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.quotes.insert_one(quote_doc)
-    return QuoteResponse(**quote_doc)
+    try:
+        if not validate_uuid(quote_data.client_id):
+            raise HTTPException(status_code=400, detail="ID client invalide")
+        
+        client = await db.clients.find_one(
+            {"id": quote_data.client_id, "owner_id": user["id"]},
+            {"_id": 0}
+        )
+        
+        if not client:
+            raise HTTPException(status_code=404, detail="Client non trouvé")
+        
+        settings = await get_company_settings()
+        
+        quote_id = str(uuid.uuid4())
+        quote_number = await get_next_quote_number()
+        
+        items = [item.dict() for item in quote_data.items]
+        
+        if settings.get("is_auto_entrepreneur"):
+            for item in items:
+                item["vat_rate"] = 0.0
+        
+        total_ht, total_vat, total_ttc = calculate_totals(items, settings.get("is_auto_entrepreneur", False))
+        
+        issue_date = datetime.now(timezone.utc)
+        validity_date = issue_date + timedelta(days=quote_data.validity_days)
+        
+        quote_doc = {
+            "id": quote_id,
+            "owner_id": user["id"],
+            "quote_number": quote_number,
+            "client_id": quote_data.client_id,
+            "client_name": client["name"],
+            "issue_date": issue_date.isoformat(),
+            "validity_date": validity_date.isoformat(),
+            "items": items,
+            "total_ht": total_ht,
+            "total_vat": total_vat,
+            "total_ttc": total_ttc,
+            "status": "brouillon",
+            "notes": quote_data.notes,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.quotes.insert_one(quote_doc)
+        
+        logger.info(f"Quote created: {quote_number}")
+        
+        return QuoteResponse(**quote_doc)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Quote creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création du devis")
 
 @api_router.get("/quotes", response_model=List[QuoteResponse])
-async def list_quotes(status: Optional[str] = None, client_id: Optional[str] = None, user: dict = Depends(get_current_user)):
-    query = {}
-    if status:
-        query["status"] = status
-    if client_id:
-        query["client_id"] = client_id
-    quotes = await db.quotes.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return [QuoteResponse(**q) for q in quotes]
+async def list_quotes(
+    status: Optional[str] = None,
+    client_id: Optional[str] = None,
+    user: dict = Depends(get_current_user)
+):
+    try:
+        query = {"owner_id": user["id"]}
+        
+        if status and status in ["brouillon", "envoye", "accepte", "refuse", "facture"]:
+            query["status"] = status
+        
+        if client_id and validate_uuid(client_id):
+            query["client_id"] = client_id
+        
+        quotes = await db.quotes.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+        
+        return [QuoteResponse(**q) for q in quotes]
+        
+    except Exception as e:
+        logger.error(f"List quotes error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération des devis")
 
 @api_router.get("/quotes/{quote_id}", response_model=QuoteResponse)
 async def get_quote(quote_id: str, user: dict = Depends(get_current_user)):
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
     return QuoteResponse(**quote)
 
 @api_router.put("/quotes/{quote_id}", response_model=QuoteResponse)
 async def update_quote(quote_id: str, quote_data: QuoteUpdate, user: dict = Depends(get_current_user)):
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     update_data = {}
+    
     if quote_data.client_id:
-        client = await db.clients.find_one({"id": quote_data.client_id}, {"_id": 0})
+        if not validate_uuid(quote_data.client_id):
+            raise HTTPException(status_code=400, detail="ID client invalide")
+        
+        client = await db.clients.find_one(
+            {"id": quote_data.client_id, "owner_id": user["id"]},
+            {"_id": 0}
+        )
         if not client:
             raise HTTPException(status_code=404, detail="Client non trouvé")
         update_data["client_id"] = quote_data.client_id
@@ -940,13 +1306,11 @@ async def update_quote(quote_id: str, quote_data: QuoteUpdate, user: dict = Depe
         update_data["validity_date"] = validity_date.isoformat()
     
     if quote_data.items:
-        # Get company settings to check auto-entrepreneur mode
         settings = await get_company_settings()
-        items = [item.model_dump() for item in quote_data.items]
-        # Apply auto-entrepreneur mode: set vat_rate to 0 for all items
-        if settings.is_auto_entrepreneur:
+        items = [item.dict() for item in quote_data.items]
+        if settings.get("is_auto_entrepreneur"):
             items = [{**item, "vat_rate": 0.0} for item in items]
-        total_ht, total_vat, total_ttc = calculate_totals(items, settings.is_auto_entrepreneur)
+        total_ht, total_vat, total_ttc = calculate_totals(items, settings.get("is_auto_entrepreneur", False))
         update_data["items"] = items
         update_data["total_ht"] = total_ht
         update_data["total_vat"] = total_vat
@@ -959,66 +1323,68 @@ async def update_quote(quote_id: str, quote_data: QuoteUpdate, user: dict = Depe
         update_data["status"] = quote_data.status
     
     if update_data:
-        await db.quotes.update_one({"id": quote_id}, {"$set": update_data})
+        await db.quotes.update_one(
+            {"id": quote_id, "owner_id": user["id"]},
+            {"$set": update_data}
+        )
     
-    updated_quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    updated_quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     return QuoteResponse(**updated_quote)
 
 @api_router.delete("/quotes/{quote_id}")
 async def delete_quote(quote_id: str, user: dict = Depends(get_current_user)):
-    result = await db.quotes.delete_one({"id": quote_id})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    result = await db.quotes.delete_one(
+        {"id": quote_id, "owner_id": user["id"]}
+    )
+    
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
-    return {"message": "Devis supprimé"}
-
-class BulkDeleteRequest(BaseModel):
-    ids: List[str]
-
-@api_router.post("/quotes/bulk-delete")
-async def bulk_delete_quotes(request: BulkDeleteRequest, user: dict = Depends(get_current_user)):
-    """Delete multiple quotes at once"""
-    if not request.ids:
-        raise HTTPException(status_code=400, detail="Aucun devis sélectionné")
     
-    result = await db.quotes.delete_many({"id": {"$in": request.ids}})
-    return {
-        "message": f"{result.deleted_count} devis supprimé(s)",
-        "deleted_count": result.deleted_count
-    }
+    logger.info(f"Quote deleted: {quote_id}")
+    
+    return {"message": "Devis supprimé"}
 
 @api_router.post("/quotes/{quote_id}/convert", response_model=InvoiceResponse)
 async def convert_quote_to_invoice(quote_id: str, user: dict = Depends(get_current_user)):
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     if quote["status"] != "accepte":
         raise HTTPException(status_code=400, detail="Seuls les devis acceptés peuvent être convertis en facture")
     
-    # Get company settings for payment delay
     settings = await get_company_settings()
     
     invoice_id = str(uuid.uuid4())
     invoice_number = await get_next_invoice_number()
-    
     issue_date = datetime.now(timezone.utc)
-    payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
+    payment_due_date = issue_date + timedelta(days=settings.get("default_payment_delay_days", 30))
     
-    # Handle auto-entrepreneur mode
     items = quote["items"]
-    if settings.is_auto_entrepreneur:
+    if settings.get("is_auto_entrepreneur"):
         items = [{**item, "vat_rate": 0.0} for item in items]
-        total_ht = sum(item["quantity"] * item["unit_price"] for item in items)
-        total_vat = 0.0
-        total_ttc = total_ht
+        total_ht, total_vat, total_ttc = calculate_totals(items, True)
     else:
-        total_ht = quote["total_ht"]
-        total_vat = quote["total_vat"]
-        total_ttc = quote["total_ttc"]
+        total_ht, total_vat, total_ttc = quote["total_ht"], quote["total_vat"], quote["total_ttc"]
     
     invoice_doc = {
         "id": invoice_id,
         "invoice_number": invoice_number,
+        "owner_id": user["id"],
         "client_id": quote["client_id"],
         "client_name": quote["client_name"],
         "quote_id": quote_id,
@@ -1031,223 +1397,281 @@ async def convert_quote_to_invoice(quote_id: str, user: dict = Depends(get_curre
         "payment_status": "impaye",
         "payment_method": "virement",
         "paid_amount": 0,
-        "notes": quote["notes"],
+        "notes": quote.get("notes", ""),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
+    
     await db.invoices.insert_one(invoice_doc)
     
-    # Update quote status
-    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "facture"}})
+    await db.quotes.update_one(
+        {"id": quote_id},
+        {"$set": {"status": "facture"}}
+    )
+    
+    logger.info(f"Quote converted to invoice: {quote['quote_number']} -> {invoice_number}")
     
     return InvoiceResponse(**invoice_doc)
-
-# ============== INVOICE HELPERS ==============
-
-async def get_next_invoice_number():
-    year = datetime.now().year
-    last_invoice = await db.invoices.find_one(
-        {"invoice_number": {"$regex": f"^FAC-{year}"}},
-        sort=[("invoice_number", -1)]
-    )
-    if last_invoice:
-        last_num = int(last_invoice["invoice_number"].split("-")[-1])
-        return f"FAC-{year}-{str(last_num + 1).zfill(4)}"
-    return f"FAC-{year}-0001"
-
-# ============== INVOICE ROUTES ==============
+	
+	# ============== INVOICE ROUTES ==============
 
 @api_router.post("/invoices", response_model=InvoiceResponse)
 async def create_invoice(invoice_data: InvoiceCreate, user: dict = Depends(get_current_user)):
-    client = await db.clients.find_one({"id": invoice_data.client_id}, {"_id": 0})
-    if not client:
-        raise HTTPException(status_code=404, detail="Client non trouvé")
-    
-    # Get company settings for default payment delay
-    settings = await get_company_settings()
-    payment_delay = invoice_data.payment_delay_days or settings.default_payment_delay_days
-    
-    invoice_id = str(uuid.uuid4())
-    invoice_number = await get_next_invoice_number()
-    
-    items = [item.model_dump() for item in invoice_data.items]
-    
-    # Handle auto-entrepreneur mode (no VAT)
-    if settings.is_auto_entrepreneur:
-        for item in items:
-            item["vat_rate"] = 0.0
-        total_ht = sum(item["quantity"] * item["unit_price"] for item in items)
-        total_vat = 0.0
-        total_ttc = total_ht
-    else:
-        total_ht, total_vat, total_ttc = calculate_totals(items)
-    
-    issue_date = datetime.now(timezone.utc)
-    payment_due_date = issue_date + timedelta(days=payment_delay)
-    
-    invoice_doc = {
-        "id": invoice_id,
-        "invoice_number": invoice_number,
-        "client_id": invoice_data.client_id,
-        "client_name": client["name"],
-        "quote_id": invoice_data.quote_id,
-        "issue_date": issue_date.isoformat(),
-        "payment_due_date": payment_due_date.isoformat(),
-        "items": items,
-        "total_ht": total_ht,
-        "total_vat": total_vat,
-        "total_ttc": total_ttc,
-        "payment_status": "impaye",
-        "payment_method": invoice_data.payment_method,
-        "paid_amount": 0,
-        "notes": invoice_data.notes,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.invoices.insert_one(invoice_doc)
-    return InvoiceResponse(**invoice_doc)
+    try:
+        if not validate_uuid(invoice_data.client_id):
+            raise HTTPException(status_code=400, detail="ID client invalide")
+        
+        client = await db.clients.find_one(
+            {"id": invoice_data.client_id, "owner_id": user["id"]},
+            {"_id": 0}
+        )
+        
+        if not client:
+            raise HTTPException(status_code=404, detail="Client non trouvé")
+        
+        if invoice_data.quote_id and not validate_uuid(invoice_data.quote_id):
+            raise HTTPException(status_code=400, detail="ID devis invalide")
+        
+        settings = await get_company_settings()
+        payment_delay = invoice_data.payment_delay_days or settings.get("default_payment_delay_days", 30)
+        
+        invoice_id = str(uuid.uuid4())
+        invoice_number = await get_next_invoice_number()
+        
+        items = [item.dict() for item in invoice_data.items]
+        
+        if settings.get("is_auto_entrepreneur"):
+            for item in items:
+                item["vat_rate"] = 0.0
+        
+        total_ht, total_vat, total_ttc = calculate_totals(items, settings.get("is_auto_entrepreneur", False))
+        
+        issue_date = datetime.now(timezone.utc)
+        payment_due_date = issue_date + timedelta(days=payment_delay)
+        
+        invoice_doc = {
+            "id": invoice_id,
+            "invoice_number": invoice_number,
+            "owner_id": user["id"],
+            "client_id": invoice_data.client_id,
+            "client_name": client["name"],
+            "quote_id": invoice_data.quote_id,
+            "issue_date": issue_date.isoformat(),
+            "payment_due_date": payment_due_date.isoformat(),
+            "items": items,
+            "total_ht": total_ht,
+            "total_vat": total_vat,
+            "total_ttc": total_ttc,
+            "payment_status": "impaye",
+            "payment_method": invoice_data.payment_method,
+            "paid_amount": 0,
+            "notes": invoice_data.notes,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.invoices.insert_one(invoice_doc)
+        
+        logger.info(f"Invoice created: {invoice_number}")
+        
+        return InvoiceResponse(**invoice_doc)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Invoice creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création de la facture")
 
 @api_router.get("/invoices", response_model=List[InvoiceResponse])
-async def list_invoices(payment_status: Optional[str] = None, client_id: Optional[str] = None, user: dict = Depends(get_current_user)):
-    query = {}
-    if payment_status:
-        query["payment_status"] = payment_status
-    if client_id:
-        query["client_id"] = client_id
-    invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    # Add default fields for compatibility
-    for inv in invoices:
-        if "payment_due_date" not in inv:
-            issue_date = datetime.fromisoformat(inv["issue_date"].replace("Z", "+00:00"))
-            inv["payment_due_date"] = (issue_date + timedelta(days=30)).isoformat()
-        # Add acompte defaults
-        inv.setdefault("is_acompte", False)
-        inv.setdefault("acompte_type", None)
-        inv.setdefault("acompte_value", None)
-        inv.setdefault("parent_quote_id", None)
-        inv.setdefault("acompte_number", None)
-        # Add retenue de garantie defaults
-        inv.setdefault("has_retenue_garantie", False)
-        inv.setdefault("retenue_garantie_rate", 0)
-        inv.setdefault("retenue_garantie_amount", 0)
-        inv.setdefault("retenue_garantie_release_date", None)
-        inv.setdefault("retenue_garantie_released", False)
-        inv.setdefault("net_a_payer", inv["total_ttc"])
-    return [InvoiceResponse(**i) for i in invoices]
+async def list_invoices(
+    payment_status: Optional[str] = None,
+    client_id: Optional[str] = None,
+    user: dict = Depends(get_current_user)
+):
+    try:
+        query = {"owner_id": user["id"]}
+        
+        if payment_status and payment_status in ["impaye", "partiel", "paye"]:
+            query["payment_status"] = payment_status
+        
+        if client_id and validate_uuid(client_id):
+            query["client_id"] = client_id
+        
+        invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+        
+        for inv in invoices:
+            inv.setdefault("is_acompte", False)
+            inv.setdefault("acompte_type", None)
+            inv.setdefault("acompte_value", None)
+            inv.setdefault("parent_quote_id", None)
+            inv.setdefault("acompte_number", None)
+            inv.setdefault("is_situation", False)
+            inv.setdefault("situation_number", None)
+            inv.setdefault("situation_percentage", None)
+            inv.setdefault("previous_percentage", None)
+            inv.setdefault("chantier_ref", None)
+            inv.setdefault("has_retenue_garantie", False)
+            inv.setdefault("retenue_garantie_rate", 0)
+            inv.setdefault("retenue_garantie_amount", 0)
+            inv.setdefault("retenue_garantie_release_date", None)
+            inv.setdefault("retenue_garantie_released", False)
+            inv.setdefault("net_a_payer", inv["total_ttc"])
+        
+        return [InvoiceResponse(**i) for i in invoices]
+        
+    except Exception as e:
+        logger.error(f"List invoices error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération des factures")
 
 @api_router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
 async def get_invoice(invoice_id: str, user: dict = Depends(get_current_user)):
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not validate_uuid(invoice_id):
+        raise HTTPException(status_code=400, detail="ID facture invalide")
+    
+    invoice = await db.invoices.find_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
-    # Add default fields for compatibility
-    if "payment_due_date" not in invoice:
-        issue_date = datetime.fromisoformat(invoice["issue_date"].replace("Z", "+00:00"))
-        invoice["payment_due_date"] = (issue_date + timedelta(days=30)).isoformat()
-    # Add acompte defaults
+    
     invoice.setdefault("is_acompte", False)
     invoice.setdefault("acompte_type", None)
     invoice.setdefault("acompte_value", None)
     invoice.setdefault("parent_quote_id", None)
     invoice.setdefault("acompte_number", None)
-    # Add retenue de garantie defaults
+    invoice.setdefault("is_situation", False)
+    invoice.setdefault("situation_number", None)
+    invoice.setdefault("situation_percentage", None)
+    invoice.setdefault("previous_percentage", None)
+    invoice.setdefault("chantier_ref", None)
     invoice.setdefault("has_retenue_garantie", False)
     invoice.setdefault("retenue_garantie_rate", 0)
     invoice.setdefault("retenue_garantie_amount", 0)
     invoice.setdefault("retenue_garantie_release_date", None)
     invoice.setdefault("retenue_garantie_released", False)
     invoice.setdefault("net_a_payer", invoice["total_ttc"])
+    
     return InvoiceResponse(**invoice)
 
 @api_router.put("/invoices/{invoice_id}", response_model=InvoiceResponse)
 async def update_invoice(invoice_id: str, invoice_data: InvoiceUpdate, user: dict = Depends(get_current_user)):
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not validate_uuid(invoice_id):
+        raise HTTPException(status_code=400, detail="ID facture invalide")
+    
+    invoice = await db.invoices.find_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
     
     update_data = {}
+    
     if invoice_data.payment_status:
         update_data["payment_status"] = invoice_data.payment_status
+    
     if invoice_data.payment_method:
         update_data["payment_method"] = invoice_data.payment_method
+    
     if invoice_data.paid_amount is not None:
         update_data["paid_amount"] = invoice_data.paid_amount
-        # Auto-update payment status based on paid amount
         if invoice_data.paid_amount >= invoice["total_ttc"]:
             update_data["payment_status"] = "paye"
         elif invoice_data.paid_amount > 0:
             update_data["payment_status"] = "partiel"
+    
     if invoice_data.notes is not None:
         update_data["notes"] = invoice_data.notes
     
     if update_data:
-        await db.invoices.update_one({"id": invoice_id}, {"$set": update_data})
+        await db.invoices.update_one(
+            {"id": invoice_id, "owner_id": user["id"]},
+            {"$set": update_data}
+        )
     
-    updated_invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    updated_invoice = await db.invoices.find_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     return InvoiceResponse(**updated_invoice)
 
 @api_router.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str, user: dict = Depends(get_current_user)):
-    result = await db.invoices.delete_one({"id": invoice_id})
+    if not validate_uuid(invoice_id):
+        raise HTTPException(status_code=400, detail="ID facture invalide")
+    
+    result = await db.invoices.delete_one(
+        {"id": invoice_id, "owner_id": user["id"]}
+    )
+    
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
+    
+    logger.info(f"Invoice deleted: {invoice_id}")
+    
     return {"message": "Facture supprimée"}
 
 @api_router.post("/invoices/bulk-delete")
-async def bulk_delete_invoices(request: BulkDeleteRequest, user: dict = Depends(get_current_user)):
-    """Delete multiple invoices at once"""
-    if not request.ids:
-        raise HTTPException(status_code=400, detail="Aucune facture sélectionnée")
+async def bulk_delete_invoices(invoice_ids: List[str], user: dict = Depends(get_current_user)):
+    valid_ids = [id for id in invoice_ids if validate_uuid(id)]
     
-    result = await db.invoices.delete_many({"id": {"$in": request.ids}})
-    return {
-        "message": f"{result.deleted_count} facture(s) supprimée(s)",
-        "deleted_count": result.deleted_count
-    }
+    if not valid_ids:
+        raise HTTPException(status_code=400, detail="Aucun ID valide fourni")
+    
+    result = await db.invoices.delete_many({
+        "id": {"$in": valid_ids},
+        "owner_id": user["id"]
+    })
+    
+    logger.info(f"Bulk deleted {result.deleted_count} invoices")
+    
+    return {"message": f"{result.deleted_count} factures supprimées"}
 
-# ============== ACOMPTES (ADVANCE PAYMENTS) ==============
+# ============== ACOMPTES ROUTES ==============
 
 @api_router.post("/quotes/{quote_id}/acompte", response_model=AcompteResponse)
 async def create_acompte(quote_id: str, acompte_data: AcompteCreate, user: dict = Depends(get_current_user)):
-    """Create an acompte (advance payment invoice) from a quote"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     if quote["status"] not in ["accepte", "envoye"]:
         raise HTTPException(status_code=400, detail="Le devis doit être accepté ou envoyé pour créer un acompte")
     
-    # Get company settings
     settings = await get_company_settings()
     
-    # Calculate acompte amounts
     if acompte_data.acompte_type == "percentage":
         acompte_ht = quote["total_ht"] * (acompte_data.value / 100)
-        acompte_vat = quote["total_vat"] * (acompte_data.value / 100) if not settings.is_auto_entrepreneur else 0
-    else:  # amount
-        # If amount, we need to calculate proportional VAT
+        acompte_vat = quote["total_vat"] * (acompte_data.value / 100) if not settings.get("is_auto_entrepreneur") else 0
+    else:
         proportion = acompte_data.value / quote["total_ttc"] if quote["total_ttc"] > 0 else 0
         acompte_ht = quote["total_ht"] * proportion
-        acompte_vat = quote["total_vat"] * proportion if not settings.is_auto_entrepreneur else 0
+        acompte_vat = quote["total_vat"] * proportion if not settings.get("is_auto_entrepreneur") else 0
     
     acompte_ttc = acompte_ht + acompte_vat
     
-    # Get existing acomptes for this quote to determine the number
     existing_acomptes = await db.invoices.count_documents({"parent_quote_id": quote_id, "is_acompte": True})
     acompte_number = existing_acomptes + 1
     
-    # Generate invoice number
     invoice_number = await get_next_invoice_number()
-    
-    # Calculate payment due date
     issue_date = datetime.now(timezone.utc)
-    payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
+    payment_due_date = issue_date + timedelta(days=settings.get("default_payment_delay_days", 30))
     
-    # Create acompte items (simplified - shows as single line)
-    # For auto-entrepreneur, vat_rate is always 0
-    item_vat_rate = 0.0 if settings.is_auto_entrepreneur else ((acompte_vat / acompte_ht * 100) if acompte_ht > 0 else 0)
+    item_vat_rate = 0.0 if settings.get("is_auto_entrepreneur") else ((acompte_vat / acompte_ht * 100) if acompte_ht > 0 else 0)
+    
     acompte_items = [{
         "description": f"Acompte n°{acompte_number} - {acompte_data.value}{'%' if acompte_data.acompte_type == 'percentage' else '€'} sur devis {quote['quote_number']}",
         "quantity": 1,
-        "unit_price": acompte_ht,
+        "unit_price": round(acompte_ht, 2),
         "vat_rate": item_vat_rate,
         "unit": "forfait"
     }]
@@ -1255,6 +1679,7 @@ async def create_acompte(quote_id: str, acompte_data: AcompteCreate, user: dict 
     acompte_doc = {
         "id": str(uuid.uuid4()),
         "invoice_number": invoice_number,
+        "owner_id": user["id"],
         "client_id": quote["client_id"],
         "client_name": quote["client_name"],
         "quote_id": quote_id,
@@ -1270,7 +1695,6 @@ async def create_acompte(quote_id: str, acompte_data: AcompteCreate, user: dict 
         "paid_amount": 0,
         "notes": acompte_data.notes,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        # Acompte specific fields
         "is_acompte": True,
         "acompte_type": acompte_data.acompte_type,
         "acompte_value": acompte_data.value,
@@ -1279,9 +1703,11 @@ async def create_acompte(quote_id: str, acompte_data: AcompteCreate, user: dict 
     
     await db.invoices.insert_one(acompte_doc)
     
+    logger.info(f"Acompte created: {invoice_number} for quote {quote_id}")
+    
     return AcompteResponse(
         id=acompte_doc["id"],
-        invoice_number=acompte_doc["invoice_number"],
+        invoice_number=invoice_number,
         quote_id=quote_id,
         quote_number=quote["quote_number"],
         client_id=acompte_doc["client_id"],
@@ -1303,13 +1729,19 @@ async def create_acompte(quote_id: str, acompte_data: AcompteCreate, user: dict 
 
 @api_router.get("/quotes/{quote_id}/acomptes", response_model=List[AcompteResponse])
 async def list_quote_acomptes(quote_id: str, user: dict = Depends(get_current_user)):
-    """List all acomptes for a quote"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     acomptes = await db.invoices.find(
-        {"parent_quote_id": quote_id, "is_acompte": True},
+        {"parent_quote_id": quote_id, "is_acompte": True, "owner_id": user["id"]},
         {"_id": 0}
     ).sort("acompte_number", 1).to_list(100)
     
@@ -1340,13 +1772,19 @@ async def list_quote_acomptes(quote_id: str, user: dict = Depends(get_current_us
 
 @api_router.get("/quotes/{quote_id}/acomptes/summary")
 async def get_acomptes_summary(quote_id: str, user: dict = Depends(get_current_user)):
-    """Get summary of acomptes for a quote (total paid, remaining)"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     acomptes = await db.invoices.find(
-        {"parent_quote_id": quote_id, "is_acompte": True},
+        {"parent_quote_id": quote_id, "is_acompte": True, "owner_id": user["id"]},
         {"_id": 0}
     ).to_list(100)
     
@@ -1390,20 +1828,24 @@ async def get_acomptes_summary(quote_id: str, user: dict = Depends(get_current_u
 
 @api_router.post("/quotes/{quote_id}/final-invoice", response_model=InvoiceResponse)
 async def create_final_invoice(quote_id: str, user: dict = Depends(get_current_user)):
-    """Create final invoice from quote, deducting all acomptes"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     if quote["status"] != "accepte":
         raise HTTPException(status_code=400, detail="Le devis doit être accepté pour créer la facture finale")
     
-    # Get company settings
     settings = await get_company_settings()
     
-    # Get all paid acomptes
     acomptes = await db.invoices.find(
-        {"parent_quote_id": quote_id, "is_acompte": True},
+        {"parent_quote_id": quote_id, "is_acompte": True, "owner_id": user["id"]},
         {"_id": 0}
     ).to_list(100)
     
@@ -1411,13 +1853,11 @@ async def create_final_invoice(quote_id: str, user: dict = Depends(get_current_u
     
     invoice_id = str(uuid.uuid4())
     invoice_number = await get_next_invoice_number()
-    
     issue_date = datetime.now(timezone.utc)
-    payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
+    payment_due_date = issue_date + timedelta(days=settings.get("default_payment_delay_days", 30))
     
-    # Handle auto-entrepreneur mode
     items = quote["items"]
-    if settings.is_auto_entrepreneur:
+    if settings.get("is_auto_entrepreneur"):
         items = [{**item, "vat_rate": 0.0} for item in items]
         total_ht = sum(item["quantity"] * item["unit_price"] for item in items)
         total_vat = 0.0
@@ -1430,6 +1870,7 @@ async def create_final_invoice(quote_id: str, user: dict = Depends(get_current_u
     invoice_doc = {
         "id": invoice_id,
         "invoice_number": invoice_number,
+        "owner_id": user["id"],
         "client_id": quote["client_id"],
         "client_name": quote["client_name"],
         "quote_id": quote_id,
@@ -1445,7 +1886,6 @@ async def create_final_invoice(quote_id: str, user: dict = Depends(get_current_u
         "paid_amount": 0,
         "notes": quote.get("notes", ""),
         "created_at": datetime.now(timezone.utc).isoformat(),
-        # Final invoice specific
         "is_acompte": False,
         "is_final_invoice": True,
         "acomptes_deducted": total_acomptes_ttc,
@@ -1454,48 +1894,52 @@ async def create_final_invoice(quote_id: str, user: dict = Depends(get_current_u
     
     await db.invoices.insert_one(invoice_doc)
     
-    # Update quote status
-    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "facture"}})
+    await db.quotes.update_one(
+        {"id": quote_id},
+        {"$set": {"status": "facture"}}
+    )
     
-    # Add default values for missing fields
     invoice_doc["acompte_type"] = None
     invoice_doc["acompte_value"] = None
     invoice_doc["acompte_number"] = None
     
+    logger.info(f"Final invoice created: {invoice_number}")
+    
     return InvoiceResponse(**invoice_doc)
 
-# ============== SITUATIONS (PROGRESSIVE BILLING) ==============
+# ============== SITUATIONS ROUTES ==============
 
 @api_router.post("/quotes/{quote_id}/situation", response_model=SituationResponse)
 async def create_situation(quote_id: str, situation_data: SituationCreate, user: dict = Depends(get_current_user)):
-    """Create a situation invoice (progressive billing) from a quote"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     if quote["status"] not in ["accepte", "envoye"]:
         raise HTTPException(status_code=400, detail="Le devis doit être accepté ou envoyé pour créer une situation")
     
-    # Get company settings
     settings = await get_company_settings()
     
-    # Get existing situations for this quote to determine the number and previous %
     existing_situations = await db.invoices.find(
-        {"parent_quote_id": quote_id, "is_situation": True},
+        {"parent_quote_id": quote_id, "is_situation": True, "owner_id": user["id"]},
         {"_id": 0}
     ).sort("situation_number", -1).to_list(100)
     
     situation_number = len(existing_situations) + 1
     
-    # Calculate previous cumulative percentage
     if existing_situations:
         previous_percentage = existing_situations[0].get("situation_percentage", 0) or 0
     else:
         previous_percentage = 0
     
-    # Calculate current situation based on type
     if situation_data.situation_type == "global":
-        # Global percentage mode
         if situation_data.global_percentage is None or situation_data.global_percentage <= 0:
             raise HTTPException(status_code=400, detail="Le pourcentage global doit être supérieur à 0")
         
@@ -1504,19 +1948,17 @@ async def create_situation(quote_id: str, situation_data: SituationCreate, user:
         
         if situation_data.global_percentage <= previous_percentage:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail=f"Le pourcentage ({situation_data.global_percentage}%) doit être supérieur au cumul précédent ({previous_percentage}%)"
             )
         
         current_percentage = situation_data.global_percentage
         situation_percentage = current_percentage - previous_percentage
         
-        # Calculate amounts for this situation
         situation_ht = quote["total_ht"] * (situation_percentage / 100)
-        situation_vat = quote["total_vat"] * (situation_percentage / 100) if not settings.is_auto_entrepreneur else 0
+        situation_vat = quote["total_vat"] * (situation_percentage / 100) if not settings.get("is_auto_entrepreneur") else 0
         situation_ttc = situation_ht + situation_vat
         
-        # Create situation items (proportional to situation %)
         situation_items = []
         for item in quote["items"]:
             item_ht = item["quantity"] * item["unit_price"] * (situation_percentage / 100)
@@ -1524,33 +1966,29 @@ async def create_situation(quote_id: str, situation_data: SituationCreate, user:
                 "description": item["description"],
                 "quantity": item["quantity"],
                 "unit_price": item["unit_price"],
-                "vat_rate": 0.0 if settings.is_auto_entrepreneur else item["vat_rate"],
+                "vat_rate": 0.0 if settings.get("is_auto_entrepreneur") else item["vat_rate"],
                 "situation_percent": situation_percentage,
                 "original_total_ht": item["quantity"] * item["unit_price"],
                 "situation_amount_ht": round(item_ht, 2)
             })
     
-    else:  # per_line mode
+    else:
         if not situation_data.line_items or len(situation_data.line_items) == 0:
-            raise HTTPException(status_code=400, detail="Les lignes de situation sont requises pour le mode par ligne")
+            raise HTTPException(status_code=400, detail="Les lignes de situation sont requises")
         
         if len(situation_data.line_items) != len(quote["items"]):
             raise HTTPException(status_code=400, detail="Le nombre de lignes doit correspondre au devis")
         
-        # Get previous line-by-line progress
-        # If previous situation was global, all lines have the same progress = global percentage
         previous_line_progress = {}
         if existing_situations:
             last_situation = existing_situations[0]
             last_type = last_situation.get("situation_type", "global")
             
             if last_type == "global":
-                # For global situations, all lines have same cumulative progress
                 global_cumul = last_situation.get("situation_percentage", 0)
                 for quote_item in quote["items"]:
                     previous_line_progress[quote_item["description"]] = global_cumul
             else:
-                # For per_line situations, get each line's cumulative progress
                 for item in last_situation.get("items", []):
                     previous_line_progress[item.get("description", "")] = item.get("cumulative_percent", 0)
         
@@ -1573,7 +2011,7 @@ async def create_situation(quote_id: str, situation_data: SituationCreate, user:
             line_situation_percent = sit_item.progress_percent - prev_progress
             item_base_ht = quote_item["quantity"] * quote_item["unit_price"]
             item_situation_ht = item_base_ht * (line_situation_percent / 100)
-            item_situation_vat = item_situation_ht * (quote_item["vat_rate"] / 100) if not settings.is_auto_entrepreneur else 0
+            item_situation_vat = item_situation_ht * (quote_item["vat_rate"] / 100) if not settings.get("is_auto_entrepreneur") else 0
             
             total_situation_ht += item_situation_ht
             total_situation_vat += item_situation_vat
@@ -1582,7 +2020,7 @@ async def create_situation(quote_id: str, situation_data: SituationCreate, user:
                 "description": quote_item["description"],
                 "quantity": quote_item["quantity"],
                 "unit_price": quote_item["unit_price"],
-                "vat_rate": 0.0 if settings.is_auto_entrepreneur else quote_item["vat_rate"],
+                "vat_rate": 0.0 if settings.get("is_auto_entrepreneur") else quote_item["vat_rate"],
                 "situation_percent": line_situation_percent,
                 "cumulative_percent": sit_item.progress_percent,
                 "original_total_ht": item_base_ht,
@@ -1593,11 +2031,10 @@ async def create_situation(quote_id: str, situation_data: SituationCreate, user:
         situation_vat = total_situation_vat
         situation_ttc = situation_ht + situation_vat
         
-        # Calculate average progress for current_percentage
         total_weight = sum(item["original_total_ht"] for item in situation_items)
         if total_weight > 0:
             current_percentage = sum(
-                item["cumulative_percent"] * item["original_total_ht"] / total_weight 
+                item["cumulative_percent"] * item["original_total_ht"] / total_weight
                 for item in situation_items
             )
         else:
@@ -1605,16 +2042,14 @@ async def create_situation(quote_id: str, situation_data: SituationCreate, user:
         
         situation_percentage = current_percentage - previous_percentage
     
-    # Generate invoice number
     invoice_number = await get_next_invoice_number()
-    
-    # Calculate payment due date
     issue_date = datetime.now(timezone.utc)
-    payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
+    payment_due_date = issue_date + timedelta(days=settings.get("default_payment_delay_days", 30))
     
     situation_doc = {
         "id": str(uuid.uuid4()),
         "invoice_number": invoice_number,
+        "owner_id": user["id"],
         "client_id": quote["client_id"],
         "client_name": quote["client_name"],
         "quote_id": quote_id,
@@ -1630,20 +2065,21 @@ async def create_situation(quote_id: str, situation_data: SituationCreate, user:
         "paid_amount": 0,
         "notes": situation_data.notes,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        # Situation specific fields
         "is_situation": True,
         "situation_type": situation_data.situation_type,
         "situation_number": situation_number,
-        "situation_percentage": round(current_percentage, 2),  # Cumulative %
+        "situation_percentage": round(current_percentage, 2),
         "previous_percentage": round(previous_percentage, 2),
         "chantier_ref": situation_data.chantier_ref or f"Chantier {quote['quote_number']}"
     }
     
     await db.invoices.insert_one(situation_doc)
     
+    logger.info(f"Situation created: {invoice_number} for quote {quote_id}")
+    
     return SituationResponse(
         id=situation_doc["id"],
-        invoice_number=situation_doc["invoice_number"],
+        invoice_number=invoice_number,
         quote_id=quote_id,
         quote_number=quote["quote_number"],
         client_id=situation_doc["client_id"],
@@ -1669,19 +2105,24 @@ async def create_situation(quote_id: str, situation_data: SituationCreate, user:
 
 @api_router.get("/quotes/{quote_id}/situations", response_model=List[SituationResponse])
 async def list_quote_situations(quote_id: str, user: dict = Depends(get_current_user)):
-    """List all situations for a quote"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     situations = await db.invoices.find(
-        {"parent_quote_id": quote_id, "is_situation": True},
+        {"parent_quote_id": quote_id, "is_situation": True, "owner_id": user["id"]},
         {"_id": 0}
     ).sort("situation_number", 1).to_list(100)
     
     result = []
     for i, s in enumerate(situations):
-        # Calculate situation_percentage (difference from previous)
         prev_pct = situations[i-1].get("situation_percentage", 0) if i > 0 else 0
         current_pct = s.get("situation_percentage", 0)
         sit_pct = current_pct - prev_pct
@@ -1716,13 +2157,19 @@ async def list_quote_situations(quote_id: str, user: dict = Depends(get_current_
 
 @api_router.get("/quotes/{quote_id}/situations/summary")
 async def get_situations_summary(quote_id: str, user: dict = Depends(get_current_user)):
-    """Get summary of situations for a quote (total progress, remaining)"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     situations = await db.invoices.find(
-        {"parent_quote_id": quote_id, "is_situation": True},
+        {"parent_quote_id": quote_id, "is_situation": True, "owner_id": user["id"]},
         {"_id": 0}
     ).sort("situation_number", 1).to_list(100)
     
@@ -1735,18 +2182,15 @@ async def get_situations_summary(quote_id: str, user: dict = Depends(get_current
     remaining_vat = quote["total_vat"] - total_situations_vat
     remaining_ttc = quote["total_ttc"] - total_situations_ttc
     
-    # Get current progress percentage
     current_progress = situations[-1].get("situation_percentage", 0) if situations else 0
     
-    # Build line-by-line progress for per_line situations
     line_progress = []
     if situations:
         last_situation = situations[-1]
         for item in last_situation.get("items", []):
             line_progress.append({
                 "description": item.get("description", ""),
-                "cumulative_percent": item.get("cumulative_percent", item.get("situation_percent", 0) + 
-                    (situations[-2].get("items", [{}])[0].get("cumulative_percent", 0) if len(situations) > 1 else 0))
+                "cumulative_percent": item.get("cumulative_percent", item.get("situation_percent", 0))
             })
     
     return {
@@ -1782,39 +2226,40 @@ async def get_situations_summary(quote_id: str, user: dict = Depends(get_current
 
 @api_router.post("/quotes/{quote_id}/situation/final-invoice", response_model=InvoiceResponse)
 async def create_situation_final_invoice(quote_id: str, user: dict = Depends(get_current_user)):
-    """Create final invoice from quote after situations, showing all previous situations"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     if quote["status"] != "accepte":
         raise HTTPException(status_code=400, detail="Le devis doit être accepté pour créer la facture finale")
     
-    # Get company settings
     settings = await get_company_settings()
     
-    # Get all situations
     situations = await db.invoices.find(
-        {"parent_quote_id": quote_id, "is_situation": True},
+        {"parent_quote_id": quote_id, "is_situation": True, "owner_id": user["id"]},
         {"_id": 0}
     ).sort("situation_number", 1).to_list(100)
     
     if not situations:
         raise HTTPException(status_code=400, detail="Aucune situation trouvée. Créez d'abord des situations.")
     
-    # Calculate totals from situations
     total_situations_ttc = sum(s["total_ttc"] for s in situations)
     total_paid_situations = sum(s.get("paid_amount", 0) for s in situations if s["payment_status"] == "paye")
     
     invoice_id = str(uuid.uuid4())
     invoice_number = await get_next_invoice_number()
-    
     issue_date = datetime.now(timezone.utc)
-    payment_due_date = issue_date + timedelta(days=settings.default_payment_delay_days)
+    payment_due_date = issue_date + timedelta(days=settings.get("default_payment_delay_days", 30))
     
-    # Handle auto-entrepreneur mode
     items = quote["items"]
-    if settings.is_auto_entrepreneur:
+    if settings.get("is_auto_entrepreneur"):
         items = [{**item, "vat_rate": 0.0} for item in items]
         total_ht = sum(item["quantity"] * item["unit_price"] for item in items)
         total_vat = 0.0
@@ -1827,6 +2272,7 @@ async def create_situation_final_invoice(quote_id: str, user: dict = Depends(get
     invoice_doc = {
         "id": invoice_id,
         "invoice_number": invoice_number,
+        "owner_id": user["id"],
         "client_id": quote["client_id"],
         "client_name": quote["client_name"],
         "quote_id": quote_id,
@@ -1842,7 +2288,6 @@ async def create_situation_final_invoice(quote_id: str, user: dict = Depends(get
         "paid_amount": 0,
         "notes": quote.get("notes", ""),
         "created_at": datetime.now(timezone.utc).isoformat(),
-        # Final invoice specific
         "is_acompte": False,
         "is_final_invoice": True,
         "is_situation_final": True,
@@ -1862,37 +2307,43 @@ async def create_situation_final_invoice(quote_id: str, user: dict = Depends(get
     
     await db.invoices.insert_one(invoice_doc)
     
-    # Update quote status
-    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "facture"}})
+    await db.quotes.update_one(
+        {"id": quote_id},
+        {"$set": {"status": "facture"}}
+    )
     
-    # Add default values for missing fields
     invoice_doc["acompte_type"] = None
     invoice_doc["acompte_value"] = None
     invoice_doc["acompte_number"] = None
     
+    logger.info(f"Situation final invoice created: {invoice_number}")
+    
     return InvoiceResponse(**invoice_doc)
 
-# ============== RETENUE DE GARANTIE (RETENTION GUARANTEE) ==============
+# ============== RETENUE DE GARANTIE ROUTES ==============
 
 @api_router.post("/invoices/{invoice_id}/retenue-garantie")
 async def apply_retenue_garantie(invoice_id: str, retenue_data: RetenueGarantieCreate, user: dict = Depends(get_current_user)):
-    """Apply retention guarantee to an invoice (French BTP standard)"""
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not validate_uuid(invoice_id):
+        raise HTTPException(status_code=400, detail="ID facture invalide")
+    
+    invoice = await db.invoices.find_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
     
-    # Validate rate (max 5% per French law)
     if retenue_data.rate > 5.0:
         raise HTTPException(status_code=400, detail="La retenue de garantie ne peut pas dépasser 5%")
     if retenue_data.rate <= 0:
         raise HTTPException(status_code=400, detail="Le taux doit être supérieur à 0")
     
-    # Calculate retention amount
     total_ttc = invoice["total_ttc"]
     retenue_amount = round(total_ttc * (retenue_data.rate / 100), 2)
     net_a_payer = round(total_ttc - retenue_amount, 2)
     
-    # Calculate release date (default: 1 year from issue date)
     issue_date = datetime.fromisoformat(invoice["issue_date"].replace("Z", "+00:00"))
     release_date = issue_date + timedelta(days=retenue_data.warranty_months * 30)
     
@@ -1905,10 +2356,12 @@ async def apply_retenue_garantie(invoice_id: str, retenue_data: RetenueGarantieC
         "net_a_payer": net_a_payer
     }
     
-    await db.invoices.update_one({"id": invoice_id}, {"$set": update_data})
+    await db.invoices.update_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"$set": update_data}
+    )
     
-    # Fetch updated invoice
-    updated_invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    logger.info(f"Retenue garantie applied to invoice {invoice_id}")
     
     return {
         "message": "Retenue de garantie appliquée",
@@ -1922,8 +2375,14 @@ async def apply_retenue_garantie(invoice_id: str, retenue_data: RetenueGarantieC
 
 @api_router.delete("/invoices/{invoice_id}/retenue-garantie")
 async def remove_retenue_garantie(invoice_id: str, user: dict = Depends(get_current_user)):
-    """Remove retention guarantee from an invoice"""
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not validate_uuid(invoice_id):
+        raise HTTPException(status_code=400, detail="ID facture invalide")
+    
+    invoice = await db.invoices.find_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
     
@@ -1939,14 +2398,25 @@ async def remove_retenue_garantie(invoice_id: str, user: dict = Depends(get_curr
         "net_a_payer": invoice["total_ttc"]
     }
     
-    await db.invoices.update_one({"id": invoice_id}, {"$set": update_data})
+    await db.invoices.update_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"$set": update_data}
+    )
+    
+    logger.info(f"Retenue garantie removed from invoice {invoice_id}")
     
     return {"message": "Retenue de garantie supprimée", "invoice_id": invoice_id}
 
 @api_router.post("/invoices/{invoice_id}/retenue-garantie/release")
 async def release_retenue_garantie(invoice_id: str, user: dict = Depends(get_current_user)):
-    """Release the retention guarantee (after warranty period)"""
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not validate_uuid(invoice_id):
+        raise HTTPException(status_code=400, detail="ID facture invalide")
+    
+    invoice = await db.invoices.find_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
     
@@ -1957,7 +2427,7 @@ async def release_retenue_garantie(invoice_id: str, user: dict = Depends(get_cur
         raise HTTPException(status_code=400, detail="La retenue a déjà été libérée")
     
     await db.invoices.update_one(
-        {"id": invoice_id}, 
+        {"id": invoice_id, "owner_id": user["id"]},
         {
             "$set": {
                 "retenue_garantie_released": True,
@@ -1965,6 +2435,8 @@ async def release_retenue_garantie(invoice_id: str, user: dict = Depends(get_cur
             }
         }
     )
+    
+    logger.info(f"Retenue garantie released for invoice {invoice_id}")
     
     return {
         "message": "Retenue de garantie libérée",
@@ -1975,21 +2447,26 @@ async def release_retenue_garantie(invoice_id: str, user: dict = Depends(get_cur
 
 @api_router.get("/quotes/{quote_id}/retenues-garantie/summary")
 async def get_quote_retenues_summary(quote_id: str, user: dict = Depends(get_current_user)):
-    """Get summary of all retention guarantees for a quote/project"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
-    # Get all invoices with retention for this quote
     invoices = await db.invoices.find(
-        {"parent_quote_id": quote_id, "has_retenue_garantie": True},
+        {"parent_quote_id": quote_id, "has_retenue_garantie": True, "owner_id": user["id"]},
         {"_id": 0}
     ).to_list(100)
     
     total_retained = sum(inv.get("retenue_garantie_amount", 0) for inv in invoices)
     total_released = sum(
-        inv.get("retenue_garantie_amount", 0) 
-        for inv in invoices 
+        inv.get("retenue_garantie_amount", 0)
+        for inv in invoices
         if inv.get("retenue_garantie_released")
     )
     pending_release = total_retained - total_released
@@ -2015,63 +2492,47 @@ async def get_quote_retenues_summary(quote_id: str, user: dict = Depends(get_cur
         "pending_release": round(pending_release, 2),
         "retentions": retentions
     }
+	
+	# ============== PROJECT FINANCIAL SUMMARY ==============
 
-# ============== PROJECT FINANCIAL SUMMARY ==============
-
-async def calculate_project_financial_summary(quote_id: str):
-    """Calculate complete financial summary for a project/quote"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+async def calculate_project_financial_summary(quote_id: str, user_id: str):
+    quote = await db.quotes.find_one({"id": quote_id, "owner_id": user_id}, {"_id": 0})
     if not quote:
         return None
     
-    # Get all invoices for this quote
     all_invoices = await db.invoices.find(
-        {"parent_quote_id": quote_id},
+        {"parent_quote_id": quote_id, "owner_id": user_id},
         {"_id": 0}
     ).to_list(100)
     
-    # Separate by type
     acomptes = [inv for inv in all_invoices if inv.get("is_acompte")]
     situations = [inv for inv in all_invoices if inv.get("is_situation")]
     final_invoices = [inv for inv in all_invoices if inv.get("is_final_invoice") or inv.get("is_situation_final")]
-    regular_invoices = [inv for inv in all_invoices if not inv.get("is_acompte") and not inv.get("is_situation") and not inv.get("is_final_invoice")]
     
-    # Calculate acomptes summary
     acomptes_total = sum(a.get("total_ttc", 0) for a in acomptes)
     acomptes_paid = sum(a.get("paid_amount", 0) for a in acomptes if a.get("payment_status") == "paye")
-    acomptes_pending = acomptes_total - acomptes_paid
     
-    # Calculate situations summary
     situations_total = sum(s.get("total_ttc", 0) for s in situations)
     situations_paid = sum(s.get("paid_amount", 0) for s in situations if s.get("payment_status") == "paye")
-    situations_pending = situations_total - situations_paid
     current_progress = situations[-1].get("situation_percentage", 0) if situations else 0
     
-    # Calculate retenue de garantie
     retenue_invoices = [inv for inv in all_invoices if inv.get("has_retenue_garantie")]
     total_retenue = sum(inv.get("retenue_garantie_amount", 0) for inv in retenue_invoices)
     retenue_released = sum(
-        inv.get("retenue_garantie_amount", 0) 
-        for inv in retenue_invoices 
+        inv.get("retenue_garantie_amount", 0)
+        for inv in retenue_invoices
         if inv.get("retenue_garantie_released")
     )
-    retenue_pending = total_retenue - retenue_released
     
-    # Calculate final invoice if exists
     final_total = sum(f.get("total_ttc", 0) for f in final_invoices)
     final_paid = sum(f.get("paid_amount", 0) for f in final_invoices if f.get("payment_status") == "paye")
     
-    # Total invoiced (excluding final which recaps everything)
     total_invoiced = acomptes_total + situations_total
     total_paid = acomptes_paid + situations_paid + final_paid
     
-    # Calculate remaining to invoice (from quote total)
     remaining_to_invoice = max(0, quote["total_ttc"] - total_invoiced)
+    remaining_to_pay = total_invoiced - total_paid + (total_retenue - retenue_released)
     
-    # Calculate remaining to pay
-    remaining_to_pay = total_invoiced - total_paid + retenue_pending
-    
-    # Build invoice list for display
     invoices_list = []
     for inv in sorted(all_invoices, key=lambda x: x.get("created_at", "")):
         inv_type = "Facture"
@@ -2102,45 +2563,33 @@ async def calculate_project_financial_summary(quote_id: str):
         "quote_number": quote["quote_number"],
         "client_name": quote["client_name"],
         "status": quote["status"],
-        
-        # Project totals
         "project_total_ht": quote["total_ht"],
         "project_total_vat": quote["total_vat"],
         "project_total_ttc": quote["total_ttc"],
-        
-        # Progress
         "progress_percentage": round(current_progress, 1),
-        
-        # Acomptes breakdown
         "acomptes": {
             "count": len(acomptes),
             "total_invoiced": round(acomptes_total, 2),
             "total_paid": round(acomptes_paid, 2),
-            "pending": round(acomptes_pending, 2)
+            "pending": round(acomptes_total - acomptes_paid, 2)
         },
-        
-        # Situations breakdown
         "situations": {
             "count": len(situations),
             "total_invoiced": round(situations_total, 2),
             "total_paid": round(situations_paid, 2),
-            "pending": round(situations_pending, 2),
+            "pending": round(situations_total - situations_paid, 2),
             "progress_percentage": round(current_progress, 1)
         },
-        
-        # Retenue de garantie
         "retenue_garantie": {
             "total_retained": round(total_retenue, 2),
             "total_released": round(retenue_released, 2),
-            "pending_release": round(retenue_pending, 2),
+            "pending_release": round(total_retenue - retenue_released, 2),
             "next_release_date": min(
-                (inv.get("retenue_garantie_release_date") for inv in retenue_invoices 
+                (inv.get("retenue_garantie_release_date") for inv in retenue_invoices
                  if not inv.get("retenue_garantie_released") and inv.get("retenue_garantie_release_date")),
                 default=None
             )
         },
-        
-        # Summary totals
         "totals": {
             "total_invoiced": round(total_invoiced, 2),
             "total_paid": round(total_paid, 2),
@@ -2148,405 +2597,80 @@ async def calculate_project_financial_summary(quote_id: str):
             "remaining_to_pay": round(remaining_to_pay, 2),
             "percentage_paid": round((total_paid / quote["total_ttc"] * 100) if quote["total_ttc"] > 0 else 0, 1)
         },
-        
-        # Invoice list
         "invoices": invoices_list
     }
 
 @api_router.get("/quotes/{quote_id}/financial-summary")
 async def get_project_financial_summary(quote_id: str, user: dict = Depends(get_current_user)):
-    """Get complete financial summary for a project/quote"""
-    summary = await calculate_project_financial_summary(quote_id)
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    summary = await calculate_project_financial_summary(quote_id, user["id"])
     if not summary:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
     return summary
 
 @api_router.get("/public/quote/{share_token}/financial-summary")
 async def get_public_project_financial_summary(share_token: str):
-    """Get complete financial summary for a project/quote (public access)"""
-    # First, try to find a quote with this share token
-    quote = await db.quotes.find_one({"share_token": share_token}, {"_id": 0})
+    if not share_token:
+        raise HTTPException(status_code=400, detail="Token invalide")
     
-    if quote:
-        quote_id = quote["id"]
-    else:
-        # If not found in quotes, try to find an invoice with this share token
-        invoice = await db.invoices.find_one({"share_token": share_token}, {"_id": 0})
-        if not invoice or not invoice.get("parent_quote_id"):
-            raise HTTPException(status_code=404, detail="Lien invalide ou expiré")
-        quote_id = invoice.get("parent_quote_id")
+    share_link = await db.share_links.find_one({"token": share_token})
+    if not share_link:
+        raise HTTPException(status_code=404, detail="Lien non trouvé")
     
-    summary = await calculate_project_financial_summary(quote_id)
+    if share_link.get("expires_at"):
+        if datetime.fromisoformat(share_link["expires_at"]) < datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Lien expiré")
+    
+    summary = await calculate_project_financial_summary(share_link["document_id"], share_link["created_by"])
     if not summary:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     return summary
 
-@api_router.get("/quotes/{quote_id}/financial-summary/pdf")
-async def download_financial_summary_pdf(quote_id: str, user: dict = Depends(get_current_user)):
-    """Generate and download PDF of the financial summary"""
-    summary = await calculate_project_financial_summary(quote_id)
-    if not summary:
-        raise HTTPException(status_code=404, detail="Devis non trouvé")
-    
-    company = await get_company_settings()
-    pdf_buffer = generate_financial_summary_pdf(summary, company)
-    
-    filename = f"Recapitulatif_financier_{summary['quote_number']}.pdf"
-    
-    return StreamingResponse(
-        pdf_buffer,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
-
-def generate_financial_summary_pdf(summary: dict, company: CompanySettings):
-    """Generate a professional PDF for the financial summary"""
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
-    
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    # Custom styles
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#0F172A'), alignment=TA_CENTER, spaceAfter=10)
-    subtitle_style = ParagraphStyle('Subtitle', parent=styles['Normal'], fontSize=12, textColor=colors.HexColor('#64748B'), alignment=TA_CENTER)
-    section_style = ParagraphStyle('Section', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#0F172A'), spaceBefore=15, spaceAfter=8)
-    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#334155'))
-    bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#0F172A'), fontName='Helvetica-Bold')
-    
-    # ========== HEADER WITH LOGO ==========
-    logo_image = None
-    if company.logo_base64:
-        try:
-            logo_data = company.logo_base64
-            if ',' in logo_data:
-                logo_data = logo_data.split(',')[1]
-            logo_bytes = base64.b64decode(logo_data)
-            logo_buffer = BytesIO(logo_bytes)
-            logo_image = Image(logo_buffer)
-            # Scale logo (max 40mm width, 20mm height for summary PDF)
-            max_width = 40 * mm
-            max_height = 20 * mm
-            aspect = logo_image.imageWidth / logo_image.imageHeight
-            if logo_image.imageWidth > max_width or logo_image.imageHeight > max_height:
-                if aspect > (max_width / max_height):
-                    logo_image.drawWidth = max_width
-                    logo_image.drawHeight = max_width / aspect
-                else:
-                    logo_image.drawHeight = max_height
-                    logo_image.drawWidth = max_height * aspect
-            else:
-                logo_image.drawWidth = min(logo_image.imageWidth, max_width)
-                logo_image.drawHeight = logo_image.drawWidth / aspect
-        except Exception as e:
-            logging.warning(f"Failed to load logo for financial summary PDF: {str(e)}")
-            logo_image = None
-    
-    if logo_image:
-        # Center the logo above the title
-        logo_table = Table([[logo_image]], colWidths=[180*mm])
-        logo_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ]))
-        elements.append(logo_table)
-        elements.append(Spacer(1, 5*mm))
-    
-    elements.append(Paragraph("RÉCAPITULATIF FINANCIER", title_style))
-    elements.append(Paragraph(f"Projet {summary['quote_number']}", subtitle_style))
-    elements.append(Spacer(1, 5*mm))
-    
-    # Company info
-    if company.company_name:
-        elements.append(Paragraph(f"<b>{company.company_name}</b>", normal_style))
-        if company.address:
-            elements.append(Paragraph(company.address, normal_style))
-        if company.siret:
-            elements.append(Paragraph(f"SIRET: {company.siret}", normal_style))
-    elements.append(Spacer(1, 8*mm))
-    
-    # ========== PROJECT INFO ==========
-    info_data = [
-        ["Client:", summary['client_name']],
-        ["Référence devis:", summary['quote_number']],
-        ["Statut:", {"brouillon": "Brouillon", "envoye": "Envoyé", "accepte": "Accepté", "refuse": "Refusé", "facture": "Facturé"}.get(summary['status'], summary['status'])],
-        ["Date du récapitulatif:", datetime.now().strftime("%d/%m/%Y")],
-    ]
-    
-    info_table = Table(info_data, colWidths=[50*mm, 120*mm])
-    info_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#64748B')),
-        ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#0F172A')),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-    ]))
-    elements.append(info_table)
-    elements.append(Spacer(1, 10*mm))
-    
-    # ========== MONTANT TOTAL ==========
-    elements.append(Paragraph("MONTANT TOTAL DU PROJET", section_style))
-    
-    total_data = [
-        ["Total HT:", f"{summary['project_total_ht']:,.2f} €".replace(",", " ")],
-        ["Total TVA:", f"{summary['project_total_vat']:,.2f} €".replace(",", " ")],
-        ["TOTAL TTC:", f"{summary['project_total_ttc']:,.2f} €".replace(",", " ")],
-    ]
-    
-    if summary['project_total_vat'] == 0:
-        total_data = [
-            ["TOTAL:", f"{summary['project_total_ht']:,.2f} €".replace(",", " ")],
-            ["", "TVA non applicable, art. 293B du CGI"],
-        ]
-    
-    total_table = Table(total_data, colWidths=[50*mm, 50*mm])
-    total_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 11),
-        ('TEXTCOLOR', (0, 0), (-1, -2), colors.HexColor('#334155')),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, -1), (-1, -1), 14),
-        ('TEXTCOLOR', (1, -1), (1, -1), colors.HexColor('#059669')),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-    ]))
-    elements.append(total_table)
-    elements.append(Spacer(1, 8*mm))
-    
-    # ========== SYNTHÈSE DES PAIEMENTS ==========
-    elements.append(Paragraph("SYNTHÈSE DES PAIEMENTS", section_style))
-    
-    totals = summary['totals']
-    synth_data = [
-        ["Montant facturé:", f"{totals['total_invoiced']:,.2f} €".replace(",", " ")],
-        ["Montant encaissé:", f"{totals['total_paid']:,.2f} €".replace(",", " ")],
-        ["Reste à facturer:", f"{totals['remaining_to_invoice']:,.2f} €".replace(",", " ")],
-        ["RESTE À PAYER:", f"{totals['remaining_to_pay']:,.2f} €".replace(",", " ")],
-    ]
-    
-    synth_table = Table(synth_data, colWidths=[60*mm, 50*mm])
-    synth_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('TEXTCOLOR', (0, 0), (-1, -2), colors.HexColor('#334155')),
-        ('TEXTCOLOR', (1, 1), (1, 1), colors.HexColor('#16A34A')),  # Encaissé en vert
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, -1), (-1, -1), 12),
-        ('TEXTCOLOR', (1, -1), (1, -1), colors.HexColor('#D97706')),  # Reste à payer en orange
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LINEABOVE', (0, -1), (-1, -1), 1, colors.HexColor('#E2E8F0')),
-        ('TOPPADDING', (0, -1), (-1, -1), 6),
-    ]))
-    elements.append(synth_table)
-    
-    # Progress bar simulation
-    progress = totals['percentage_paid']
-    elements.append(Spacer(1, 3*mm))
-    elements.append(Paragraph(f"<b>Progression des paiements: {progress}%</b>", normal_style))
-    elements.append(Spacer(1, 8*mm))
-    
-    # ========== DÉTAIL PAR CATÉGORIE ==========
-    elements.append(Paragraph("DÉTAIL PAR CATÉGORIE", section_style))
-    
-    # Acomptes
-    acomptes = summary['acomptes']
-    if acomptes['count'] > 0:
-        elements.append(Paragraph(f"<b>Acomptes ({acomptes['count']})</b>", bold_style))
-        acompte_data = [
-            ["Facturé:", f"{acomptes['total_invoiced']:,.2f} €".replace(",", " ")],
-            ["Encaissé:", f"{acomptes['total_paid']:,.2f} €".replace(",", " ")],
-            ["En attente:", f"{acomptes['pending']:,.2f} €".replace(",", " ")],
-        ]
-        acompte_table = Table(acompte_data, colWidths=[40*mm, 40*mm])
-        acompte_table.setStyle(TableStyle([
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#64748B')),
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-        ]))
-        elements.append(acompte_table)
-    else:
-        elements.append(Paragraph("<b>Acomptes:</b> Aucun", normal_style))
-    
-    elements.append(Spacer(1, 4*mm))
-    
-    # Situations
-    situations = summary['situations']
-    if situations['count'] > 0:
-        elements.append(Paragraph(f"<b>Situations de travaux ({situations['count']})</b>", bold_style))
-        elements.append(Paragraph(f"Avancement chantier: {situations['progress_percentage']}%", normal_style))
-        sit_data = [
-            ["Facturé:", f"{situations['total_invoiced']:,.2f} €".replace(",", " ")],
-            ["Encaissé:", f"{situations['total_paid']:,.2f} €".replace(",", " ")],
-            ["En attente:", f"{situations['pending']:,.2f} €".replace(",", " ")],
-        ]
-        sit_table = Table(sit_data, colWidths=[40*mm, 40*mm])
-        sit_table.setStyle(TableStyle([
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#64748B')),
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-        ]))
-        elements.append(sit_table)
-    else:
-        elements.append(Paragraph("<b>Situations:</b> Aucune", normal_style))
-    
-    elements.append(Spacer(1, 4*mm))
-    
-    # Retenue de garantie
-    retenue = summary['retenue_garantie']
-    if retenue['total_retained'] > 0:
-        elements.append(Paragraph("<b>Retenue de garantie</b>", bold_style))
-        ret_data = [
-            ["Total retenu:", f"{retenue['total_retained']:,.2f} €".replace(",", " ")],
-            ["Libéré:", f"{retenue['total_released']:,.2f} €".replace(",", " ")],
-            ["En attente:", f"{retenue['pending_release']:,.2f} €".replace(",", " ")],
-        ]
-        if retenue.get('next_release_date'):
-            ret_data.append(["Prochaine libération:", retenue['next_release_date'][:10]])
-        ret_table = Table(ret_data, colWidths=[50*mm, 40*mm])
-        ret_table.setStyle(TableStyle([
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#64748B')),
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 10),
-        ]))
-        elements.append(ret_table)
-    else:
-        elements.append(Paragraph("<b>Retenue de garantie:</b> Aucune", normal_style))
-    
-    elements.append(Spacer(1, 10*mm))
-    
-    # ========== HISTORIQUE DES FACTURES ==========
-    if summary.get('invoices') and len(summary['invoices']) > 0:
-        elements.append(Paragraph("HISTORIQUE DES FACTURES", section_style))
-        
-        inv_header = ["N° Facture", "Type", "Date", "Montant TTC", "Statut"]
-        inv_data = [inv_header]
-        
-        for inv in summary['invoices']:
-            status_map = {"paye": "Payé", "impaye": "En attente", "partiel": "Partiel"}
-            inv_data.append([
-                inv['invoice_number'],
-                inv['type'],
-                inv['date'],
-                f"{inv['total_ttc']:,.2f} €".replace(",", " "),
-                status_map.get(inv['payment_status'], inv['payment_status'])
-            ])
-        
-        inv_table = Table(inv_data, colWidths=[35*mm, 40*mm, 25*mm, 35*mm, 25*mm])
-        inv_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EA580C')),  # Orange header
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (2, 0), (4, -1), 'CENTER'),
-            ('ALIGN', (3, 1), (3, -1), 'RIGHT'),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(inv_table)
-    
-    elements.append(Spacer(1, 15*mm))
-    
-    # ========== FOOTER ==========
-    footer_style = ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#94A3B8'), alignment=TA_CENTER)
-    elements.append(Paragraph("_" * 80, footer_style))
-    elements.append(Paragraph(f"Document généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}", footer_style))
-    if company.company_name:
-        elements.append(Paragraph(f"{company.company_name} - {company.phone or ''} - {company.email or ''}", footer_style))
-    
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
-
-# ============== COMPANY SETTINGS ==============
-
-@api_router.get("/settings", response_model=CompanySettings)
-async def get_settings(user: dict = Depends(get_current_user)):
-    settings = await db.settings.find_one({"type": "company"}, {"_id": 0})
-    if not settings:
-        return CompanySettings()
-    return CompanySettings(**{k: v for k, v in settings.items() if k != "type"})
-
-@api_router.put("/settings", response_model=CompanySettings)
-async def update_settings(settings_data: CompanySettings, user: dict = Depends(get_current_user)):
-    settings_doc = settings_data.model_dump()
-    settings_doc["type"] = "company"
-    
-    await db.settings.update_one(
-        {"type": "company"},
-        {"$set": settings_doc},
-        upsert=True
-    )
-    return settings_data
-
-@api_router.post("/settings/logo")
-async def upload_logo(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Le fichier doit être une image")
-    
-    contents = await file.read()
-    if len(contents) > 5 * 1024 * 1024:  # 5MB limit
-        raise HTTPException(status_code=400, detail="L'image ne doit pas dépasser 5MB")
-    
-    logo_base64 = base64.b64encode(contents).decode('utf-8')
-    logo_data = f"data:{file.content_type};base64,{logo_base64}"
-    
-    await db.settings.update_one(
-        {"type": "company"},
-        {"$set": {"logo_base64": logo_data}},
-        upsert=True
-    )
-    
-    return {"message": "Logo téléchargé avec succès", "logo": logo_data}
-
-# ============== DASHBOARD ==============
+# ============== DASHBOARD ROUTES ==============
 
 @api_router.get("/dashboard", response_model=DashboardStats)
 async def get_dashboard(user: dict = Depends(get_current_user)):
-    # Total turnover (paid invoices)
-    paid_invoices = await db.invoices.find({"payment_status": "paye"}, {"_id": 0}).to_list(10000)
-    total_turnover = sum(inv["total_ttc"] for inv in paid_invoices)
-    
-    # Unpaid invoices
-    unpaid_invoices = await db.invoices.find({"payment_status": {"$in": ["impaye", "partiel"]}}, {"_id": 0}).to_list(10000)
-    unpaid_count = len(unpaid_invoices)
-    unpaid_amount = sum(inv["total_ttc"] - inv.get("paid_amount", 0) for inv in unpaid_invoices)
-    
-    # Pending quotes (sent but not accepted/refused)
-    pending_quotes = await db.quotes.count_documents({"status": "envoye"})
-    
-    # Totals
-    total_clients = await db.clients.count_documents({})
-    total_quotes = await db.quotes.count_documents({})
-    total_invoices = await db.invoices.count_documents({})
-    
-    return DashboardStats(
-        total_turnover=round(total_turnover, 2),
-        unpaid_invoices_count=unpaid_count,
-        unpaid_invoices_amount=round(unpaid_amount, 2),
-        pending_quotes_count=pending_quotes,
-        total_clients=total_clients,
-        total_quotes=total_quotes,
-        total_invoices=total_invoices
-    )
+    try:
+        paid_invoices = await db.invoices.find(
+            {"payment_status": "paye", "owner_id": user["id"]},
+            {"_id": 0}
+        ).to_list(10000)
+        total_turnover = sum(inv["total_ttc"] for inv in paid_invoices)
+        
+        unpaid_invoices = await db.invoices.find(
+            {"payment_status": {"$in": ["impaye", "partiel"]}, "owner_id": user["id"]},
+            {"_id": 0}
+        ).to_list(10000)
+        unpaid_count = len(unpaid_invoices)
+        unpaid_amount = sum(inv["total_ttc"] - inv.get("paid_amount", 0) for inv in unpaid_invoices)
+        
+        pending_quotes = await db.quotes.count_documents({"status": "envoye", "owner_id": user["id"]})
+        
+        total_clients = await db.clients.count_documents({"owner_id": user["id"]})
+        total_quotes = await db.quotes.count_documents({"owner_id": user["id"]})
+        total_invoices = await db.invoices.count_documents({"owner_id": user["id"]})
+        
+        return DashboardStats(
+            total_turnover=round(total_turnover, 2),
+            unpaid_invoices_count=unpaid_count,
+            unpaid_invoices_amount=round(unpaid_amount, 2),
+            pending_quotes_count=pending_quotes,
+            total_clients=total_clients,
+            total_quotes=total_quotes,
+            total_invoices=total_invoices
+        )
+        
+    except Exception as e:
+        logger.error(f"Dashboard error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la récupération des statistiques")
 
 # ============== PREDEFINED ITEMS ROUTES ==============
 
 async def initialize_default_items():
-    """Initialize default BTP items if none exist"""
     count = await db.predefined_items.count_documents({})
     if count == 0:
         for category, items in DEFAULT_BTP_CATEGORIES.items():
@@ -2563,11 +2687,9 @@ async def initialize_default_items():
 
 @api_router.get("/predefined-items/categories")
 async def get_categories(user: dict = Depends(get_current_user)):
-    """Get all categories with their items"""
     await initialize_default_items()
     items = await db.predefined_items.find({}, {"_id": 0}).to_list(1000)
     
-    # Group by category
     categories = {}
     for item in items:
         cat = item["category"]
@@ -2575,13 +2697,11 @@ async def get_categories(user: dict = Depends(get_current_user)):
             categories[cat] = []
         categories[cat].append(PredefinedItemResponse(**item))
     
-    # Return as list of categories
     result = [{"name": name, "items": items} for name, items in sorted(categories.items())]
     return result
 
 @api_router.get("/predefined-items", response_model=List[PredefinedItemResponse])
 async def list_predefined_items(category: Optional[str] = None, user: dict = Depends(get_current_user)):
-    """List all predefined items, optionally filtered by category"""
     await initialize_default_items()
     query = {}
     if category:
@@ -2591,7 +2711,6 @@ async def list_predefined_items(category: Optional[str] = None, user: dict = Dep
 
 @api_router.post("/predefined-items", response_model=PredefinedItemResponse)
 async def create_predefined_item(item_data: PredefinedItemCreate, user: dict = Depends(get_current_user)):
-    """Create a new predefined item"""
     item_id = str(uuid.uuid4())
     item_doc = {
         "id": item_id,
@@ -2606,12 +2725,14 @@ async def create_predefined_item(item_data: PredefinedItemCreate, user: dict = D
 
 @api_router.put("/predefined-items/{item_id}", response_model=PredefinedItemResponse)
 async def update_predefined_item(item_id: str, item_data: PredefinedItemUpdate, user: dict = Depends(get_current_user)):
-    """Update a predefined item"""
+    if not validate_uuid(item_id):
+        raise HTTPException(status_code=400, detail="ID article invalide")
+    
     item = await db.predefined_items.find_one({"id": item_id}, {"_id": 0})
     if not item:
         raise HTTPException(status_code=404, detail="Article non trouvé")
     
-    update_data = {k: v for k, v in item_data.model_dump().items() if v is not None}
+    update_data = {k: v for k, v in item_data.dict().items() if v is not None}
     if update_data:
         await db.predefined_items.update_one({"id": item_id}, {"$set": update_data})
     
@@ -2620,15 +2741,17 @@ async def update_predefined_item(item_id: str, item_data: PredefinedItemUpdate, 
 
 @api_router.delete("/predefined-items/{item_id}")
 async def delete_predefined_item(item_id: str, user: dict = Depends(get_current_user)):
-    """Delete a predefined item"""
+    if not validate_uuid(item_id):
+        raise HTTPException(status_code=400, detail="ID article invalide")
+    
     result = await db.predefined_items.delete_one({"id": item_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Article non trouvé")
+    
     return {"message": "Article supprimé"}
 
 @api_router.post("/predefined-items/reset")
 async def reset_predefined_items(user: dict = Depends(get_current_user)):
-    """Reset predefined items to defaults"""
     await db.predefined_items.delete_many({})
     await initialize_default_items()
     return {"message": "Articles réinitialisés"}
@@ -2636,7 +2759,6 @@ async def reset_predefined_items(user: dict = Depends(get_current_user)):
 # ============== RENOVATION KITS ROUTES ==============
 
 async def initialize_default_kits():
-    """Initialize default renovation kits if none exist"""
     count = await db.renovation_kits.count_documents({"is_default": True})
     if count == 0:
         for kit in DEFAULT_RENOVATION_KITS:
@@ -2652,14 +2774,15 @@ async def initialize_default_kits():
 
 @api_router.get("/kits", response_model=List[KitResponse])
 async def list_kits(user: dict = Depends(get_current_user)):
-    """List all renovation kits"""
     await initialize_default_kits()
     kits = await db.renovation_kits.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
     return [KitResponse(**kit) for kit in kits]
 
 @api_router.get("/kits/{kit_id}", response_model=KitResponse)
 async def get_kit(kit_id: str, user: dict = Depends(get_current_user)):
-    """Get a specific kit"""
+    if not validate_uuid(kit_id):
+        raise HTTPException(status_code=400, detail="ID kit invalide")
+    
     kit = await db.renovation_kits.find_one({"id": kit_id}, {"_id": 0})
     if not kit:
         raise HTTPException(status_code=404, detail="Kit non trouvé")
@@ -2667,14 +2790,13 @@ async def get_kit(kit_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.post("/kits", response_model=KitResponse)
 async def create_kit(kit_data: KitCreate, user: dict = Depends(get_current_user)):
-    """Create a new renovation kit"""
     kit_id = str(uuid.uuid4())
     kit_doc = {
         "id": kit_id,
         "name": kit_data.name,
         "description": kit_data.description,
-        "items": [item.model_dump() for item in kit_data.items],
-        "is_default": False,  # User-created kits are not default
+        "items": [item.dict() for item in kit_data.items],
+        "is_default": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.renovation_kits.insert_one(kit_doc)
@@ -2682,7 +2804,9 @@ async def create_kit(kit_data: KitCreate, user: dict = Depends(get_current_user)
 
 @api_router.put("/kits/{kit_id}", response_model=KitResponse)
 async def update_kit(kit_id: str, kit_data: KitUpdate, user: dict = Depends(get_current_user)):
-    """Update a renovation kit"""
+    if not validate_uuid(kit_id):
+        raise HTTPException(status_code=400, detail="ID kit invalide")
+    
     kit = await db.renovation_kits.find_one({"id": kit_id}, {"_id": 0})
     if not kit:
         raise HTTPException(status_code=404, detail="Kit non trouvé")
@@ -2693,7 +2817,7 @@ async def update_kit(kit_id: str, kit_data: KitUpdate, user: dict = Depends(get_
     if kit_data.description is not None:
         update_data["description"] = kit_data.description
     if kit_data.items is not None:
-        update_data["items"] = [item.model_dump() for item in kit_data.items]
+        update_data["items"] = [item.dict() for item in kit_data.items]
     
     if update_data:
         await db.renovation_kits.update_one({"id": kit_id}, {"$set": update_data})
@@ -2703,20 +2827,27 @@ async def update_kit(kit_id: str, kit_data: KitUpdate, user: dict = Depends(get_
 
 @api_router.delete("/kits/{kit_id}")
 async def delete_kit(kit_id: str, user: dict = Depends(get_current_user)):
-    """Delete a renovation kit"""
+    if not validate_uuid(kit_id):
+        raise HTTPException(status_code=400, detail="ID kit invalide")
+    
     result = await db.renovation_kits.delete_one({"id": kit_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Kit non trouvé")
     return {"message": "Kit supprimé"}
 
-@api_router.post("/kits/from-quote/{quote_id}", response_model=KitResponse)
+@api_router.post("/kits/from-quote/{quote_id}")
 async def create_kit_from_quote(quote_id: str, kit_name: str, kit_description: str = "", user: dict = Depends(get_current_user)):
-    """Create a kit from an existing quote"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
-    # Convert quote items to kit items
     kit_items = []
     for item in quote["items"]:
         kit_items.append({
@@ -2741,618 +2872,333 @@ async def create_kit_from_quote(quote_id: str, kit_name: str, kit_description: s
 
 @api_router.post("/kits/reset")
 async def reset_kits(user: dict = Depends(get_current_user)):
-    """Reset kits to defaults (removes user kits)"""
     await db.renovation_kits.delete_many({})
     await initialize_default_kits()
     return {"message": "Kits réinitialisés"}
 
-# ============== PDF GENERATION ==============
+# ============== COMPANY SETTINGS ==============
 
-async def get_company_settings():
+@api_router.get("/settings", response_model=CompanySettings)
+async def get_settings(user: dict = Depends(get_current_user)):
     settings = await db.settings.find_one({"type": "company"}, {"_id": 0})
     if not settings:
         return CompanySettings()
     return CompanySettings(**{k: v for k, v in settings.items() if k != "type"})
 
-def create_pdf(doc_type: str, doc_data: dict, company: CompanySettings, client: dict):
+@api_router.put("/settings", response_model=CompanySettings)
+async def update_settings(settings_data: CompanySettings, user: dict = Depends(get_current_user)):
+    settings_doc = settings_data.dict()
+    settings_doc["type"] = "company"
+    
+    await db.settings.update_one(
+        {"type": "company"},
+        {"$set": settings_doc},
+        upsert=True
+    )
+    
+    logger.info(f"Settings updated by user {user['id']}")
+    
+    return settings_data
+
+@api_router.post("/settings/logo")
+async def upload_logo(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Le fichier doit être une image")
+    
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="L'image ne doit pas dépasser 5MB")
+    
+    logo_base64 = base64.b64encode(contents).decode('utf-8')
+    logo_data = f"data:{file.content_type};base64,{logo_base64}"
+    
+    await db.settings.update_one(
+        {"type": "company"},
+        {"$set": {"logo_base64": logo_data}},
+        upsert=True
+    )
+    
+    return {"message": "Logo téléchargé avec succès", "logo": logo_data}
+
+# ============== PDF GENERATION ==============
+
+def create_pdf(doc_type: str, doc_data: dict, company: dict, client: dict):
     buffer = BytesIO()
     
-    # Increase bottom margin for footer
     doc = SimpleDocTemplate(
-        buffer, 
-        pagesize=A4, 
-        topMargin=15*mm, 
-        bottomMargin=25*mm,  # Extra space for footer
-        leftMargin=15*mm, 
+        buffer,
+        pagesize=A4,
+        topMargin=15*mm,
+        bottomMargin=25*mm,
+        leftMargin=15*mm,
         rightMargin=15*mm
     )
     
     styles = getSampleStyleSheet()
+    company_name = company.get("company_name", "Votre Entreprise BTP")
     
-    # Company name for header/footer
-    company_name = company.company_name or "Votre Entreprise BTP"
-    
-    # Footer callback function - called for each page
     def add_footer(canvas, doc):
         canvas.saveState()
-        
-        # Footer separator line
         canvas.setStrokeColor(colors.HexColor('#E2E8F0'))
         canvas.setLineWidth(0.5)
         canvas.line(15*mm, 18*mm, A4[0] - 15*mm, 18*mm)
         
-        # Footer text
         footer_parts = [company_name]
-        if company.siret:
-            footer_parts.append(f"SIRET: {company.siret}")
-        if company.rcs_rm:
-            footer_parts.append(company.rcs_rm)
+        if company.get("siret"):
+            footer_parts.append(f"SIRET: {company['siret']}")
         
         footer_text = " | ".join(footer_parts)
         
         canvas.setFont('Helvetica', 7)
         canvas.setFillColor(colors.HexColor('#64748B'))
         
-        # Center the footer text
         text_width = canvas.stringWidth(footer_text, 'Helvetica', 7)
         x_position = (A4[0] - text_width) / 2
         canvas.drawString(x_position, 12*mm, footer_text)
         
         canvas.restoreState()
     
-    # Custom styles for professional layout
     company_name_style = ParagraphStyle(
-        'CompanyName', 
-        parent=styles['Heading1'], 
-        fontSize=14, 
+        'CompanyName',
+        parent=styles['Heading1'],
+        fontSize=14,
         fontName='Helvetica-Bold',
-        textColor=colors.HexColor('#0F172A'), 
+        textColor=colors.HexColor('#0F172A'),
         alignment=TA_CENTER,
         spaceAfter=2
     )
     company_info_style = ParagraphStyle(
-        'CompanyInfo', 
-        parent=styles['Normal'], 
-        fontSize=8, 
-        textColor=colors.HexColor('#475569'), 
+        'CompanyInfo',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.HexColor('#475569'),
         alignment=TA_CENTER,
         leading=11
     )
-    company_legal_style = ParagraphStyle(
-        'CompanyLegal', 
-        parent=styles['Normal'], 
-        fontSize=8, 
-        fontName='Helvetica-Bold',
-        textColor=colors.HexColor('#1E293B'), 
-        alignment=TA_CENTER,
-        leading=11
-    )
-    
-    # Other styles
-    header_style = ParagraphStyle('Header', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#475569'), leading=12)
-    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=9, leading=12)
-    bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold', leading=12)
-    small_style = ParagraphStyle('Small', parent=styles['Normal'], fontSize=7, textColor=colors.HexColor('#64748B'), leading=10)
-    legal_style = ParagraphStyle('Legal', parent=styles['Normal'], fontSize=7, textColor=colors.HexColor('#374151'), leading=10)
     
     elements = []
     
-    # ========== HEADER: Logo LEFT + Company Info CENTER ==========
-    
-    # Try to load logo if available
-    logo_image = None
-    if company.logo_base64:
+    if company.get("logo_base64"):
         try:
-            logo_data = company.logo_base64
+            logo_data = company["logo_base64"]
             if ',' in logo_data:
                 logo_data = logo_data.split(',')[1]
             logo_bytes = base64.b64decode(logo_data)
             logo_buffer = BytesIO(logo_bytes)
             logo_image = Image(logo_buffer)
-            # Scale logo proportionally (max 35mm width, 18mm height - smaller for left placement)
-            max_width = 35 * mm
-            max_height = 18 * mm
-            aspect = logo_image.imageWidth / logo_image.imageHeight
-            if logo_image.imageWidth > max_width or logo_image.imageHeight > max_height:
-                if aspect > (max_width / max_height):
-                    logo_image.drawWidth = max_width
-                    logo_image.drawHeight = max_width / aspect
-                else:
-                    logo_image.drawHeight = max_height
-                    logo_image.drawWidth = max_height * aspect
-            else:
-                logo_image.drawWidth = min(logo_image.imageWidth, max_width)
-                logo_image.drawHeight = logo_image.drawWidth / aspect
+            logo_image.drawWidth = 40 * mm
+            logo_image.drawHeight = 20 * mm
+            logo_table = Table([[logo_image]], colWidths=[180*mm])
+            logo_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            elements.append(logo_table)
+            elements.append(Spacer(1, 5*mm))
         except Exception as e:
-            logging.warning(f"Failed to load logo for PDF: {str(e)}")
-            logo_image = None
+            logger.warning(f"Failed to load logo: {str(e)}")
     
-    # Build company info block (centered text)
-    company_info_content = []
+    elements.append(Paragraph(company_name, company_name_style))
+    if company.get("address"):
+        elements.append(Paragraph(company["address"], company_info_style))
     
-    # Company name (bold, larger)
-    company_info_content.append(Paragraph(company_name, company_name_style))
-    
-    # Address (normal weight)
-    if company.address:
-        company_info_content.append(Paragraph(company.address, company_info_style))
-    
-    # Contact info (normal weight)
-    contact_parts = []
-    if company.phone:
-        contact_parts.append(f"Tél: {company.phone}")
-    if company.email:
-        contact_parts.append(f"Email: {company.email}")
-    if contact_parts:
-        company_info_content.append(Paragraph(" | ".join(contact_parts), company_info_style))
-    
-    # Legal information (bold) - SIRET, RCS/RM, Code APE
-    legal_line_parts = []
-    if company.siret:
-        legal_line_parts.append(f"SIRET: {company.siret}")
-    if company.rcs_rm:
-        legal_line_parts.append(company.rcs_rm)
-    if company.code_ape:
-        legal_line_parts.append(f"Code APE: {company.code_ape}")
-    if legal_line_parts:
-        company_info_content.append(Paragraph(" | ".join(legal_line_parts), company_legal_style))
-    
-    # Capital social (bold)
-    if company.capital_social:
-        company_info_content.append(Paragraph(f"Capital social: {company.capital_social}", company_legal_style))
-    
-    # VAT number or auto-entrepreneur mention (bold)
-    if company.is_auto_entrepreneur:
-        company_info_content.append(Paragraph(company.auto_entrepreneur_mention, company_legal_style))
-    elif company.vat_number:
-        company_info_content.append(Paragraph(f"N° TVA: {company.vat_number}", company_legal_style))
-    
-    # Create header table: Logo on LEFT, Company info in CENTER
-    if logo_image:
-        # Three columns: Logo (left) | Company info (center) | Empty (right for balance)
-        header_table_data = [[logo_image, company_info_content, '']]
-        header_table = Table(header_table_data, colWidths=[40*mm, 100*mm, 40*mm])
-        header_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (0, 0), (0, 0), 'LEFT'),      # Logo left
-            ('ALIGN', (1, 0), (1, 0), 'CENTER'),    # Company info center
-            ('ALIGN', (2, 0), (2, 0), 'RIGHT'),     # Empty right
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 0),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-        ]))
-        elements.append(header_table)
-    else:
-        # No logo - just centered company info
-        for elem in company_info_content:
-            elements.append(elem)
-    
-    # Separator line
-    elements.append(Spacer(1, 4*mm))
-    separator_table = Table([['']],  colWidths=[180*mm], rowHeights=[0.5])
-    separator_table.setStyle(TableStyle([
-        ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
-    ]))
-    elements.append(separator_table)
     elements.append(Spacer(1, 6*mm))
     
-    # ========== DOCUMENT TITLE ==========
     if doc_type == "quote":
-        doc_title = f"DEVIS N° {doc_data['quote_number']}"
+        title = f"DEVIS N° {doc_data['quote_number']}"
     else:
-        # Check if it's an acompte, situation or final invoice
-        is_acompte = doc_data.get('is_acompte', False)
-        is_situation = doc_data.get('is_situation', False)
-        is_final = doc_data.get('is_final_invoice', False)
-        is_situation_final = doc_data.get('is_situation_final', False)
-        
-        if is_situation:
-            situation_num = doc_data.get('situation_number', 1)
-            current_pct = doc_data.get('situation_percentage', 0)
-            chantier_ref = doc_data.get('chantier_ref', '')
-            doc_title = f"SITUATION DE TRAVAUX N° {doc_data['invoice_number']}"
-            elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
-            elements.append(Paragraph(f"Situation n°{situation_num} - Avancement {current_pct}%", ParagraphStyle('SubTitle', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#059669'))))
-            if chantier_ref:
-                elements.append(Paragraph(f"Réf. chantier: {chantier_ref}", ParagraphStyle('RefStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#6B7280'))))
-        elif is_acompte:
-            acompte_num = doc_data.get('acompte_number', 1)
-            doc_title = f"FACTURE D'ACOMPTE N° {doc_data['invoice_number']}"
-            elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
-            elements.append(Paragraph(f"Acompte n°{acompte_num}", ParagraphStyle('SubTitle', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#6366F1'))))
-        elif is_situation_final:
-            doc_title = f"DÉCOMPTE FINAL N° {doc_data['invoice_number']}"
-            elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
-            elements.append(Paragraph("Facture de solde après situations", ParagraphStyle('SubTitle', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#059669'))))
-        elif is_final:
-            doc_title = f"FACTURE DE SOLDE N° {doc_data['invoice_number']}"
-            elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
+        if doc_data.get('is_situation'):
+            title = f"SITUATION N° {doc_data['situation_number']}"
+        elif doc_data.get('is_acompte'):
+            title = f"ACOMPTE N° {doc_data['acompte_number']}"
         else:
-            doc_title = f"FACTURE N° {doc_data['invoice_number']}"
-            elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
+            title = f"FACTURE N° {doc_data['invoice_number']}"
+    
+    elements.append(Paragraph(title, ParagraphStyle(
+        'Title',
+        parent=styles['Heading1'],
+        fontSize=16,
+        textColor=colors.HexColor('#0F172A'),
+        alignment=TA_CENTER
+    )))
+    
+    elements.append(Spacer(1, 6*mm))
+    
+    info_data = [
+        ["Date:", doc_data['issue_date'][:10]],
+        ["Client:", client.get('name', '')]
+    ]
     
     if doc_type == "quote":
-        elements.append(Paragraph(doc_title, ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'))))
-    
-    elements.append(Spacer(1, 4*mm))
-    
-    # ========== DATE & CLIENT INFO ==========
-    issue_date = doc_data['issue_date'][:10] if isinstance(doc_data['issue_date'], str) else doc_data['issue_date'].strftime('%Y-%m-%d')
-    
-    left_col = []
-    left_col.append(Paragraph(f"<b>Date d'émission:</b> {issue_date}", normal_style))
-    
-    if doc_type == "quote":
-        validity_date = doc_data['validity_date'][:10] if isinstance(doc_data['validity_date'], str) else doc_data['validity_date'].strftime('%Y-%m-%d')
-        left_col.append(Paragraph(f"<b>Date de validité:</b> {validity_date}", normal_style))
+        info_data.insert(1, ["Valable jusqu'au:", doc_data['validity_date'][:10]])
     else:
-        # Invoice: payment due date
-        payment_due = doc_data.get('payment_due_date', '')
-        if payment_due:
-            due_date = payment_due[:10] if isinstance(payment_due, str) else payment_due.strftime('%Y-%m-%d')
-            left_col.append(Paragraph(f"<b>Date d'échéance:</b> {due_date}", normal_style))
+        info_data.insert(1, ["Échéance:", doc_data.get('payment_due_date', '')[:10]])
     
-    right_col = []
-    right_col.append(Paragraph("<b>Client:</b>", normal_style))
-    right_col.append(Paragraph(client.get('name', ''), bold_style))
-    if client.get('address'):
-        right_col.append(Paragraph(client.get('address', ''), normal_style))
-    if client.get('email'):
-        right_col.append(Paragraph(client.get('email', ''), normal_style))
-    if client.get('phone'):
-        right_col.append(Paragraph(f"Tél: {client.get('phone', '')}", normal_style))
-    
-    # Create two-column layout
-    info_data = [[left_col[0] if left_col else '', right_col[0] if right_col else '']]
-    max_rows = max(len(left_col), len(right_col))
-    for i in range(1, max_rows):
-        left_item = left_col[i] if i < len(left_col) else ''
-        right_item = right_col[i] if i < len(right_col) else ''
-        info_data.append([left_item, right_item])
-    
-    info_table = Table(info_data, colWidths=[90*mm, 80*mm])
+    info_table = Table(info_data, colWidths=[40*mm, 130*mm])
     info_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 1),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
     ]))
     elements.append(info_table)
     elements.append(Spacer(1, 8*mm))
     
-    # ========== ITEMS TABLE ==========
-    is_auto_entrepreneur = company.is_auto_entrepreneur
-    is_situation = doc_data.get('is_situation', False)
-    is_situation_final = doc_data.get('is_situation_final', False)
+    table_data = [[
+        Paragraph("<b>Description</b>", styles['Normal']),
+        Paragraph("<b>Qté</b>", styles['Normal']),
+        Paragraph("<b>Prix unit.</b>", styles['Normal']),
+        Paragraph("<b>Total</b>", styles['Normal'])
+    ]]
     
-    if is_situation:
-        # Special table format for situation invoices
-        if is_auto_entrepreneur:
-            table_data = [
-                [Paragraph("<b>Description</b>", bold_style), 
-                 Paragraph("<b>Base HT</b>", bold_style), 
-                 Paragraph("<b>%</b>", bold_style), 
-                 Paragraph("<b>Montant</b>", bold_style)]
-            ]
-            
-            for item in doc_data['items']:
-                base_ht = item.get('original_total_ht', item['quantity'] * item['unit_price'])
-                sit_pct = item.get('situation_percent', item.get('cumulative_percent', 0))
-                sit_amount = item.get('situation_amount_ht', base_ht * sit_pct / 100)
-                table_data.append([
-                    Paragraph(item['description'], normal_style),
-                    Paragraph(f"{base_ht:.2f} €", normal_style),
-                    Paragraph(f"{sit_pct:.1f}%", normal_style),
-                    Paragraph(f"{sit_amount:.2f} €", normal_style)
-                ])
-            
-            items_table = Table(table_data, colWidths=[80*mm, 35*mm, 20*mm, 35*mm])
-        else:
-            table_data = [
-                [Paragraph("<b>Description</b>", bold_style), 
-                 Paragraph("<b>Base HT</b>", bold_style),
-                 Paragraph("<b>TVA</b>", bold_style), 
-                 Paragraph("<b>% Sit.</b>", bold_style), 
-                 Paragraph("<b>Montant HT</b>", bold_style)]
-            ]
-            
-            for item in doc_data['items']:
-                base_ht = item.get('original_total_ht', item['quantity'] * item['unit_price'])
-                sit_pct = item.get('situation_percent', item.get('cumulative_percent', 0))
-                sit_amount = item.get('situation_amount_ht', base_ht * sit_pct / 100)
-                table_data.append([
-                    Paragraph(item['description'], normal_style),
-                    Paragraph(f"{base_ht:.2f} €", normal_style),
-                    Paragraph(f"{item['vat_rate']}%", normal_style),
-                    Paragraph(f"{sit_pct:.1f}%", normal_style),
-                    Paragraph(f"{sit_amount:.2f} €", normal_style)
-                ])
-            
-            items_table = Table(table_data, colWidths=[65*mm, 30*mm, 18*mm, 22*mm, 30*mm])
+    for item in doc_data['items']:
+        line_total = item['quantity'] * item['unit_price']
+        table_data.append([
+            Paragraph(item['description'], styles['Normal']),
+            str(item['quantity']),
+            f"{item['unit_price']:.2f} €",
+            f"{line_total:.2f} €"
+        ])
     
-    elif is_auto_entrepreneur:
-        # No VAT columns for auto-entrepreneur
-        table_data = [
-            [Paragraph("<b>Description</b>", bold_style), 
-             Paragraph("<b>Qté</b>", bold_style), 
-             Paragraph("<b>Prix unitaire</b>", bold_style), 
-             Paragraph("<b>Total</b>", bold_style)]
-        ]
-        
-        for item in doc_data['items']:
-            line_total = item['quantity'] * item['unit_price']
-            table_data.append([
-                Paragraph(item['description'], normal_style),
-                Paragraph(str(item['quantity']), normal_style),
-                Paragraph(f"{item['unit_price']:.2f} €", normal_style),
-                Paragraph(f"{line_total:.2f} €", normal_style)
-            ])
-        
-        items_table = Table(table_data, colWidths=[85*mm, 20*mm, 35*mm, 35*mm])
-    else:
-        # Full table with VAT
-        table_data = [
-            [Paragraph("<b>Description</b>", bold_style), 
-             Paragraph("<b>Qté</b>", bold_style), 
-             Paragraph("<b>Prix unit. HT</b>", bold_style), 
-             Paragraph("<b>TVA</b>", bold_style), 
-             Paragraph("<b>Total HT</b>", bold_style)]
-        ]
-        
-        for item in doc_data['items']:
-            line_total = item['quantity'] * item['unit_price']
-            table_data.append([
-                Paragraph(item['description'], normal_style),
-                Paragraph(str(item['quantity']), normal_style),
-                Paragraph(f"{item['unit_price']:.2f} €", normal_style),
-                Paragraph(f"{item['vat_rate']}%", normal_style),
-                Paragraph(f"{line_total:.2f} €", normal_style)
-            ])
-        
-        items_table = Table(table_data, colWidths=[70*mm, 18*mm, 30*mm, 20*mm, 30*mm])
-    
+    items_table = Table(table_data, colWidths=[80*mm, 20*mm, 35*mm, 35*mm])
     items_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EA580C')),  # Orange header (same as Total TTC)
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#EA580C')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-        ('TOPPADDING', (0, 0), (-1, 0), 6),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8FAFC')),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#F8FAFC'), colors.white]),
-        ('TOPPADDING', (0, 1), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
     ]))
     elements.append(items_table)
     elements.append(Spacer(1, 6*mm))
     
-    # ========== TOTALS ==========
-    if is_auto_entrepreneur:
-        totals_data = [
-            ["Total:", f"{doc_data['total_ht']:.2f} €"],
-        ]
-    else:
-        # For situations, use situation_amount_ht from items
-        if is_situation:
-            total_ht = sum(item.get('situation_amount_ht', 0) for item in doc_data['items'])
-            vat_by_rate = {}
-            for item in doc_data['items']:
-                rate = item.get('vat_rate', 0)
-                sit_amount = item.get('situation_amount_ht', 0)
-                line_vat = sit_amount * rate / 100 if rate > 0 else 0
-                if rate not in vat_by_rate:
-                    vat_by_rate[rate] = 0
-                vat_by_rate[rate] += line_vat
-        else:
-            # Group VAT by rate
-            vat_by_rate = {}
-            for item in doc_data['items']:
-                rate = item['vat_rate']
-                line_ht = item['quantity'] * item['unit_price']
-                line_vat = line_ht * rate / 100
-                if rate not in vat_by_rate:
-                    vat_by_rate[rate] = 0
-                vat_by_rate[rate] += line_vat
-        
-        totals_data = [
-            ["Total HT:", f"{doc_data['total_ht']:.2f} €"],
-        ]
-        
-        # Show VAT breakdown by rate
-        for rate in sorted(vat_by_rate.keys()):
-            if vat_by_rate[rate] > 0:
-                totals_data.append([f"TVA {rate}%:", f"{vat_by_rate[rate]:.2f} €"])
-        
-        totals_data.append(["Total TTC:", f"{doc_data['total_ttc']:.2f} €"])
-    
-    # Invoice-specific: payment info
-    if doc_type == "invoice":
-        # For final invoice with acomptes deducted
-        is_final = doc_data.get('is_final_invoice', False)
-        is_situation_final = doc_data.get('is_situation_final', False)
-        acomptes_deducted = doc_data.get('acomptes_deducted', 0)
-        situations_deducted = doc_data.get('situations_deducted', 0)
-        
-        if is_situation_final and situations_deducted > 0:
-            # Add recap of all previous situations
-            situations_recap = doc_data.get('situations_recap', [])
-            if situations_recap:
-                elements.append(Spacer(1, 4*mm))
-                elements.append(Paragraph("<b>Récapitulatif des situations précédentes :</b>", bold_style))
-                recap_data = [["N°", "Facture", "Avancement", "Montant TTC"]]
-                for sit in situations_recap:
-                    recap_data.append([
-                        f"Sit. {sit.get('situation_number', '?')}",
-                        sit.get('invoice_number', ''),
-                        f"{sit.get('percentage', 0):.1f}%",
-                        f"{sit.get('total_ttc', 0):.2f} €"
-                    ])
-                recap_table = Table(recap_data, colWidths=[25*mm, 45*mm, 35*mm, 40*mm])
-                recap_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#059669')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                    ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 8),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-                    ('TOPPADDING', (0, 0), (-1, -1), 3),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-                ]))
-                elements.append(recap_table)
-                elements.append(Spacer(1, 4*mm))
-            
-            totals_data.append(["Situations précédentes:", f"-{situations_deducted:.2f} €"])
-            net_to_pay = doc_data.get('net_to_pay', doc_data['total_ttc'] - situations_deducted)
-            totals_data.append(["NET À PAYER:", f"{net_to_pay:.2f} €"])
-        elif is_final and acomptes_deducted > 0:
-            totals_data.append(["Acomptes versés:", f"-{acomptes_deducted:.2f} €"])
-            net_to_pay = doc_data.get('net_to_pay', doc_data['total_ttc'] - acomptes_deducted)
-            totals_data.append(["NET À PAYER:", f"{net_to_pay:.2f} €"])
-        
-        # Retenue de garantie handling
-        has_retenue = doc_data.get('has_retenue_garantie', False)
-        if has_retenue and not doc_data.get('retenue_garantie_released', False):
-            retenue_rate = doc_data.get('retenue_garantie_rate', 5)
-            retenue_amount = doc_data.get('retenue_garantie_amount', 0)
-            net_after_retenue = doc_data.get('net_a_payer', doc_data['total_ttc'] - retenue_amount)
-            
-            totals_data.append([f"Retenue de garantie ({retenue_rate}%):", f"-{retenue_amount:.2f} €"])
-            totals_data.append(["NET À PAYER (après retenue):", f"{net_after_retenue:.2f} €"])
-        
-        payment_status_map = {"impaye": "Impayé", "paye": "Payé", "partiel": "Partiellement payé"}
-        totals_data.append(["Statut:", payment_status_map.get(doc_data['payment_status'], doc_data['payment_status'])])
-        
-        if not is_final and not is_situation_final:
-            if doc_data.get('paid_amount', 0) > 0:
-                totals_data.append(["Montant payé:", f"{doc_data['paid_amount']:.2f} €"])
-                base_amount = doc_data.get('net_a_payer', doc_data['total_ttc'])
-                remaining = base_amount - doc_data['paid_amount']
-                totals_data.append(["Reste à payer:", f"{remaining:.2f} €"])
-    
-    totals_table = Table(totals_data, colWidths=[120*mm, 50*mm])
-    
-    # Highlight the final row
-    final_row_idx = len(totals_data) - 1
-    if doc_type == "invoice":
-        # For invoice, highlight the TTC row (usually 3rd row if no payment)
-        ttc_row_idx = 2 if not is_auto_entrepreneur else 0
-    else:
-        ttc_row_idx = final_row_idx
-    
-    table_style = [
-        ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    totals_data = [
+        ["Total HT:", f"{doc_data['total_ht']:.2f} €"],
     ]
     
-    # Find the TTC row for highlighting
-    for i, row in enumerate(totals_data):
-        if "TTC" in row[0] or (is_auto_entrepreneur and row[0] == "Total:"):
-            table_style.extend([
-                ('FONTNAME', (0, i), (-1, i), 'Helvetica-Bold'),
-                ('BACKGROUND', (0, i), (-1, i), colors.HexColor('#EA580C')),
-                ('TEXTCOLOR', (0, i), (-1, i), colors.white),
-            ])
-            break
+    if not company.get("is_auto_entrepreneur"):
+        totals_data.append(["Total TVA:", f"{doc_data['total_vat']:.2f} €"])
     
-    totals_table.setStyle(TableStyle(table_style))
+    totals_data.append(["Total TTC:", f"{doc_data['total_ttc']:.2f} €"])
+    
+    totals_table = Table(totals_data, colWidths=[120*mm, 50*mm])
+    totals_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#EA580C')),
+        ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
+    ]))
     elements.append(totals_table)
     
-    # ========== BANK DETAILS (for invoices) ==========
-    if doc_type == "invoice" and (company.iban or company.bic):
-        elements.append(Spacer(1, 8*mm))
-        elements.append(Paragraph("<b>Coordonnées bancaires:</b>", bold_style))
-        if company.iban:
-            elements.append(Paragraph(f"IBAN: {company.iban}", normal_style))
-        if company.bic:
-            elements.append(Paragraph(f"BIC: {company.bic}", normal_style))
-    
-    # ========== NOTES ==========
     if doc_data.get('notes'):
-        elements.append(Spacer(1, 8*mm))
-        elements.append(Paragraph("<b>Notes:</b>", bold_style))
-        elements.append(Paragraph(doc_data['notes'], normal_style))
+        elements.append(Spacer(1, 6*mm))
+        elements.append(Paragraph("<b>Notes:</b>", styles['Normal']))
+        elements.append(Paragraph(doc_data['notes'], styles['Normal']))
     
-    # ========== LEGAL MENTIONS ==========
+    doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
+    buffer.seek(0)
+    return buffer
+
+def generate_financial_summary_pdf(summary: dict, company: dict):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#0F172A'), alignment=TA_CENTER, spaceAfter=10)
+    section_style = ParagraphStyle('Section', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#0F172A'), spaceBefore=15, spaceAfter=8)
+    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#334155'))
+    
+    elements.append(Paragraph("RÉCAPITULATIF FINANCIER", title_style))
+    elements.append(Paragraph(f"Projet {summary['quote_number']}", normal_style))
+    elements.append(Spacer(1, 5*mm))
+    
+    if company.get("company_name"):
+        elements.append(Paragraph(f"<b>{company['company_name']}</b>", normal_style))
+    
+    elements.append(Spacer(1, 8*mm))
+    
+    info_data = [
+        ["Client:", summary['client_name']],
+        ["Référence devis:", summary['quote_number']],
+        ["Date:", datetime.now().strftime("%d/%m/%Y")],
+    ]
+    
+    info_table = Table(info_data, colWidths=[50*mm, 120*mm])
+    info_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(info_table)
     elements.append(Spacer(1, 10*mm))
     
-    if doc_type == "quote":
-        # Quote legal mentions
-        legal_lines = [
-            f"Ce devis est valable jusqu'au {validity_date}.",
-            "En signant ce devis, le client reconnaît avoir pris connaissance des conditions générales de vente.",
-            "",
-            "Signature du client précédée de la mention \"Bon pour accord\" et de la date:",
-            "",
-            "_" * 50,
-        ]
-        for line in legal_lines:
-            elements.append(Paragraph(line, legal_style))
-    else:
-        # Invoice legal mentions (French legal requirements)
-        payment_method_map = {
-            "virement": "virement bancaire",
-            "especes": "espèces", 
-            "cheque": "chèque",
-            "carte": "carte bancaire"
-        }
-        method = payment_method_map.get(doc_data.get('payment_method', 'virement'), 'virement bancaire')
-        
-        payment_due = doc_data.get('payment_due_date', '')
-        if payment_due:
-            due_date_str = payment_due[:10] if isinstance(payment_due, str) else payment_due.strftime('%Y-%m-%d')
-        else:
-            due_date_str = "30 jours"
-        
-        legal_lines = [
-            f"<b>Mode de règlement:</b> {method}",
-            f"<b>Date limite de paiement:</b> {due_date_str}",
-            "",
-            "<b>Conditions de paiement:</b>",
-            f"En cas de retard de paiement, seront exigibles, conformément à l'article L 441-6 du code de commerce:",
-            f"- Une indemnité calculée sur la base de trois fois le taux d'intérêt légal en vigueur",
-            f"- Une indemnité forfaitaire pour frais de recouvrement de 40 euros",
-        ]
-        
-        # Add retenue de garantie legal mention if applicable
-        if doc_data.get('has_retenue_garantie', False):
-            retenue_rate = doc_data.get('retenue_garantie_rate', 5)
-            release_date = doc_data.get('retenue_garantie_release_date', '')
-            if release_date:
-                release_date_str = release_date[:10] if isinstance(release_date, str) else release_date.strftime('%Y-%m-%d')
-            else:
-                release_date_str = "1 an après réception"
-            
-            legal_lines.extend([
-                "",
-                f"<b>Retenue de garantie:</b>",
-                f"Une retenue de garantie de {retenue_rate}% est appliquée conformément à la loi n°75-1334 du 31 décembre 1975.",
-                f"Cette retenue sera libérée le {release_date_str}, sauf réserves non levées.",
-            ])
-        
-        for line in legal_lines:
-            elements.append(Paragraph(line, legal_style))
+    elements.append(Paragraph("MONTANT TOTAL DU PROJET", section_style))
     
-    # Build PDF with footer on each page
-    doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
+    total_data = [
+        ["Total HT:", f"{summary['project_total_ht']:,.2f} €".replace(",", " ")],
+        ["Total TVA:", f"{summary['project_total_vat']:,.2f} €".replace(",", " ")],
+        ["TOTAL TTC:", f"{summary['project_total_ttc']:,.2f} €".replace(",", " ")],
+    ]
+    
+    total_table = Table(total_data, colWidths=[50*mm, 50*mm])
+    total_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, -1), (-1, -1), 14),
+        ('TEXTCOLOR', (1, -1), (1, -1), colors.HexColor('#059669')),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+    ]))
+    elements.append(total_table)
+    elements.append(Spacer(1, 8*mm))
+    
+    elements.append(Paragraph("SYNTHÈSE DES PAIEMENTS", section_style))
+    
+    totals = summary['totals']
+    synth_data = [
+        ["Montant facturé:", f"{totals['total_invoiced']:,.2f} €".replace(",", " ")],
+        ["Montant encaissé:", f"{totals['total_paid']:,.2f} €".replace(",", " ")],
+        ["Reste à facturer:", f"{totals['remaining_to_invoice']:,.2f} €".replace(",", " ")],
+        ["RESTE À PAYER:", f"{totals['remaining_to_pay']:,.2f} €".replace(",", " ")],
+    ]
+    
+    synth_table = Table(synth_data, colWidths=[60*mm, 50*mm])
+    synth_table.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, -1), (-1, -1), 12),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+    ]))
+    elements.append(synth_table)
+    
+    doc.build(elements)
     buffer.seek(0)
     return buffer
 
 @api_router.get("/quotes/{quote_id}/pdf")
 async def generate_quote_pdf(quote_id: str, user: dict = Depends(get_current_user)):
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
-    client = await db.clients.find_one({"id": quote["client_id"]}, {"_id": 0})
-    if not client:
-        client = {"name": quote["client_name"], "address": "", "email": ""}
+    client = await db.clients.find_one(
+        {"id": quote["client_id"]},
+        {"_id": 0}
+    ) or {"name": quote["client_name"]}
     
     company = await get_company_settings()
+    
     pdf_buffer = create_pdf("quote", quote, company, client)
     
     return StreamingResponse(
@@ -3363,15 +3209,24 @@ async def generate_quote_pdf(quote_id: str, user: dict = Depends(get_current_use
 
 @api_router.get("/invoices/{invoice_id}/pdf")
 async def generate_invoice_pdf(invoice_id: str, user: dict = Depends(get_current_user)):
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not validate_uuid(invoice_id):
+        raise HTTPException(status_code=400, detail="ID facture invalide")
+    
+    invoice = await db.invoices.find_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
     
-    client = await db.clients.find_one({"id": invoice["client_id"]}, {"_id": 0})
-    if not client:
-        client = {"name": invoice["client_name"], "address": "", "email": ""}
+    client = await db.clients.find_one(
+        {"id": invoice["client_id"]},
+        {"_id": 0}
+    ) or {"name": invoice["client_name"]}
     
     company = await get_company_settings()
+    
     pdf_buffer = create_pdf("invoice", invoice, company, client)
     
     return StreamingResponse(
@@ -3380,119 +3235,265 @@ async def generate_invoice_pdf(invoice_id: str, user: dict = Depends(get_current
         headers={"Content-Disposition": f"attachment; filename=facture_{invoice['invoice_number']}.pdf"}
     )
 
-# ============== CLIENT SHARE LINKS (PUBLIC) ==============
+@api_router.get("/quotes/{quote_id}/financial-summary/pdf")
+async def download_financial_summary_pdf(quote_id: str, user: dict = Depends(get_current_user)):
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    summary = await calculate_project_financial_summary(quote_id, user["id"])
+    if not summary:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    company = await get_company_settings()
+    pdf_buffer = generate_financial_summary_pdf(summary, company)
+    
+    filename = f"Recapitulatif_financier_{summary['quote_number']}.pdf"
+    
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
-import secrets
-
-def generate_share_token():
-    """Generate a secure random token for document sharing"""
-    return secrets.token_urlsafe(32)
+# ============== SHARE LINKS ==============
 
 @api_router.post("/quotes/{quote_id}/share")
 async def create_quote_share_link(quote_id: str, user: dict = Depends(get_current_user)):
-    """Create or refresh share token for a quote"""
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
     share_token = generate_share_token()
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    
     await db.quotes.update_one(
         {"id": quote_id},
-        {"$set": {"share_token": share_token}}
+        {"$set": {"share_token": share_token, "share_expires_at": expires_at}}
     )
     
-    return {"share_token": share_token, "share_url": f"/client/devis/{share_token}"}
-
-@api_router.delete("/quotes/{quote_id}/share")
-async def revoke_quote_share_link(quote_id: str, user: dict = Depends(get_current_user)):
-    """Revoke share link for a quote"""
-    result = await db.quotes.update_one(
-        {"id": quote_id},
-        {"$unset": {"share_token": ""}}
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Devis non trouvé")
-    return {"message": "Lien de partage révoqué"}
+    await db.share_links.insert_one({
+        "token": share_token,
+        "document_type": "quote",
+        "document_id": quote_id,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at,
+        "access_count": 0,
+        "last_accessed": None
+    })
+    
+    share_url = f"{FRONTEND_URL or ''}/client/devis/{share_token}"
+    
+    return {
+        "share_token": share_token,
+        "expires_at": expires_at,
+        "share_url": share_url
+    }
 
 @api_router.post("/invoices/{invoice_id}/share")
 async def create_invoice_share_link(invoice_id: str, user: dict = Depends(get_current_user)):
-    """Create or refresh share token for an invoice"""
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not validate_uuid(invoice_id):
+        raise HTTPException(status_code=400, detail="ID facture invalide")
+    
+    invoice = await db.invoices.find_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
     
     share_token = generate_share_token()
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    
     await db.invoices.update_one(
         {"id": invoice_id},
-        {"$set": {"share_token": share_token}}
+        {"$set": {"share_token": share_token, "share_expires_at": expires_at}}
     )
     
-    return {"share_token": share_token, "share_url": f"/client/facture/{share_token}"}
+    await db.share_links.insert_one({
+        "token": share_token,
+        "document_type": "invoice",
+        "document_id": invoice_id,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at,
+        "access_count": 0,
+        "last_accessed": None
+    })
+    
+    share_url = f"{FRONTEND_URL or ''}/client/facture/{share_token}"
+    
+    return {
+        "share_token": share_token,
+        "expires_at": expires_at,
+        "share_url": share_url
+    }
+
+@api_router.delete("/quotes/{quote_id}/share")
+async def revoke_quote_share_link(quote_id: str, user: dict = Depends(get_current_user)):
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    result = await db.quotes.update_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"$unset": {"share_token": "", "share_expires_at": ""}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    await db.share_links.delete_many({
+        "document_id": quote_id,
+        "document_type": "quote"
+    })
+    
+    return {"message": "Lien de partage révoqué"}
 
 @api_router.delete("/invoices/{invoice_id}/share")
 async def revoke_invoice_share_link(invoice_id: str, user: dict = Depends(get_current_user)):
-    """Revoke share link for an invoice"""
+    if not validate_uuid(invoice_id):
+        raise HTTPException(status_code=400, detail="ID facture invalide")
+    
     result = await db.invoices.update_one(
-        {"id": invoice_id},
-        {"$unset": {"share_token": ""}}
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"$unset": {"share_token": "", "share_expires_at": ""}}
     )
+    
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
+    
+    await db.share_links.delete_many({
+        "document_id": invoice_id,
+        "document_type": "invoice"
+    })
+    
     return {"message": "Lien de partage révoqué"}
 
-# Public endpoints (no auth required)
 @api_router.get("/public/quote/{share_token}")
 async def get_public_quote(share_token: str):
-    """Get quote details via share link - NO AUTH REQUIRED"""
-    quote = await db.quotes.find_one({"share_token": share_token}, {"_id": 0})
-    if not quote:
-        raise HTTPException(status_code=404, detail="Document non trouvé ou lien expiré")
+    if not share_token or len(share_token) != 43:
+        raise HTTPException(status_code=400, detail="Token invalide")
     
-    client = await db.clients.find_one({"id": quote["client_id"]}, {"_id": 0})
+    share_link = await db.share_links.find_one({
+        "token": share_token,
+        "document_type": "quote"
+    })
+    
+    if not share_link:
+        raise HTTPException(status_code=404, detail="Lien non trouvé")
+    
+    if share_link.get("expires_at"):
+        if datetime.fromisoformat(share_link["expires_at"]) < datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Lien expiré")
+    
+    quote = await db.quotes.find_one(
+        {"id": share_link["document_id"]},
+        {"_id": 0, "owner_id": 0}
+    )
+    
+    if not quote:
+        raise HTTPException(status_code=404, detail="Document non trouvé")
+    
+    await db.share_links.update_one(
+        {"token": share_token},
+        {
+            "$inc": {"access_count": 1},
+            "$set": {"last_accessed": datetime.now(timezone.utc).isoformat()}
+        }
+    )
+    
     company = await get_company_settings()
     
-    # Return limited data for client view
-    status_labels = {
-        "brouillon": "Devis",
-        "envoye": "Devis envoyé",
-        "accepte": "Devis accepté",
-        "refuse": "Devis refusé",
-        "facture": "Facturé"
+    return {
+        **quote,
+        "company": {
+            "name": company.get("company_name"),
+            "address": company.get("address"),
+            "siret": company.get("siret")
+        }
     }
+
+@api_router.get("/public/invoice/{share_token}")
+async def get_public_invoice(share_token: str):
+    if not share_token or len(share_token) != 43:
+        raise HTTPException(status_code=400, detail="Token invalide")
+    
+    share_link = await db.share_links.find_one({
+        "token": share_token,
+        "document_type": "invoice"
+    })
+    
+    if not share_link:
+        raise HTTPException(status_code=404, detail="Lien non trouvé")
+    
+    if share_link.get("expires_at"):
+        if datetime.fromisoformat(share_link["expires_at"]) < datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Lien expiré")
+    
+    invoice = await db.invoices.find_one(
+        {"id": share_link["document_id"]},
+        {"_id": 0, "owner_id": 0}
+    )
+    
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Document non trouvé")
+    
+    await db.share_links.update_one(
+        {"token": share_token},
+        {
+            "$inc": {"access_count": 1},
+            "$set": {"last_accessed": datetime.now(timezone.utc).isoformat()}
+        }
+    )
+    
+    company = await get_company_settings()
     
     return {
-        "type": "devis",
-        "document_number": quote["quote_number"],
-        "client_name": quote["client_name"],
-        "issue_date": quote["issue_date"],
-        "validity_date": quote["validity_date"],
-        "items": quote["items"],
-        "total_ht": quote["total_ht"],
-        "total_vat": quote["total_vat"],
-        "total_ttc": quote["total_ttc"],
-        "status": quote["status"],
-        "status_label": status_labels.get(quote["status"], quote["status"]),
-        "notes": quote.get("notes", ""),
+        **invoice,
         "company": {
-            "name": company.company_name,
-            "address": company.address,
-            "phone": company.phone,
-            "email": company.email,
-            "siret": company.siret,
-            "vat_number": company.vat_number
+            "name": company.get("company_name"),
+            "address": company.get("address"),
+            "siret": company.get("siret")
         }
     }
 
 @api_router.get("/public/quote/{share_token}/pdf")
 async def get_public_quote_pdf(share_token: str):
-    """Download quote PDF via share link - NO AUTH REQUIRED"""
-    quote = await db.quotes.find_one({"share_token": share_token}, {"_id": 0})
-    if not quote:
-        raise HTTPException(status_code=404, detail="Document non trouvé ou lien expiré")
+    if not share_token or len(share_token) != 43:
+        raise HTTPException(status_code=400, detail="Token invalide")
     
-    client = await db.clients.find_one({"id": quote["client_id"]}, {"_id": 0})
-    if not client:
-        client = {"name": quote["client_name"], "address": "", "email": ""}
+    share_link = await db.share_links.find_one({
+        "token": share_token,
+        "document_type": "quote"
+    })
+    
+    if not share_link:
+        raise HTTPException(status_code=404, detail="Lien non trouvé")
+    
+    if share_link.get("expires_at"):
+        if datetime.fromisoformat(share_link["expires_at"]) < datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Lien expiré")
+    
+    quote = await db.quotes.find_one(
+        {"id": share_link["document_id"]},
+        {"_id": 0}
+    )
+    
+    if not quote:
+        raise HTTPException(status_code=404, detail="Document non trouvé")
+    
+    client = await db.clients.find_one(
+        {"id": quote["client_id"]},
+        {"_id": 0}
+    ) or {"name": quote["client_name"]}
     
     company = await get_company_settings()
     pdf_buffer = create_pdf("quote", quote, company, client)
@@ -3503,56 +3504,35 @@ async def get_public_quote_pdf(share_token: str):
         headers={"Content-Disposition": f"attachment; filename=devis_{quote['quote_number']}.pdf"}
     )
 
-@api_router.get("/public/invoice/{share_token}")
-async def get_public_invoice(share_token: str):
-    """Get invoice details via share link - NO AUTH REQUIRED"""
-    invoice = await db.invoices.find_one({"share_token": share_token}, {"_id": 0})
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Document non trouvé ou lien expiré")
-    
-    client = await db.clients.find_one({"id": invoice["client_id"]}, {"_id": 0})
-    company = await get_company_settings()
-    
-    payment_status_labels = {
-        "impaye": "En attente de paiement",
-        "partiel": "Partiellement payé",
-        "paye": "Payé"
-    }
-    
-    return {
-        "type": "facture",
-        "document_number": invoice["invoice_number"],
-        "client_name": invoice["client_name"],
-        "issue_date": invoice["issue_date"],
-        "items": invoice["items"],
-        "total_ht": invoice["total_ht"],
-        "total_vat": invoice["total_vat"],
-        "total_ttc": invoice["total_ttc"],
-        "payment_status": invoice["payment_status"],
-        "payment_status_label": payment_status_labels.get(invoice["payment_status"], invoice["payment_status"]),
-        "payment_method": invoice.get("payment_method", "virement"),
-        "paid_amount": invoice.get("paid_amount", 0),
-        "notes": invoice.get("notes", ""),
-        "company": {
-            "name": company.company_name,
-            "address": company.address,
-            "phone": company.phone,
-            "email": company.email,
-            "siret": company.siret,
-            "vat_number": company.vat_number
-        }
-    }
-
 @api_router.get("/public/invoice/{share_token}/pdf")
 async def get_public_invoice_pdf(share_token: str):
-    """Download invoice PDF via share link - NO AUTH REQUIRED"""
-    invoice = await db.invoices.find_one({"share_token": share_token}, {"_id": 0})
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Document non trouvé ou lien expiré")
+    if not share_token or len(share_token) != 43:
+        raise HTTPException(status_code=400, detail="Token invalide")
     
-    client = await db.clients.find_one({"id": invoice["client_id"]}, {"_id": 0})
-    if not client:
-        client = {"name": invoice["client_name"], "address": "", "email": ""}
+    share_link = await db.share_links.find_one({
+        "token": share_token,
+        "document_type": "invoice"
+    })
+    
+    if not share_link:
+        raise HTTPException(status_code=404, detail="Lien non trouvé")
+    
+    if share_link.get("expires_at"):
+        if datetime.fromisoformat(share_link["expires_at"]) < datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Lien expiré")
+    
+    invoice = await db.invoices.find_one(
+        {"id": share_link["document_id"]},
+        {"_id": 0}
+    )
+    
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Document non trouvé")
+    
+    client = await db.clients.find_one(
+        {"id": invoice["client_id"]},
+        {"_id": 0}
+    ) or {"name": invoice["client_name"]}
     
     company = await get_company_settings()
     pdf_buffer = create_pdf("invoice", invoice, company, client)
@@ -3565,113 +3545,78 @@ async def get_public_invoice_pdf(share_token: str):
 
 # ============== EMAIL SENDING ==============
 
-class SendDocumentEmailRequest(BaseModel):
-    recipient_email: EmailStr
-    recipient_name: str = ""
-    custom_message: str = ""
-
-def generate_email_html(doc_type: str, doc_data: dict, company, client, share_url: str, custom_message: str = ""):
-    """Generate professional French email HTML"""
-    
+def generate_email_html(doc_type: str, doc_data: dict, company: dict, client: dict, share_url: str, custom_message: str = ""):
     doc_label = "Devis" if doc_type == "quote" else "Facture"
     doc_number = doc_data.get("quote_number") if doc_type == "quote" else doc_data.get("invoice_number")
     
-    email_html = f"""
+    return f"""
     <!DOCTYPE html>
     <html>
-    <head>
-        <meta charset="utf-8">
-    </head>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background-color: #f97316; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">{company.company_name}</h1>
+            <h1 style="color: white;">{company.get('company_name', '')}</h1>
         </div>
-        
-        <div style="padding: 30px; background-color: #ffffff;">
-            <p>Bonjour{' ' + client.get('name', '') if client.get('name') else ''},</p>
-            
-            <p>Veuillez trouver ci-joint votre <strong>{doc_label.lower()} n° {doc_number}</strong>.</p>
-            
+        <div style="padding: 30px;">
+            <p>Bonjour {client.get('name', '')},</p>
+            <p>Veuillez trouver ci-joint votre {doc_label.lower()} n° {doc_number}.</p>
             {f'<p>{custom_message}</p>' if custom_message else ''}
-            
-            <table style="width: 100%; margin: 20px 0; border-collapse: collapse;">
-                <tr style="background-color: #f8fafc;">
-                    <td style="padding: 15px; border: 1px solid #e2e8f0;"><strong>N° {doc_label}</strong></td>
-                    <td style="padding: 15px; border: 1px solid #e2e8f0;">{doc_number}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 15px; border: 1px solid #e2e8f0;"><strong>Date</strong></td>
-                    <td style="padding: 15px; border: 1px solid #e2e8f0;">{doc_data.get('issue_date', '')[:10]}</td>
-                </tr>
-                <tr style="background-color: #f8fafc;">
-                    <td style="padding: 15px; border: 1px solid #e2e8f0;"><strong>Montant TTC</strong></td>
-                    <td style="padding: 15px; border: 1px solid #e2e8f0; font-size: 18px; color: #f97316;"><strong>{doc_data.get('total_ttc', 0):.2f} €</strong></td>
-                </tr>
-            </table>
-            
             <div style="text-align: center; margin: 30px 0;">
-                <a href="{share_url}" style="background-color: #f97316; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                <a href="{share_url}" style="background-color: #f97316; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px;">
                     Consulter le {doc_label.lower()}
                 </a>
             </div>
-            
-            <p>Vous pouvez également télécharger le PDF depuis ce lien.</p>
-            
-            <p>Cordialement,<br><strong>{company.company_name}</strong></p>
-        </div>
-        
-        <div style="background-color: #1e293b; color: #94a3b8; padding: 20px; font-size: 12px; text-align: center;">
-            <p style="margin: 5px 0;"><strong>{company.company_name}</strong></p>
-            <p style="margin: 5px 0;">{company.address}</p>
-            <p style="margin: 5px 0;">Tél: {company.phone} | Email: {company.email}</p>
-            {f'<p style="margin: 5px 0;">SIRET: {company.siret}</p>' if company.siret else ''}
-            {f'<p style="margin: 5px 0;">N° TVA: {company.vat_number}</p>' if company.vat_number else ''}
+            <p>Cordialement,<br><strong>{company.get('company_name', '')}</strong></p>
         </div>
     </body>
     </html>
     """
-    return email_html
 
 @api_router.post("/quotes/{quote_id}/send-email")
 async def send_quote_email(quote_id: str, request: SendDocumentEmailRequest, user: dict = Depends(get_current_user)):
-    """Send quote by email to client"""
     if not RESEND_CONFIGURED:
-        raise HTTPException(
-            status_code=503, 
-            detail="Service email non configuré. Pour activer l'envoi d'emails, ajoutez une clé API Resend valide (RESEND_API_KEY) dans le fichier backend/.env. Obtenez une clé sur https://resend.com"
-        )
+        raise HTTPException(status_code=503, detail="Service email non configuré")
     
-    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not FRONTEND_URL:
+        raise HTTPException(status_code=500, detail="FRONTEND_URL non configuré")
+    
+    if not validate_uuid(quote_id):
+        raise HTTPException(status_code=400, detail="ID devis invalide")
+    
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not quote:
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     
-    client = await db.clients.find_one({"id": quote["client_id"]}, {"_id": 0})
+    client = await db.clients.find_one(
+        {"id": quote["client_id"]},
+        {"_id": 0}
+    ) or {"name": quote["client_name"]}
+    
     company = await get_company_settings()
     
-    # Generate or get share token
     share_token = quote.get("share_token")
     if not share_token:
         share_token = generate_share_token()
-        await db.quotes.update_one({"id": quote_id}, {"$set": {"share_token": share_token}})
+        await db.quotes.update_one(
+            {"id": quote_id},
+            {"$set": {"share_token": share_token}}
+        )
     
-    # Get base URL from environment (required for email links)
-    base_url = os.environ.get("FRONTEND_URL")
-    if not base_url:
-        raise HTTPException(status_code=500, detail="Configuration manquante: FRONTEND_URL non défini dans les variables d'environnement")
-    share_url = f"{base_url}/client/devis/{share_token}"
+    share_url = f"{FRONTEND_URL}/client/devis/{share_token}"
     
-    # Generate email HTML
-    email_html = generate_email_html("quote", quote, company, client or {}, share_url, request.custom_message)
+    email_html = generate_email_html("quote", quote, company, client, share_url, request.custom_message)
     
-    # Generate PDF attachment
-    pdf_buffer = create_pdf("quote", quote, company, client or {"name": quote["client_name"], "address": ""})
+    pdf_buffer = create_pdf("quote", quote, company, client)
     pdf_data = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
     
     try:
         params = {
             "from": SENDER_EMAIL,
             "to": [request.recipient_email],
-            "subject": f"Devis n° {quote['quote_number']} - {company.company_name}",
+            "subject": f"Devis n° {quote['quote_number']} - {company.get('company_name', '')}",
             "html": email_html,
             "attachments": [
                 {
@@ -3681,61 +3626,71 @@ async def send_quote_email(quote_id: str, request: SendDocumentEmailRequest, use
             ]
         }
         
-        # Send email asynchronously
         email_result = await asyncio.to_thread(resend.Emails.send, params)
         
-        # Update quote status to sent
-        await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "envoye"}})
+        await db.quotes.update_one(
+            {"id": quote_id},
+            {"$set": {"status": "envoye"}}
+        )
+        
+        logger.info(f"Quote email sent: {quote['quote_number']} to {request.recipient_email}")
         
         return {
             "status": "success",
             "message": f"Devis envoyé à {request.recipient_email}",
             "email_id": email_result.get("id")
         }
+        
     except Exception as e:
-        logging.error(f"Email send error: {str(e)}")
+        logger.error(f"Email send error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'envoi: {str(e)}")
 
 @api_router.post("/invoices/{invoice_id}/send-email")
 async def send_invoice_email(invoice_id: str, request: SendDocumentEmailRequest, user: dict = Depends(get_current_user)):
-    """Send invoice by email to client"""
     if not RESEND_CONFIGURED:
-        raise HTTPException(
-            status_code=503, 
-            detail="Service email non configuré. Pour activer l'envoi d'emails, ajoutez une clé API Resend valide (RESEND_API_KEY) dans le fichier backend/.env. Obtenez une clé sur https://resend.com"
-        )
+        raise HTTPException(status_code=503, detail="Service email non configuré")
     
-    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not FRONTEND_URL:
+        raise HTTPException(status_code=500, detail="FRONTEND_URL non configuré")
+    
+    if not validate_uuid(invoice_id):
+        raise HTTPException(status_code=400, detail="ID facture invalide")
+    
+    invoice = await db.invoices.find_one(
+        {"id": invoice_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture non trouvée")
     
-    client = await db.clients.find_one({"id": invoice["client_id"]}, {"_id": 0})
+    client = await db.clients.find_one(
+        {"id": invoice["client_id"]},
+        {"_id": 0}
+    ) or {"name": invoice["client_name"]}
+    
     company = await get_company_settings()
     
-    # Generate or get share token
     share_token = invoice.get("share_token")
     if not share_token:
         share_token = generate_share_token()
-        await db.invoices.update_one({"id": invoice_id}, {"$set": {"share_token": share_token}})
+        await db.invoices.update_one(
+            {"id": invoice_id},
+            {"$set": {"share_token": share_token}}
+        )
     
-    # Get base URL from environment (required for email links)
-    base_url = os.environ.get("FRONTEND_URL")
-    if not base_url:
-        raise HTTPException(status_code=500, detail="Configuration manquante: FRONTEND_URL non défini dans les variables d'environnement")
-    share_url = f"{base_url}/client/facture/{share_token}"
+    share_url = f"{FRONTEND_URL}/client/facture/{share_token}"
     
-    # Generate email HTML
-    email_html = generate_email_html("invoice", invoice, company, client or {}, share_url, request.custom_message)
+    email_html = generate_email_html("invoice", invoice, company, client, share_url, request.custom_message)
     
-    # Generate PDF attachment
-    pdf_buffer = create_pdf("invoice", invoice, company, client or {"name": invoice["client_name"], "address": ""})
+    pdf_buffer = create_pdf("invoice", invoice, company, client)
     pdf_data = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
     
     try:
         params = {
             "from": SENDER_EMAIL,
             "to": [request.recipient_email],
-            "subject": f"Facture n° {invoice['invoice_number']} - {company.company_name}",
+            "subject": f"Facture n° {invoice['invoice_number']} - {company.get('company_name', '')}",
             "html": email_html,
             "attachments": [
                 {
@@ -3745,39 +3700,90 @@ async def send_invoice_email(invoice_id: str, request: SendDocumentEmailRequest,
             ]
         }
         
-        # Send email asynchronously
         email_result = await asyncio.to_thread(resend.Emails.send, params)
+        
+        logger.info(f"Invoice email sent: {invoice['invoice_number']} to {request.recipient_email}")
         
         return {
             "status": "success",
             "message": f"Facture envoyée à {request.recipient_email}",
             "email_id": email_result.get("id")
         }
+        
     except Exception as e:
-        logging.error(f"Email send error: {str(e)}")
+        logger.error(f"Email send error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erreur lors de l'envoi: {str(e)}")
 
 @api_router.get("/email/status")
 async def get_email_status(user: dict = Depends(get_current_user)):
-    """Check if email service is configured"""
     return {
         "configured": RESEND_CONFIGURED,
         "sender": SENDER_EMAIL if RESEND_CONFIGURED else None,
-        "setup_instructions": None if RESEND_CONFIGURED else "Pour activer l'envoi d'emails, ajoutez RESEND_API_KEY dans backend/.env (obtenez une clé sur https://resend.com)"
+        "frontend_url": FRONTEND_URL
     }
 
-# ============== MAIN APP ==============
+# ============== HEALTH CHECK ==============
+
+@api_router.get("/health")
+async def health_check():
+    try:
+        await client.admin.command('ping')
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "environment": ENVIRONMENT
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e)
+        }
+
+# ============== MAIN APP SETUP ==============
 
 app.include_router(api_router)
 
+cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
+cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
     allow_headers=["*"],
+    allow_methods=["*"],
+    max_age=3600,
 )
+
+@app.on_event("startup")
+async def startup_db_client():
+    try:
+        await client.admin.command('ping')
+        logger.info("Connected to MongoDB")
+        
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("id", unique=True)
+        await db.clients.create_index([("owner_id", 1), ("id", 1)], unique=True)
+        await db.quotes.create_index([("owner_id", 1), ("id", 1)], unique=True)
+        await db.invoices.create_index([("owner_id", 1), ("id", 1)], unique=True)
+        await db.share_links.create_index("token", unique=True)
+        await db.share_links.create_index("expires_at", expireAfterSeconds=0)
+        
+        logger.info("Database indexes created")
+        
+        await initialize_default_items()
+        await initialize_default_kits()
+        
+    except Exception as e:
+        logger.error(f"Database connection failed: {str(e)}")
+        raise
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+    logger.info("Database connection closed")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
