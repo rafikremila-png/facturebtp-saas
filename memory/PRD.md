@@ -352,6 +352,43 @@ Build a production-ready MVP web application for a French construction company (
 - **Frontend** : Section "Administration" conditionnelle, page /utilisateurs, badges de rôle
 - **Tests** : 100% de réussite (13 tests backend, tous tests frontend passés)
 
+### OTP & Sécurité Avancée ✅ (Feb 24, 2026)
+- **OTP à l'inscription** :
+  - Téléphone obligatoire à l'inscription
+  - Code OTP 6 chiffres envoyé par email (MOCKÉ - logs en dev)
+  - Compte activé uniquement après vérification
+  - OTP valide 10 minutes
+- **OTP pour actions admin sensibles** (5 minutes) :
+  - Modification de rôle
+  - Réinitialisation mot de passe
+  - Suppression utilisateur
+  - Impersonation
+- **Fiche détail utilisateur** :
+  - Nom, email, téléphone, entreprise, adresse
+  - Rôle, date création, dernière connexion
+  - Statut actif/inactif, email vérifié
+- **Impersonation (Mode Support)** :
+  - Super admin uniquement
+  - OTP obligatoire
+  - Bannière "Mode Support Actif" visible
+  - Audit log enregistré
+  - Bouton "Quitter le mode"
+- **Champ Site Web dans paramètres** :
+  - Validation URL
+  - CTA business si champ vide
+- **Formulaire demande de site** :
+  - Type d'activité, objectif, budget, délai
+  - Email admin + enregistrement en base
+- **Page profil utilisateur** :
+  - Édition nom, téléphone, entreprise, adresse
+  - Route /profil
+- **Audit logging** :
+  - Actions sensibles enregistrées avec IP
+  - Logs structurés
+- **Backend** : Middlewares `require_admin`, `require_super_admin`, routes /api/users/*
+- **Frontend** : Section "Administration" conditionnelle, page /utilisateurs, badges de rôle
+- **Tests** : 100% de réussite (13 tests backend, tous tests frontend passés)
+
 ## Test Reports Created
 - `/app/test_reports/iteration_5.json` - Situations testing
 - `/app/test_reports/iteration_6.json` - Retenue de garantie testing
