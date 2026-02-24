@@ -1527,7 +1527,63 @@ async def get_me(user: dict = Depends(get_current_user)):
         id=user["id"], 
         email=user["email"], 
         name=user["name"],
-        role=user.get("role", ROLE_USER)
+        role=user.get("role", ROLE_USER),
+        phone=user.get("phone"),
+        email_verified=user.get("email_verified", False)
+    )
+
+@api_router.get("/auth/profile", response_model=UserDetailResponse)
+async def get_profile(user: dict = Depends(get_current_user)):
+    """Get current user's full profile"""
+    return UserDetailResponse(
+        id=user["id"],
+        email=user["email"],
+        name=user["name"],
+        phone=user.get("phone", ""),
+        company_name=user.get("company_name"),
+        address=user.get("address"),
+        role=user.get("role", ROLE_USER),
+        created_at=user["created_at"],
+        last_login=user.get("last_login"),
+        is_active=user.get("is_active", True),
+        email_verified=user.get("email_verified", False)
+    )
+
+@api_router.put("/auth/profile")
+async def update_profile(profile_data: UserProfileUpdate, user: dict = Depends(get_current_user)):
+    """Update current user's profile"""
+    update_fields = {}
+    
+    if profile_data.name is not None:
+        update_fields["name"] = profile_data.name
+    if profile_data.phone is not None:
+        update_fields["phone"] = profile_data.phone
+    if profile_data.company_name is not None:
+        update_fields["company_name"] = profile_data.company_name
+    if profile_data.address is not None:
+        update_fields["address"] = profile_data.address
+    
+    if update_fields:
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": update_fields}
+        )
+        logger.info(f"Profile updated for user {user['id']}")
+    
+    # Return updated user
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password": 0})
+    return UserDetailResponse(
+        id=updated_user["id"],
+        email=updated_user["email"],
+        name=updated_user["name"],
+        phone=updated_user.get("phone", ""),
+        company_name=updated_user.get("company_name"),
+        address=updated_user.get("address"),
+        role=updated_user.get("role", ROLE_USER),
+        created_at=updated_user["created_at"],
+        last_login=updated_user.get("last_login"),
+        is_active=updated_user.get("is_active", True),
+        email_verified=updated_user.get("email_verified", False)
     )
 
 # ============== USER MANAGEMENT ROUTES (ADMIN ONLY) ==============
