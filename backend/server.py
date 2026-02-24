@@ -1017,6 +1017,119 @@ def verify_password(password: str, hashed: str) -> bool:
     except Exception:
         return False
 
+# ============== OTP FUNCTIONS ==============
+
+async def generate_and_store_otp(email: str, otp_type: str, target_user_id: str = None) -> str:
+    """Generate OTP, store in database, and return the code"""
+    otp_code = generate_otp()
+    expiration_minutes = OTP_EXPIRATION_MINUTES.get(otp_type, 5)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=expiration_minutes)
+    
+    # Delete any existing OTP for this email/type
+    await db.otp_codes.delete_many({"email": email, "otp_type": otp_type})
+    
+    otp_doc = {
+        "id": str(uuid.uuid4()),
+        "email": email,
+        "otp_code": otp_code,
+        "otp_type": otp_type,
+        "target_user_id": target_user_id,
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "used": False
+    }
+    
+    await db.otp_codes.insert_one(otp_doc)
+    
+    # Log OTP for development (will be replaced by email in production)
+    logger.info(f"[OTP] Code: {otp_code} | Email: {email} | Type: {otp_type} | Expires in {expiration_minutes} minutes")
+    
+    # Send email if Resend is configured
+    if RESEND_CONFIGURED:
+        try:
+            await send_otp_email(email, otp_code, otp_type, expiration_minutes)
+        except Exception as e:
+            logger.error(f"Failed to send OTP email: {str(e)}")
+    
+    return otp_code
+
+async def verify_otp(email: str, otp_code: str, otp_type: str) -> dict:
+    """Verify OTP code and return the OTP document if valid"""
+    otp_doc = await db.otp_codes.find_one({
+        "email": email,
+        "otp_code": otp_code,
+        "otp_type": otp_type,
+        "used": False
+    })
+    
+    if not otp_doc:
+        return None
+    
+    expires_at = datetime.fromisoformat(otp_doc["expires_at"].replace('Z', '+00:00'))
+    if datetime.now(timezone.utc) > expires_at:
+        await db.otp_codes.delete_one({"id": otp_doc["id"]})
+        return None
+    
+    # Mark as used
+    await db.otp_codes.update_one(
+        {"id": otp_doc["id"]},
+        {"$set": {"used": True}}
+    )
+    
+    return otp_doc
+
+async def send_otp_email(email: str, otp_code: str, otp_type: str, expiration_minutes: int):
+    """Send OTP via email using Resend"""
+    type_labels = {
+        OTP_TYPE_REGISTRATION: "Vérification de votre compte",
+        OTP_TYPE_PASSWORD_RESET: "Réinitialisation du mot de passe",
+        OTP_TYPE_DELETE_USER: "Suppression de compte",
+        OTP_TYPE_PROMOTE_ADMIN: "Modification de rôle",
+        OTP_TYPE_IMPERSONATION: "Accès support"
+    }
+    
+    subject = f"BTP Facture - {type_labels.get(otp_type, 'Code de vérification')}"
+    
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #ea580c;">BTP Facture</h2>
+        <p>Votre code de vérification est :</p>
+        <div style="background: #f1f5f9; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1e293b;">{otp_code}</span>
+        </div>
+        <p style="color: #64748b;">Ce code expire dans {expiration_minutes} minutes.</p>
+        <p style="color: #64748b; font-size: 12px;">Si vous n'avez pas demandé ce code, ignorez cet email.</p>
+    </div>
+    """
+    
+    resend.emails.send({
+        "from": SENDER_EMAIL,
+        "to": [email],
+        "subject": subject,
+        "html": html_content
+    })
+
+# ============== AUDIT LOG FUNCTIONS ==============
+
+async def create_audit_log(action: str, actor_id: str, actor_email: str, 
+                          target_id: str = None, target_email: str = None,
+                          details: str = None, ip_address: str = None):
+    """Create an audit log entry for sensitive actions"""
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "action": action,
+        "actor_id": actor_id,
+        "actor_email": actor_email,
+        "target_id": target_id,
+        "target_email": target_email,
+        "details": details,
+        "ip_address": ip_address,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.audit_logs.insert_one(log_entry)
+    logger.info(f"[AUDIT] {action} | Actor: {actor_email} | Target: {target_email or 'N/A'} | Details: {details or 'N/A'}")
+
 def create_token(user_id: str, token_type: str = "access") -> str:
     if token_type == "access":
         expires = timedelta(hours=JWT_EXPIRATION_HOURS)
