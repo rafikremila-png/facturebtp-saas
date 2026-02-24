@@ -1275,9 +1275,16 @@ async def init_super_admin():
 
 # ============== AUTH ROUTES ==============
 
-@api_router.post("/auth/register", response_model=TokenResponse)
+class RegistrationResponse(BaseModel):
+    """Response after initial registration"""
+    message: str
+    email: str
+    requires_verification: bool = True
+
+@api_router.post("/auth/register", response_model=RegistrationResponse)
 @limiter.limit("5/hour")
 async def register(request: Request, user_data: UserCreate):
+    """Register a new user - requires email verification via OTP"""
     try:
         existing = await db.users.find_one({"email": user_data.email})
         if existing:
@@ -1291,8 +1298,12 @@ async def register(request: Request, user_data: UserCreate):
             "email": user_data.email,
             "password": hashed_password,
             "name": user_data.name,
-            "role": ROLE_USER,  # New users get 'user' role by default
-            "is_active": True,
+            "phone": user_data.phone,
+            "company_name": user_data.company_name or "",
+            "address": user_data.address or "",
+            "role": ROLE_USER,
+            "is_active": False,  # Inactive until email verified
+            "email_verified": False,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_login": None,
             "login_attempts": 0,
@@ -1301,15 +1312,15 @@ async def register(request: Request, user_data: UserCreate):
         
         await db.users.insert_one(user_doc)
         
-        access_token = create_token(user_id, "access")
-        refresh_token = create_token(user_id, "refresh")
+        # Generate and send OTP for email verification
+        await generate_and_store_otp(user_data.email, OTP_TYPE_REGISTRATION)
         
-        logger.info(f"User registered: {user_id} with role: {ROLE_USER}")
+        logger.info(f"User registered (pending verification): {user_id}")
         
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            user=UserResponse(id=user_id, email=user_data.email, name=user_data.name, role=ROLE_USER)
+        return RegistrationResponse(
+            message="Compte créé. Vérifiez votre email pour le code de validation.",
+            email=user_data.email,
+            requires_verification=True
         )
         
     except HTTPException:
@@ -1317,6 +1328,81 @@ async def register(request: Request, user_data: UserCreate):
     except Exception as e:
         logger.error(f"Registration error: {str(e)}")
         raise HTTPException(status_code=500, detail="Erreur lors de l'inscription")
+
+@api_router.post("/auth/verify-email", response_model=TokenResponse)
+@limiter.limit("10/hour")
+async def verify_email(request: Request, data: OTPVerify):
+    """Verify email with OTP and activate account"""
+    try:
+        if data.otp_type != OTP_TYPE_REGISTRATION:
+            raise HTTPException(status_code=400, detail="Type OTP invalide")
+        
+        otp_doc = await verify_otp(data.email, data.otp_code, OTP_TYPE_REGISTRATION)
+        
+        if not otp_doc:
+            raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré")
+        
+        # Activate user account
+        user = await db.users.find_one({"email": data.email})
+        if not user:
+            raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+        
+        await db.users.update_one(
+            {"email": data.email},
+            {"$set": {
+                "is_active": True,
+                "email_verified": True,
+                "last_login": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        access_token = create_token(user["id"], "access")
+        refresh_token = create_token(user["id"], "refresh")
+        
+        logger.info(f"Email verified and account activated: {user['id']}")
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user=UserResponse(
+                id=user["id"], 
+                email=user["email"], 
+                name=user["name"], 
+                role=user.get("role", ROLE_USER),
+                phone=user.get("phone"),
+                email_verified=True
+            )
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Email verification error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la vérification")
+
+@api_router.post("/auth/resend-otp")
+@limiter.limit("3/hour")
+async def resend_otp(request: Request, data: OTPRequest):
+    """Resend OTP code"""
+    try:
+        user = await db.users.find_one({"email": data.email})
+        if not user:
+            # Don't reveal if email exists
+            return {"message": "Si cet email existe, un code a été envoyé"}
+        
+        # For registration OTP, only send if not verified
+        if data.otp_type == OTP_TYPE_REGISTRATION and user.get("email_verified"):
+            raise HTTPException(status_code=400, detail="Email déjà vérifié")
+        
+        await generate_and_store_otp(data.email, data.otp_type, data.target_user_id)
+        
+        return {"message": "Code envoyé avec succès"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Resend OTP error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de l'envoi")
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
