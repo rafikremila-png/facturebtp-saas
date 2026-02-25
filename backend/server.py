@@ -1418,7 +1418,7 @@ async def verify_email(request: Request, data: OTPVerify):
         # Verify OTP using new service
         otp_service = get_otp_service(db)
         try:
-            result = await otp_service.verify_otp(user["id"], data.email, data.otp_code)
+            await otp_service.verify_otp(user["id"], data.email, data.otp_code)
         except HTTPException:
             raise
         except Exception:
