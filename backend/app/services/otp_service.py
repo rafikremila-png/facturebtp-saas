@@ -289,6 +289,10 @@ class OTPService:
         now = datetime.now(timezone.utc)
         last_sent = verification.get("last_sent_at", verification["created_at"])
         
+        # Handle naive datetime from MongoDB
+        if last_sent.tzinfo is None:
+            last_sent = last_sent.replace(tzinfo=timezone.utc)
+        
         # Check cooldown (60 seconds minimum between resends)
         seconds_since_last = (now - last_sent).total_seconds()
         if seconds_since_last < RESEND_COOLDOWN_SECONDS:
@@ -304,6 +308,8 @@ class OTPService:
         if resend_count >= MAX_RESEND_PER_HOUR:
             # Check if an hour has passed since first send
             created_at = verification["created_at"]
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
             if (now - created_at).total_seconds() < 3600:
                 return {
                     "can_resend": False,
