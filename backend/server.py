@@ -1421,7 +1421,7 @@ async def verify_email(request: Request, data: OTPVerify):
             result = await otp_service.verify_otp(user["id"], data.email, data.otp_code)
         except HTTPException:
             raise
-        except Exception as e:
+        except Exception:
             # Fallback to legacy OTP verification
             otp_doc = await verify_otp(data.email, data.otp_code, OTP_TYPE_REGISTRATION)
             if not otp_doc:
