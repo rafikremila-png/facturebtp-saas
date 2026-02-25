@@ -467,7 +467,7 @@ class TestHealthAndBasicEndpoints:
     
     def test_api_health(self):
         """API should be healthy"""
-        response = requests.get(f"{BASE_URL}/api/")
+        response = requests.get(f"{BASE_URL}/api/health")
         assert response.status_code == 200
     
     def test_auth_me_requires_auth(self):
