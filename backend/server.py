@@ -1315,12 +1315,20 @@ class RegistrationResponse(BaseModel):
     """Response after initial registration"""
     message: str
     email: str
+    user_id: Optional[str] = None
     requires_verification: bool = True
 
 @api_router.post("/auth/register", response_model=RegistrationResponse)
 @limiter.limit("5/hour")
 async def register(request: Request, user_data: UserCreate):
-    """Register a new user - requires email verification via OTP"""
+    """
+    Register a new user - requires email verification via OTP.
+    
+    Flow:
+    1. Create user with is_verified=False, trial_start=None, plan="trial_pending"
+    2. Generate and send OTP via email
+    3. User must verify OTP to activate trial (14 days)
+    """
     try:
         existing = await db.users.find_one({"email": user_data.email})
         if existing:
@@ -1329,6 +1337,7 @@ async def register(request: Request, user_data: UserCreate):
         user_id = str(uuid.uuid4())
         hashed_password = hash_password(user_data.password)
         
+        # New user document structure with trial management
         user_doc = {
             "id": user_id,
             "email": user_data.email,
@@ -1340,22 +1349,42 @@ async def register(request: Request, user_data: UserCreate):
             "role": ROLE_USER,
             "is_active": False,  # Inactive until email verified
             "email_verified": False,
+            "is_verified": False,  # New field for trial activation
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_login": None,
             "login_attempts": 0,
-            "locked_until": None
+            "locked_until": None,
+            # Trial management (starts only after verification)
+            "trial_start": None,
+            "trial_end": None,
+            "plan": "trial_pending",
+            "invoice_limit": 9,
+            # Stripe preparation (not integrated yet)
+            "stripe_customer_id": None,
+            "stripe_subscription_id": None,
+            "subscription_status": None,
+            "current_period_end": None,
         }
         
         await db.users.insert_one(user_doc)
         
-        # Generate and send OTP for email verification
-        await generate_and_store_otp(user_data.email, OTP_TYPE_REGISTRATION)
+        # Generate OTP using new service
+        otp_service = get_otp_service(db)
+        otp_code = await otp_service.create_otp(user_id, user_data.email)
+        
+        # Send OTP email using new email service
+        email_service = get_email_service()
+        try:
+            email_service.send_otp_email(user_data.email, otp_code)
+        except Exception as email_error:
+            logger.warning(f"Email sending failed (non-blocking): {email_error}")
         
         logger.info(f"User registered (pending verification): {user_id}")
         
         return RegistrationResponse(
             message="Compte créé. Vérifiez votre email pour le code de validation.",
             email=user_data.email,
+            user_id=user_id,
             requires_verification=True
         )
         
@@ -1368,34 +1397,69 @@ async def register(request: Request, user_data: UserCreate):
 @api_router.post("/auth/verify-email", response_model=TokenResponse)
 @limiter.limit("10/hour")
 async def verify_email(request: Request, data: OTPVerify):
-    """Verify email with OTP and activate account"""
+    """
+    Verify email with OTP and activate account + trial.
+    
+    On success:
+    - Sets is_verified=True, email_verified=True, is_active=True
+    - Sets trial_start=now, trial_end=now+14days
+    - Sets plan="trial_active"
+    - Returns JWT tokens
+    """
     try:
         if data.otp_type != OTP_TYPE_REGISTRATION:
             raise HTTPException(status_code=400, detail="Type OTP invalide")
         
-        otp_doc = await verify_otp(data.email, data.otp_code, OTP_TYPE_REGISTRATION)
-        
-        if not otp_doc:
-            raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré")
-        
-        # Activate user account
+        # Find user first
         user = await db.users.find_one({"email": data.email})
         if not user:
             raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
         
+        # Verify OTP using new service
+        otp_service = get_otp_service(db)
+        try:
+            result = await otp_service.verify_otp(user["id"], data.email, data.otp_code)
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Fallback to legacy OTP verification
+            otp_doc = await verify_otp(data.email, data.otp_code, OTP_TYPE_REGISTRATION)
+            if not otp_doc:
+                raise HTTPException(status_code=400, detail="Code OTP invalide ou expiré")
+        
+        # Calculate trial period (14 days)
+        now = datetime.now(timezone.utc)
+        trial_end = now + timedelta(days=14)
+        
+        # Activate user account with trial
         await db.users.update_one(
             {"email": data.email},
             {"$set": {
                 "is_active": True,
                 "email_verified": True,
-                "last_login": datetime.now(timezone.utc).isoformat()
+                "is_verified": True,
+                "last_login": now.isoformat(),
+                # Activate trial
+                "trial_start": now.isoformat(),
+                "trial_end": trial_end.isoformat(),
+                "plan": "trial_active",
             }}
         )
+        
+        # Clean up OTP
+        await otp_service.delete_otp(user["id"], data.email)
         
         access_token = create_token(user["id"], "access")
         refresh_token = create_token(user["id"], "refresh")
         
-        logger.info(f"Email verified and account activated: {user['id']}")
+        # Send welcome email
+        email_service = get_email_service()
+        try:
+            email_service.send_welcome_email(data.email, user["name"])
+        except Exception as email_error:
+            logger.warning(f"Welcome email failed (non-blocking): {email_error}")
+        
+        logger.info(f"Email verified, trial activated: {user['id']} (ends: {trial_end.isoformat()})")
         
         return TokenResponse(
             access_token=access_token,
@@ -1419,7 +1483,14 @@ async def verify_email(request: Request, data: OTPVerify):
 @api_router.post("/auth/resend-otp")
 @limiter.limit("3/hour")
 async def resend_otp(request: Request, data: OTPRequest):
-    """Resend OTP code"""
+    """
+    Resend OTP code with rate limiting.
+    
+    Rules (via new OTP service):
+    - Minimum 60 seconds between resends
+    - Maximum 5 resends per hour
+    - Deletes previous OTP before generating new one
+    """
     try:
         user = await db.users.find_one({"email": data.email})
         if not user:
@@ -1430,7 +1501,21 @@ async def resend_otp(request: Request, data: OTPRequest):
         if data.otp_type == OTP_TYPE_REGISTRATION and user.get("email_verified"):
             raise HTTPException(status_code=400, detail="Email déjà vérifié")
         
-        await generate_and_store_otp(data.email, data.otp_type, data.target_user_id)
+        # Use new OTP service with built-in rate limiting
+        otp_service = get_otp_service(db)
+        
+        try:
+            otp_code = await otp_service.resend_otp(user["id"], data.email)
+            
+            # Send email
+            email_service = get_email_service()
+            email_service.send_otp_email(data.email, otp_code)
+            
+        except HTTPException:
+            raise
+        except Exception:
+            # Fallback to legacy OTP generation
+            await generate_and_store_otp(data.email, data.otp_type, data.target_user_id)
         
         return {"message": "Code envoyé avec succès"}
         
