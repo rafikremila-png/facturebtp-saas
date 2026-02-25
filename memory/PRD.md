@@ -387,6 +387,36 @@ Build a production-ready MVP web application for a French construction company (
   - Logs structurés
 - **Tests** : 94-100% de réussite
 
+### Architecture Modulaire & Trial Management ✅ (Feb 25, 2026)
+- **Structure modulaire** sous `/app/backend/app/`:
+  - `services/email_service.py` - Service SMTP avec templates HTML
+  - `services/otp_service.py` - OTP sécurisé avec bcrypt
+  - `services/rate_limit_service.py` - Rate limiting in-memory (Redis-ready)
+  - `services/jwt_service.py` - Génération de tokens JWT
+  - `models/user_model.py` - Modèles utilisateur avec trial
+  - `models/verification_model.py` - Modèles OTP
+- **Trial Management** :
+  - 14 jours d'essai gratuit
+  - Limite de 9 factures pendant l'essai
+  - Trial commence UNIQUEMENT après vérification email
+  - États: `trial_pending` → `trial_active` → `trial_expired`
+- **OTP Sécurisé** :
+  - Génération via `secrets` module (6 chiffres)
+  - Hashage bcrypt
+  - Expiration 10 minutes
+  - Max 5 tentatives
+  - Collection `email_verifications` avec TTL index
+- **Resend OTP Rate Limiting** :
+  - Cooldown 60 secondes entre renvois
+  - Maximum 5 renvois par heure
+  - HTTP 429 si limite dépassée
+- **Préparation Stripe** (non intégré) :
+  - `stripe_customer_id`
+  - `stripe_subscription_id`
+  - `subscription_status` (active | canceled | past_due)
+  - `current_period_end`
+- **Tests** : 96% de réussite (24/25)
+
 ## Test Reports Created
 - `/app/test_reports/iteration_5.json` - Situations testing
 - `/app/test_reports/iteration_6.json` - Retenue de garantie testing
@@ -395,5 +425,8 @@ Build a production-ready MVP web application for a French construction company (
 - `/app/test_reports/iteration_9.json` - Select bug fix testing (Feb 4, 2026)
 - `/app/test_reports/iteration_10.json` - RBAC system testing (Feb 4, 2026)
 - `/app/test_reports/iteration_11.json` - OTP & Security features testing (Feb 24, 2026)
+- `/app/test_reports/iteration_12.json` - Trial & OTP Architecture testing (Feb 25, 2026)
 - `/app/backend/tests/test_rbac.py` - Tests unitaires RBAC
 - `/app/backend/tests/test_otp_features.py` - Tests unitaires OTP
+- `/app/backend/tests/test_trial_otp_architecture.py` - Tests architecture modulaire
+- `/app/backend/tests/test_e2e_registration_flow.py` - Tests E2E inscription
