@@ -211,8 +211,14 @@ class OTPService:
                 detail="Aucun code OTP en attente pour cet utilisateur"
             )
         
-        # Check expiration
-        if datetime.now(timezone.utc) > verification["expires_at"]:
+        # Check expiration (handle both naive and aware datetimes from MongoDB)
+        expires_at = verification["expires_at"]
+        now = datetime.now(timezone.utc)
+        # Make comparison timezone-aware if needed
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+        if now > expires_at:
             await self.collection.delete_one({"_id": verification["_id"]})
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
