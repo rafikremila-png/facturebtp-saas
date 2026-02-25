@@ -166,7 +166,7 @@ class OTPService:
         # Log OTP in development (never in production!)
         import os
         if os.environ.get("ENVIRONMENT", "development") == "development":
-            logger.info(f"""
+            print(f"""
 ╔══════════════════════════════════════════════════════════════╗
 ║ [DEV MODE] OTP CODE GENERATED                                ║
 ╠══════════════════════════════════════════════════════════════╣
@@ -174,7 +174,7 @@ class OTPService:
 ║ OTP Code: {otp_code}
 ║ Expires: {expiration_minutes} minutes
 ╚══════════════════════════════════════════════════════════════╝
-            """)
+            """, flush=True)
         
         return otp_code
     
