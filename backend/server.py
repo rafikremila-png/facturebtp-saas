@@ -24,6 +24,12 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import re
 
+# Import new modular services
+from app.services.email_service import get_email_service
+from app.services.otp_service import get_otp_service
+from app.services.rate_limit_service import get_rate_limiter, get_client_ip
+from app.init import init_app_services, create_user_indexes
+
 # ReportLab imports for PDF
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
