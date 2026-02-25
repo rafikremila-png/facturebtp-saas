@@ -1,152 +1,174 @@
-<analysis>**original_problem_statement:**
-The user wants to build a production-ready MVP web application for a French construction company (BTP) to manage quotes (devis) and invoices (factures). The application must be fully compliant with French legal, accounting, and tax requirements.
+<analysis>
+**original_problem_statement:**
+The user wants to build a production-ready MVP web application for a French construction company to manage quotes and invoices, fully compliant with French legal and tax requirements.
 
 **PRODUCT REQUIREMENTS:**
-- **Core Features:** Client management (CRUD), Quote management (CRUD, status tracking, PDF generation, conversion to invoice), Invoice management (CRUD, payment status, PDF generation), and a Dashboard.
-- **French BTP Specifics:**
-    - **Renovation Kits:** Predefined sets of line items for common jobs.
-    - **Client View:** A public, secure link for clients to view documents.
-    - **Email Notifications:** Send documents to clients via email.
-    - **Auto-Entrepreneur Mode:** A toggle for a VAT-exempt mode.
-    - **Legal Compliance:** Mandatory French legal information on documents.
-    - **Advance Payments (Acomptes):** Create down-payment invoices.
-    - **Situation Invoices (Factures de situation):** Progressive billing based on work completion percentage.
-    - **Retention Guarantee (Retenue de garantie):** A 5% retention on invoices, releasable after a warranty period.
-    - **Financial Summary:** A dashboard for project financials, accessible by admin and client.
-    - **PDF Export:** An exportable PDF of the financial summary.
+- **Core Features:** Client management, Quote management (CRUD, status, PDF, conversion), Invoice management (CRUD, status, PDF), and a Dashboard.
+- **French BTP Specifics:** Renovation Kits, Client View, Email Notifications, Auto-Entrepreneur Mode, Legal Compliance, Advance Payments, Situation Invoices, Retention Guarantee, Financial Summary PDF, Bulk Actions, and Client Filtering.
+- **Security & Admin:**
+    - A hard-coded  account for the SaaS owner with full access, bypassing subscription checks.
+    - A mono-tenant architecture with a strict Role-Based Access Control (RBAC) system for , , and  roles.
+    - Two-Factor Authentication (OTP) via email for user registration and sensitive admin actions (password reset, user deletion, promotion, impersonation).
+- **User & Company Profile Enrichment:**
+    - Add a mandatory  field for users.
+    - Add an optional  field to company settings.
+    - Create a business lead generation opportunity: if the website field is empty, show a button to request a website creation via an internal form.
+- **Feature: Document Color Customization:**
+    - Allow users to select a primary color (from a predefined list) for their quotes and invoices in the settings.
+- **Feature: Automatic Payment Reminders:**
+    - Implement a daily background job to send scheduled email reminders for overdue invoices.
 
 **User's preferred language**: French
 
 **what currently exists?**
-A full-stack React/FastAPI application for managing construction quotes and invoices. The app includes secure JWT authentication, full CRUD for clients/quotes/invoices, a settings page with an Auto-entrepreneur mode toggle, PDF generation, and a public client view.
+A full-stack React/FastAPI application for managing construction quotes and invoices. The application now features a comprehensive, secure, role-based access control (RBAC) system with three tiers: , , and .
 
-In this session, the following features were added:
-1.  **Situation Invoices:** A complete system for progressive billing, supporting both global and per-line completion percentages.
-2.  **Retention Guarantee:** Management of the 5% retention guarantee () on invoices, including application, tracking, and release.
-3.  **Auto-Entrepreneur Compatibility:** A full audit and fix to ensure all features (acomptes, situations, retenue) correctly handle the VAT-exempt mode.
-4.  **Project Financial Summary:** A detailed, reusable dashboard component showing a project's complete financial status, accessible to both admins and clients (via a secure link).
+Key functionalities include:
+- **Core Business Logic:** Full CRUD for clients, quotes, and invoices; PDF generation; and a public client view link.
+- **Security:** Secure JWT authentication (with access and refresh tokens), endpoint protection via role-based middlewares, a rate limiter, and a robust OTP system for registration and sensitive admin actions. A  account is automatically created on startup using credentials from the  file.
+- **User Management:** An admin-only page to view, manage roles, and perform actions (activate, deactivate, delete) on users. A detailed user profile page is also available.
+- **Impersonation:** A -only Support Mode to impersonate other users for debugging, with a clear visual indicator in the UI.
+- **Customization:** Users can now customize the theme color of their PDF documents (quotes, invoices) from a predefined palette in the settings page.
+- **Business Lead Generation:** A CTA to request a website is displayed in the settings if the company's website URL is not provided.
 
 **Last working item**:
-- **Last item agent was working:** Implementing the user's request for a **PDF export of the project financial summary**. The agent has already created the backend endpoint () and the corresponding frontend API call in .
-- **Status:** IN PROGRESS
+- **Last item agent was working:** The agent received a new feature request to implement automatic payment reminders for overdue invoices. The agent has acknowledged the request but has not yet started the implementation.
+- **Status:** NOT STARTED
 - **Agent Testing Done:** N
 - **Which testing method agent to use?** both
 - **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
-- There are no known pending issues.
+- No pending issues. The last major bug was resolved.
 
 **In progress Task List**:
-- **Task 1:** Implement PDF Export for Financial Summary (P0)
-
-**Task Detail:**
-- **Task 1:**
-    - **Where to resume:** The backend endpoint and frontend API function are complete. The next step is to modify  to add a download button that triggers the PDF generation.
-    - **What will be achieved with this?** Users will be able to download a professional PDF of the project's financial dashboard, which is useful for client meetings and record-keeping.
-    - **Status:** IN PROGRESS
-    - **Should Test frontend/backend/both after fix?** Both
-    - **Blocked on something:** No
+- No tasks are currently in progress.
 
 **Upcoming and Future Tasks**
 - **Upcoming Tasks:**
+    - **P0: Implement Automatic Payment Reminders:** This is the immediate next task. It involves creating a background scheduler, tracking reminder stages, allowing user configuration in settings, and updating the UI to show reminder history.
     - **P1: TVA Attestations (10% / 5.5%):** Implement a guided form for clients to fill out the necessary attestations for reduced VAT rates on renovation work.
 - **Future Tasks:**
-    - **P2: Multi-User Support:** Implement a role-based system for multiple users (e.g., Admin, Sales, Accountant).
-    - **P3: Email Reminders:** Add an automated reminder system for unpaid invoices.
+    - **P2: Full Multi-Tenancy:** Migrate the current mono-tenant architecture to a full multi-tenant system where each company is a separate tenant.
+    - **P3: Push/SMS Notifications:** As a potential enhancement, add push or SMS notifications for invoice reminders.
 
 **Completed work in this session**
-- **Feature: Situation Invoices ()**: Implemented a full progressive billing system with UI/UX, backend logic, and PDF updates. Tested and validated.
-- **Feature: Retention Guarantee ()**: Implemented the French BTP standard for retention guarantees, including UI for settings and invoice management, backend logic, and PDF updates. Tested and validated.
-- **Feature: Auto-Entrepreneur Mode Compatibility**: Audited and fixed all features (quotes, invoices, acomptes, situations, retenue) to ensure they work seamlessly in the VAT-exempt mode. Tested and validated.
-- **Feature: Project Financial Summary Dashboard**: Created a comprehensive, read-only financial dashboard for projects, accessible to both admins and clients (via a secure public link). Tested and validated.
+- **Bug Fix:** Permanently fixed the recurring  component UI bug where the placeholder and selected value were concatenated.
+- **Feature: RBAC Security Overhaul:**
+    - Implemented a mono-tenant, multi-user architecture with , , and  roles.
+    - Created a  account on application startup from  variables.
+    - Secured all relevant backend API endpoints with role-based middlewares (, ).
+    - Added a comprehensive user management page () for admins.
+    - Added a user profile page ().
+- **Feature: OTP & Security Enhancement:**
+    - Implemented an OTP system for user registration (email verification) and sensitive admin actions.
+    - Made the  field mandatory on registration.
+    - Created an impersonation (Support Mode) feature for .
+- **Feature: Business Lead Generation:**
+    - Added a  field to company settings.
+    - Implemented a dialog form for users to request website creation, triggered from the settings page if no website is present.
+- **Feature: Document Color Customization:**
+    - Added a  field to company settings.
+    - Implemented a UI in the settings page for users to select a theme color from a predefined palette.
+    - Updated all PDF generation logic () to dynamically apply the selected color to headers and tables.
 
 **Earlier issues found/mentioned but not fixed**
 - None.
 
 **Known issue recurrence from previous fork**
-- None.
+- **Issue recurrence in previous fork:**  display bug.
+- **Recurrence count:** 1
+- **Status:** RESOLVED. The agent successfully fixed this recurring issue in the current session and verified it with the testing agent.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Backend:** FastAPI, Motor (async MongoDB), Pydantic, JWT, ReportLab.
-- **Frontend:** React, React Router, Axios, Shadcn/UI, Tailwind CSS,  for toasts.
-- **Architecture:** Monolithic backend () with a React SPA frontend.
+- **Backend:** FastAPI, Motor (async MongoDB on Atlas), Pydantic, JWT (with refresh tokens),  (bcrypt), , ReportLab,  (rate limiting).
+- **Frontend:** React, React Router, Axios, Shadcn/UI, Tailwind CSS, , .
+- **Security:** Full RBAC implementation, middleware-based route protection, OTP generation/verification for critical actions, audit logging, impersonation mode, and database isolation between users (via API logic).
+- **Database:** MongoDB Atlas (remote instance).
 
 **key DB schema**
-- **quotes:** Added , , , .
-- **invoices:** Added , , , , , , .
-- **company_settings:** Added , .
+- **:** Added  (String),  (String),  (Boolean),  (Boolean),  (String, optional),  (String, optional).
+- **:** Added  (String, default: blue),  (String, optional).
+- **New Collections:**
+    - **:** {, , , , }
+    - **:** {, , , , }
+    - **:** {, , , }
 
 **changes in tech stack**
-- No changes to the tech stack.
+- ****: Added to the backend for API rate limiting.
 
 **All files of reference**
-- ****: Heavily modified for all new features.
-- ****: Updated with new API calls.
-- ****: Major updates for Situations and the Financial Summary.
-- ****: Updated for Retenue de Garantie UI.
-- ****: Updated to configure Retenue de Garantie defaults.
-- ****: Updated with a tabbed layout for the Financial Summary.
-- ****: New component for the financial dashboard.
-- ****, ****: Updated for Auto-Entrepreneur mode compatibility.
-- ****: Updated with progress.
-- ****, ****, ****: Test reports for new features.
+- ****: Massively updated with all new security features (RBAC, OTP, impersonation), color theme logic for PDFs, and new API endpoints.
+- ****: Updated to include  and .
+- ****: Overhauled to handle the new OTP verification step during registration.
+- ****: New file for the admin user management dashboard.
+- ****: New file for the user's personal profile.
+- ****: Heavily modified to include the Website and Document Appearance sections.
+- ****: Updated to include protected routes, the impersonation banner, and new page routes.
+- ****: Sidebar updated to show/hide admin links based on user role and add a My Profile link.
+- ****: Modified to store and provide the user's role throughout the app.
+- ****: Added new functions for user management.
 
 **Areas that need refactoring**:
-- The  file is a large monolith. For future maintainability, it should be broken down into a more structured architecture (e.g., separate files for routes, models, and business logic/services). However, the user has explicitly requested not to refactor the architecture at this time.
+-  is now over 4,500 lines long. It contains all models, routes, logic, and PDF generation code. The user has explicitly forbidden refactoring it, but its size is a significant technical debt.
 
 **key api endpoints**
-- 
-- 
-- 
-- 
-- 
--  (in progress)
+- **Auth & Users:**
+    -  (now initiates OTP flow)
+    - 
+    - 
+    - , 
+    - 
+    - 
+    - , 
+- **Business Lead:**
+    - 
+- **Settings:**
+    -  (now handles  and )
 
 **Critical Info for New Agent**
-1.  **Immediate Task:** Your first priority is to complete the **PDF export for the financial summary**. The backend work is started; you need to add the download button to the  component.
-2.  **No Refactoring:** The user has explicitly said, Ne pas refactoriser l’architecture existante. Adhere to this, even though  is becoming a monolith.
-3.  **Next Priority (P1):** After completing the PDF export, the next task is to implement **TVA Attestations** for reduced VAT rates.
-4.  **Testing Gap:** The  call for the Auto-Entrepreneur Compatibility feature did not produce a report. The agent performed manual validation which passed, but this area lacks an automated regression test and may need extra attention if issues arise.
+1.  **Immediate Task (P0):** Your first and only task is to implement the **Automatic Payment Reminders** feature as detailed in the user's request. This is a significant feature requiring backend scheduling, database tracking, and UI updates.
+2.  **Database is on Atlas:** The production database is a MongoDB Atlas cluster, NOT . The connection string is in . All database verification commands must target the Atlas instance to see the correct data.
+3.  **Super Admin:** The primary admin account is created at startup using  and  from . Use this account to test all admin functionalities.
+4.  **No Refactoring :** The user has strictly forbidden breaking up the monolithic  file. All new backend logic must be added to this file.
 
 **documents and test reports created in this job**
-- 
-- 
-- 
-- 
+-  (updated extensively)
+-  (Select bug fix)
+-  (RBAC implementation)
+-  (OTP and Profile features)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **user**: Approved the PDF export suggestion and confirmed priorities: P1 is VAT Attestations, P2 is Multi-user, P3 is email reminders. (PENDING - agent is working on the PDF export now).
-2.  **agent**: Finished the financial summary dashboard and suggested a PDF export.
-3.  **user**: Requested the project financial summary dashboard feature.
-4.  **agent**: Finished ensuring all features are compatible with auto-entrepreneur mode.
-5.  **user**: Requested the auto-entrepreneur compatibility check.
-6.  **agent**: Finished implementing the Retenue de garantie (retention guarantee) feature.
-7.  **user**: Requested the Retenue de garantie feature.
-8.  **agent**: Finished implementing Situation invoices.
-9.  **user**: Clarified requirements for Situation invoices and approved implementation.
-10. **agent**: Presented a plan and asked for clarification on Situation invoices.
+1.  **user**: (CURRENT/PENDING) Requests implementation of an automatic payment reminder system for overdue invoices.
+2.  **user**: (COMPLETED) Requests a feature to allow users to customize the color theme of their quotes and invoices.
+3.  **user**: (COMPLETED) Provides detailed choices for the OTP/Security implementation: log OTPs in dev, use an internal form for website requests, make phone mandatory, and implement impersonation for super_admin.
+4.  **user**: (COMPLETED) Initiates conversation for OTP security, user profile enrichment, and a business lead generation feature.
+5.  **user**: (COMPLETED) Finishes a successful session after implementing the RBAC system.
+6.  **user**: (COMPLETED) Provides clear direction to implement a mono-tenant security model with RBAC, shelving the multi-tenant idea for later.
+7.  **user**: (COMPLETED) Initiates a major security refactor request, initially asking for a full multi-tenant architecture.
+8.  **user**: (COMPLETED) Requests the creation of a hard-coded administrator account for the SaaS owner.
+9.  **user**: (COMPLETED) Finishes a successful session after fixing the  component bug.
+10. **user**: (COMPLETED) Confirms that the agent should prioritize fixing the  bug.
 
 **Project Health Check:**
-- **Healthy:** The application is stable and the newly added features have been tested.
-- **Mocked:** The Resend email integration still uses a test key () and does not send real emails.
+- **Healthy:** The application is stable, with major security vulnerabilities addressed and significant features (RBAC, OTP, Customization) added. Core functionality is robust.
+- **Mocked:** The Resend email integration still uses a test key. While the OTP system logs codes to the console for development, a real email sending service (like Resend with a valid key) is required for production.
 
 **3rd Party Integrations**
-- **Resend (Email):** Integrated via  and uses the Emergent LLM Key. It is configured with a test key.
+- **Resend (Email):** Integrated via . It is configured with a placeholder test key (). The backend correctly identifies if a real key is missing. Does not use Emergent LLM Key.
 
 **Testing status**
-- **Testing agent used after significant changes:** YES (for Situations, Retenue, and Financial Summary).
+- **Testing agent used after significant changes:** YES. Used after the Select bug fix, the RBAC implementation, and the OTP/profile enrichment features.
 - **Troubleshoot agent used after agent stuck in loop:** NO
-- **Test files created:**
-    - 
-    - 
-    - 
-- **Known regressions:** None.
+- **Test files created:** None.
+- **Known regressions:** None in this session.
 
 **Credentials to test flow:**
-The testing agent creates a default user (). Manual testing can be done by getting a token via the login API endpoint.
+The  account credentials are set in  under the keys  and .
 
 **What agent forgot to execute**
-- The agent noted that the testing agent failed to produce a report during the Auto-Entrepreneur compatibility check. Instead of re-running the test or debugging the testing agent, the agent proceeded with manual validation and moved on. This leaves a potential gap in the automated test suite for those specific changes.</analysis>
+- Nothing. The agent successfully implemented all user requests in a sequential and logical order, including complex security features.
+</analysis>
