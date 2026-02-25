@@ -4903,11 +4903,17 @@ async def startup_db_client():
         await db.users.create_index("email", unique=True)
         await db.users.create_index("id", unique=True)
         await db.users.create_index("role")  # Index for role-based queries
+        await db.users.create_index("is_verified")  # Index for verification status
+        await db.users.create_index("is_active")  # Index for active users
+        await db.users.create_index([("plan", 1), ("trial_end", 1)])  # Index for trial management
         await db.clients.create_index([("owner_id", 1), ("id", 1)], unique=True)
         await db.quotes.create_index([("owner_id", 1), ("id", 1)], unique=True)
         await db.invoices.create_index([("owner_id", 1), ("id", 1)], unique=True)
         await db.share_links.create_index("token", unique=True)
         await db.share_links.create_index("expires_at", expireAfterSeconds=0)
+        
+        # Initialize new modular services (OTP indexes, email verification TTL)
+        await init_app_services(db)
         
         logger.info("Database indexes created")
         
