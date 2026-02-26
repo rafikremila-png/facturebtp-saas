@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 import { getDashboard } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { 
     Euro, 
     AlertCircle, 
@@ -11,13 +13,28 @@ import {
     FileText, 
     Receipt,
     Plus,
-    TrendingUp
+    TrendingUp,
+    Gift,
+    Calendar
 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function DashboardPage() {
+    const { user } = useAuth();
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    // Debug: Log trial status
+    useEffect(() => {
+        if (user) {
+            console.log('[TRIAL DEBUG] User trial info:', {
+                trial_status: user.trial_status,
+                trial_started_at: user.trial_started_at,
+                trial_ends_at: user.trial_ends_at,
+                invoice_limit: user.invoice_limit
+            });
+        }
+    }, [user]);
 
     useEffect(() => {
         loadDashboard();
@@ -33,6 +50,18 @@ export default function DashboardPage() {
             setLoading(false);
         }
     };
+
+    // Calculate days remaining in trial
+    const getTrialDaysRemaining = () => {
+        if (!user?.trial_ends_at) return null;
+        const endDate = new Date(user.trial_ends_at);
+        const now = new Date();
+        const diffTime = endDate - now;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays > 0 ? diffDays : 0;
+    };
+
+    const trialDaysRemaining = getTrialDaysRemaining();
 
     if (loading) {
         return (
