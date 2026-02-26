@@ -45,13 +45,17 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 # Rate limiting setup
 limiter = Limiter(key_func=get_remote_address)
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
 # ============== ENVIRONMENT VALIDATION ==============
 
 JWT_SECRET = os.environ.get('JWT_SECRET')
 ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
+
+# Debug: Log SMTP configuration at startup (without password)
+logging.info(f"[SMTP CONFIG] SMTP_HOST={os.environ.get('SMTP_HOST')}")
+logging.info(f"[SMTP CONFIG] SMTP_PORT={os.environ.get('SMTP_PORT')}")
+logging.info(f"[SMTP CONFIG] SMTP_USER={os.environ.get('SMTP_USER')}")
+logging.info(f"[SMTP CONFIG] SMTP_FROM={os.environ.get('SMTP_FROM')}")
+logging.info(f"[SMTP CONFIG] SMTP_PASS={'***SET***' if os.environ.get('SMTP_PASS') else '***NOT SET***'}")
 
 if not JWT_SECRET:
     if ENVIRONMENT == 'production':
