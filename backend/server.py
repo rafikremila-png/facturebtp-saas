@@ -5114,6 +5114,79 @@ async def get_service_stats(user: dict = Depends(require_admin)):
     service = get_service_request_service(db)
     return await service.get_stats()
 
+# ============== SERVICE CATEGORIES ==============
+
+@api_router.get("/categories")
+async def get_categories(user: dict = Depends(get_current_user)):
+    """
+    Get service categories filtered by user's business type.
+    Returns categories where user's business_type matches.
+    """
+    business_type = user.get("business_type", "general")
+    category_service = get_category_service(db)
+    return await category_service.get_categories_for_user(business_type)
+
+@api_router.get("/categories/all")
+async def get_all_categories(user: dict = Depends(require_admin)):
+    """Get all categories (admin only)"""
+    category_service = get_category_service(db)
+    return await category_service.get_all_categories()
+
+@api_router.get("/categories/with-items")
+async def get_categories_with_items(user: dict = Depends(get_current_user)):
+    """
+    Get categories with their items (for invoice/quote forms).
+    Filtered by user's business type.
+    """
+    business_type = user.get("business_type", "general")
+    category_service = get_category_service(db)
+    return await category_service.get_categories_with_items(business_type)
+
+@api_router.get("/categories/{category_id}")
+async def get_category(category_id: str, user: dict = Depends(get_current_user)):
+    """Get a single category by ID"""
+    category_service = get_category_service(db)
+    category = await category_service.get_category_by_id(category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Catégorie non trouvée")
+    return category
+
+@api_router.get("/categories/{category_id}/items")
+async def get_category_items(category_id: str, user: dict = Depends(get_current_user)):
+    """Get items for a specific category"""
+    category_service = get_category_service(db)
+    return await category_service.get_items_by_category(category_id)
+
+@api_router.get("/categories/search/items")
+async def search_category_items(
+    q: str,
+    user: dict = Depends(get_current_user)
+):
+    """Search items by name across allowed categories"""
+    if not q or len(q) < 2:
+        return []
+    business_type = user.get("business_type", "general")
+    category_service = get_category_service(db)
+    return await category_service.search_items(q, business_type)
+
+@api_router.get("/business-types")
+async def get_business_types():
+    """Get list of available business types (public)"""
+    return {
+        "types": VALID_BUSINESS_TYPES,
+        "labels": BUSINESS_TYPE_LABELS
+    }
+
+@api_router.post("/categories/seed")
+async def seed_categories(
+    force: bool = False,
+    user: dict = Depends(require_super_admin)
+):
+    """Seed default categories and items (super_admin only)"""
+    category_service = get_category_service(db)
+    stats = await category_service.seed_categories(force=force)
+    return {"message": "Catégories initialisées", "stats": stats}
+
 # ============== HEALTH CHECK ==============
 
 @api_router.get("/health")
