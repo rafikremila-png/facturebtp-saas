@@ -5243,6 +5243,13 @@ async def startup_db_client():
         # Initialize new modular services (OTP indexes, email verification TTL)
         await init_app_services(db)
         
+        # Initialize category service and seed if empty
+        category_service = get_category_service(db)
+        await category_service.init_indexes()
+        seed_stats = await category_service.seed_categories(force=False)
+        if seed_stats.get("categories", 0) > 0:
+            logger.info(f"Seeded {seed_stats['categories']} categories and {seed_stats['items']} items")
+        
         logger.info("Database indexes created")
         
         # Initialize super admin account
