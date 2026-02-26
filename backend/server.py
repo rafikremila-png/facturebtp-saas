@@ -230,6 +230,7 @@ class UserCreate(BaseModel):
     phone: str = Field(..., min_length=10, max_length=20)
     company_name: Optional[str] = Field(None, max_length=200)
     address: Optional[str] = Field(None, max_length=500)
+    business_type: Optional[str] = Field(default="general", max_length=50)
     
     @validator('password')
     def validate_password(cls, v):
@@ -242,6 +243,13 @@ class UserCreate(BaseModel):
         if not any(c.isdigit() for c in v):
             raise ValueError('Le mot de passe doit contenir au moins un chiffre')
         return v
+    
+    @validator('business_type')
+    def validate_business_type(cls, v):
+        valid_types = ["general", "electrician", "plumber", "mason", "painter", "carpenter", "it_installer"]
+        if v and v not in valid_types:
+            return "general"
+        return v or "general"
     
     @validator('name')
     def sanitize_name(cls, v):
