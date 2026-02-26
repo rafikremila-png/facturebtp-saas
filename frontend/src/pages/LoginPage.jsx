@@ -290,6 +290,26 @@ export default function LoginPage() {
                                         />
                                     </div>
                                 </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="businessType">Type d'activité *</Label>
+                                    <div className="relative">
+                                        <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                                        <Select value={businessType} onValueChange={setBusinessType}>
+                                            <SelectTrigger className="pl-10" data-testid="business-type-select">
+                                                <SelectValue placeholder="Sélectionner votre métier" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.entries(BUSINESS_TYPES).map(([value, label]) => (
+                                                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <p className="text-xs text-slate-500">
+                                        Détermine les catégories d'articles affichées dans vos devis
+                                    </p>
+                                </div>
                             </>
                         )}
                         
