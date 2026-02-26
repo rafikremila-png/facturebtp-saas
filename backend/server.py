@@ -1664,7 +1664,11 @@ async def get_me(user: dict = Depends(get_current_user)):
         name=user["name"],
         role=user.get("role", ROLE_USER),
         phone=user.get("phone"),
-        email_verified=user.get("email_verified", False)
+        email_verified=user.get("email_verified", False),
+        trial_status=user.get("plan"),
+        trial_started_at=user.get("trial_start"),
+        trial_ends_at=user.get("trial_end"),
+        invoice_limit=user.get("invoice_limit", 9)
     )
 
 @api_router.get("/auth/profile", response_model=UserDetailResponse)
