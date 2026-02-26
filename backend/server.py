@@ -5201,6 +5201,120 @@ async def seed_categories(
     stats = await category_service.seed_categories(force=force)
     return {"message": "Catégories initialisées", "stats": stats}
 
+
+# ============== CATEGORIES V2 API (Enhanced with Subcategories & Kits) ==============
+
+@api_router.get("/v2/categories")
+async def get_categories_v2(user: dict = Depends(get_current_user)):
+    """Get categories filtered by user's business type (V2 with subcategories)"""
+    category_service = get_category_service_v2(db)
+    business_type = user.get("business_type", "general")
+    return await category_service.get_categories_for_user(business_type)
+
+
+@api_router.get("/v2/categories/full")
+async def get_full_catalog_v2(user: dict = Depends(get_current_user)):
+    """Get full catalog: categories -> subcategories -> items with smart prices"""
+    category_service = get_category_service_v2(db)
+    business_type = user.get("business_type", "general")
+    return await category_service.get_full_catalog(business_type)
+
+
+@api_router.get("/v2/categories/with-subcategories")
+async def get_categories_with_subcategories_v2(user: dict = Depends(get_current_user)):
+    """Get categories with their subcategories (no items)"""
+    category_service = get_category_service_v2(db)
+    business_type = user.get("business_type", "general")
+    return await category_service.get_categories_with_subcategories(business_type)
+
+
+@api_router.get("/v2/categories/{category_id}")
+async def get_category_v2(category_id: str, user: dict = Depends(get_current_user)):
+    """Get a single category by ID"""
+    category_service = get_category_service_v2(db)
+    category = await category_service.get_category_by_id(category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Catégorie non trouvée")
+    return category
+
+
+@api_router.get("/v2/categories/{category_id}/subcategories")
+async def get_subcategories_v2(category_id: str, user: dict = Depends(get_current_user)):
+    """Get subcategories for a category"""
+    category_service = get_category_service_v2(db)
+    return await category_service.get_subcategories(category_id)
+
+
+@api_router.get("/v2/subcategories/{subcategory_id}/items")
+async def get_subcategory_items_v2(subcategory_id: str, user: dict = Depends(get_current_user)):
+    """Get items for a subcategory with smart prices"""
+    category_service = get_category_service_v2(db)
+    business_type = user.get("business_type", "general")
+    items = await category_service.get_items_by_subcategory(subcategory_id)
+    
+    # Add smart price to each item
+    for item in items:
+        item["smart_price"] = await category_service.get_smart_price(item["id"], business_type)
+    
+    return items
+
+
+@api_router.get("/v2/items/{item_id}")
+async def get_item_v2(item_id: str, user: dict = Depends(get_current_user)):
+    """Get a single item with smart price"""
+    category_service = get_category_service_v2(db)
+    business_type = user.get("business_type", "general")
+    
+    item = await category_service.get_item_by_id(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Article non trouvé")
+    
+    item["smart_price"] = await category_service.get_smart_price(item_id, business_type)
+    return item
+
+
+@api_router.get("/v2/items/search")
+async def search_items_v2(q: str, user: dict = Depends(get_current_user)):
+    """Search items by name"""
+    if not q or len(q) < 2:
+        raise HTTPException(status_code=400, detail="Requête de recherche trop courte (min 2 caractères)")
+    
+    category_service = get_category_service_v2(db)
+    business_type = user.get("business_type", "general")
+    return await category_service.search_items(q, business_type)
+
+
+@api_router.get("/v2/kits")
+async def get_kits_v2(user: dict = Depends(get_current_user)):
+    """Get kits filtered by user's business type"""
+    category_service = get_category_service_v2(db)
+    business_type = user.get("business_type", "general")
+    return await category_service.get_kits_for_user(business_type)
+
+
+@api_router.get("/v2/kits/{kit_id}")
+async def get_kit_v2(kit_id: str, user: dict = Depends(get_current_user)):
+    """Get a kit with expanded items and smart prices"""
+    category_service = get_category_service_v2(db)
+    business_type = user.get("business_type", "general")
+    
+    kit = await category_service.get_kit_with_items(kit_id, business_type)
+    if not kit:
+        raise HTTPException(status_code=404, detail="Kit non trouvé")
+    
+    return kit
+
+
+@api_router.post("/v2/categories/seed")
+async def seed_categories_v2(
+    force: bool = False,
+    user: dict = Depends(require_super_admin)
+):
+    """Seed V2 categories, subcategories, items, and kits (super_admin only)"""
+    category_service = get_category_service_v2(db)
+    stats = await category_service.seed_all(force=force)
+    return {"message": "Données V2 initialisées", "stats": stats}
+
 # ============== HEALTH CHECK ==============
 
 @api_router.get("/health")
