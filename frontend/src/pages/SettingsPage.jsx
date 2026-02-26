@@ -36,6 +36,9 @@ export default function SettingsPage() {
     const [showWebsiteDialog, setShowWebsiteDialog] = useState(false);
     const fileInputRef = useRef(null);
     
+    // Business types from API
+    const [businessTypes, setBusinessTypes] = useState({ types: [], labels: {} });
+    
     // Company settings
     const [formData, setFormData] = useState({
         company_name: "",
