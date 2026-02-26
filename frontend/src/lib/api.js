@@ -127,6 +127,19 @@ export const getDynamicCategoryItems = (categoryId) => api.get(`/categories/${ca
 export const searchCategoryItems = (query) => api.get('/categories/search/items', { params: { q: query } });
 export const getBusinessTypes = () => api.get('/business-types');
 
+// Service Categories V2 (Enhanced with subcategories and kits)
+export const getCategoriesV2 = () => api.get('/v2/categories');
+export const getFullCatalogV2 = () => api.get('/v2/categories/full');
+export const getCategoriesWithSubcategoriesV2 = () => api.get('/v2/categories/with-subcategories');
+export const getCategoryV2 = (categoryId) => api.get(`/v2/categories/${categoryId}`);
+export const getSubcategoriesV2 = (categoryId) => api.get(`/v2/categories/${categoryId}/subcategories`);
+export const getSubcategoryItemsV2 = (subcategoryId) => api.get(`/v2/subcategories/${subcategoryId}/items`);
+export const getItemV2 = (itemId) => api.get(`/v2/items/${itemId}`);
+export const searchItemsV2 = (query) => api.get('/v2/items/search', { params: { q: query } });
+export const getKitsV2 = () => api.get('/v2/kits');
+export const getKitV2 = (kitId) => api.get(`/v2/kits/${kitId}`);
+export const seedCategoriesV2 = (force = false) => api.post(`/v2/categories/seed?force=${force}`);
+
 // Renovation Kits
 export const getKits = () => api.get('/kits');
 export const getKit = (id) => api.get(`/kits/${id}`);
