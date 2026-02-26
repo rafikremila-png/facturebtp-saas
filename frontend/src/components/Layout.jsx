@@ -13,7 +13,9 @@ import {
     UserCog,
     Shield,
     Crown,
-    User
+    User,
+    Briefcase,
+    ClipboardList
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -24,12 +26,14 @@ const navItems = [
     { to: "/clients", icon: Users, label: "Clients" },
     { to: "/devis", icon: FileText, label: "Devis" },
     { to: "/factures", icon: Receipt, label: "Factures" },
+    { to: "/services", icon: Briefcase, label: "Services Pro" },
     { to: "/parametres", icon: Settings, label: "Paramètres" },
 ];
 
 // Admin-only navigation items
 const adminNavItems = [
     { to: "/utilisateurs", icon: UserCog, label: "Utilisateurs", adminOnly: true },
+    { to: "/demandes-services", icon: ClipboardList, label: "Demandes Services", adminOnly: true },
 ];
 
 const ROLE_BADGES = {
