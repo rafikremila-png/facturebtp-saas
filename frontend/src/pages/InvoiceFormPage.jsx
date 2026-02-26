@@ -148,7 +148,7 @@ function InvoiceFormPage() {
                             <div><Label className="text-xs">Catégorie</Label>
                                 <Select value={selectedCategory} onValueChange={function(v) { setSelectedCategory(v); setSelectedItem(""); }}>
                                     <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
-                                    <SelectContent>{categories.map(function(c) { return <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>; })}</SelectContent></Select></div>
+                                    <SelectContent>{categories.map(function(c) { return <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>; })}</SelectContent></Select></div>
                             <div><Label className="text-xs">Article</Label>
                                 <Select value={selectedItem} onValueChange={setSelectedItem} disabled={!selectedCategory}>
                                     <SelectTrigger><SelectValue placeholder="Choisir" /></SelectTrigger>
