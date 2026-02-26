@@ -271,6 +271,11 @@ class UserResponse(BaseModel):
     role: str = ROLE_USER
     phone: Optional[str] = None
     email_verified: bool = False
+    # Trial fields
+    trial_status: Optional[str] = None  # trial_pending, trial_active, trial_expired, paid
+    trial_started_at: Optional[str] = None
+    trial_ends_at: Optional[str] = None
+    invoice_limit: Optional[int] = None
 
 class UserDetailResponse(BaseModel):
     """Detailed user info for admin view"""
