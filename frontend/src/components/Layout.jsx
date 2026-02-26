@@ -15,7 +15,8 @@ import {
     Crown,
     User,
     Briefcase,
-    ClipboardList
+    ClipboardList,
+    CreditCard
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ const navItems = [
     { to: "/devis", icon: FileText, label: "Devis" },
     { to: "/factures", icon: Receipt, label: "Factures" },
     { to: "/services", icon: Briefcase, label: "Services Pro" },
+    { to: "/facturation", icon: CreditCard, label: "Facturation" },
     { to: "/parametres", icon: Settings, label: "Paramètres" },
 ];
 
