@@ -47,11 +47,30 @@ export default function QuoteFormPage() {
             const [clientsRes, settingsRes, categoriesRes, kitsRes] = await Promise.all([
                 getClients(),
                 getSettings(),
-                getPredefinedCategories(),
+                getDynamicCategoriesWithItems(),
                 getKits()
             ]);
             setClients(clientsRes.data);
-            setCategories(categoriesRes.data);
+            
+            // Transform dynamic categories for the form
+            var cats = categoriesRes.data || [];
+            setCategories(cats.map(function(c) {
+                return {
+                    id: c.id,
+                    name: c.name,
+                    icon: c.icon,
+                    items: (c.items || []).map(function(item) {
+                        return {
+                            id: item.id,
+                            description: item.name,
+                            unit: item.unit || "unité",
+                            default_price: item.default_price || 0,
+                            default_vat_rate: 20 // Default VAT rate for dynamic items
+                        };
+                    })
+                };
+            }));
+            
             setKits(kitsRes.data);
             
             if (settingsRes.data.default_vat_rates?.length > 0) {
