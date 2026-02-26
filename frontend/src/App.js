@@ -112,7 +112,13 @@ function AppRoutes() {
                 <Route path="factures/:id" element={<InvoiceDetailPage />} />
                 <Route path="factures/:id/edit" element={<InvoiceFormPage />} />
                 <Route path="parametres" element={<SettingsPage />} />
+                <Route path="services" element={<ServicesPage />} />
                 <Route path="utilisateurs" element={<UsersPage />} />
+                <Route path="demandes-services" element={
+                    <AdminRoute>
+                        <ServiceRequestsPage />
+                    </AdminRoute>
+                } />
                 <Route path="profil" element={<ProfilePage />} />
             </Route>
         </Routes>
