@@ -120,7 +120,7 @@ function InvoiceFormPage() {
     }, { ht: 0, vat: 0 });
 
     var selectedCategoryItems = [];
-    var cat = categories.find(function(c) { return c.name === selectedCategory; });
+    var cat = categories.find(function(c) { return c.id === selectedCategory; });
     if (cat) selectedCategoryItems = cat.items;
 
     if (loading) return <div className="flex justify-center py-20"><div className="spinner"></div></div>;
