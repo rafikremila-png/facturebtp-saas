@@ -34,10 +34,27 @@ function InvoiceFormPage() {
     });
 
     useEffect(function() {
-        Promise.all([getClients(), getSettings(), getPredefinedCategories()]).then(function(results) {
+        Promise.all([getClients(), getSettings(), getDynamicCategoriesWithItems()]).then(function(results) {
             setClients(results[0].data);
             if (results[1].data.default_vat_rates) setVatRates(results[1].data.default_vat_rates);
-            setCategories(results[2].data);
+            // Transform categories for the form - use 'id' instead of 'name' as key
+            var cats = results[2].data || [];
+            setCategories(cats.map(function(c) {
+                return {
+                    id: c.id,
+                    name: c.name,
+                    icon: c.icon,
+                    items: (c.items || []).map(function(item) {
+                        return {
+                            id: item.id,
+                            description: item.name,
+                            unit: item.unit || "unité",
+                            default_price: item.default_price || 0,
+                            default_vat_rate: 20 // Default VAT rate for dynamic items
+                        };
+                    })
+                };
+            }));
             setLoading(false);
         }).catch(function() { setLoading(false); });
     }, []);
