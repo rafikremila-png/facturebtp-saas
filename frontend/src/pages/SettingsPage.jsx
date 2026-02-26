@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { getSettings, updateSettings, uploadLogo, getPredefinedCategories, createPredefinedItem, updatePredefinedItem, deletePredefinedItem, resetPredefinedItems, getKits, createKit, updateKit, deleteKit, resetKits } from "@/lib/api";
+import { getSettings, updateSettings, uploadLogo, getPredefinedCategories, createPredefinedItem, updatePredefinedItem, deletePredefinedItem, resetPredefinedItems, getKits, createKit, updateKit, deleteKit, resetKits, getBusinessTypes } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
