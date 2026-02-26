@@ -1374,6 +1374,8 @@ async def register(request: Request, user_data: UserCreate):
             "last_login": None,
             "login_attempts": 0,
             "locked_until": None,
+            # Business type for category filtering
+            "business_type": "general",
             # Trial management (starts only after verification)
             "trial_start": None,
             "trial_end": None,
