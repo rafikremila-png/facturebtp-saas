@@ -188,6 +188,22 @@ Build a production-ready MVP web application for a French construction company (
 
 ## Changelog (Feb 2026)
 
+### Plateforme BTP Verticalisée ✅ (Feb 26, 2026)
+- **Landing pages spécialisées** :
+  - `/accueil` - Page générale BTP tous corps d'état
+  - `/logiciel-facturation-electricien` - Page dédiée électriciens (thème jaune)
+  - `/logiciel-facturation-plombier` - Page dédiée plombiers (thème bleu)
+  - `/logiciel-facturation-peintre` - Page dédiée peintres (thème violet)
+  - `/logiciel-facturation-installateur-reseau` - Page dédiée IT (thème cyan)
+- **Inscription avec type de métier** :
+  - Sélecteur `business_type` dans le formulaire d'inscription
+  - Pré-remplissage depuis les landing pages via URL parameter
+  - Support des 7 types : general, electrician, plumber, painter, mason, carpenter, it_installer
+- **Correction incohérence Devis/Facture** :
+  - Les deux formulaires utilisent maintenant `ServiceItemSelectorV2`
+  - Structure identique : Catégorie → Sous-catégorie → Article
+  - Même bouton "Ajouter un kit" sur les deux pages
+
 ### Système de Catégories V2 avec Sous-catégories et Kits ✅ (Feb 26, 2026)
 - **Architecture V2 complète** :
   - `service_categories` : 7 catégories principales
