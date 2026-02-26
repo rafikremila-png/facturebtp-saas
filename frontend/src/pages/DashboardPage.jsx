@@ -104,6 +104,56 @@ export default function DashboardPage() {
 
     return (
         <div className="space-y-8" data-testid="dashboard-page">
+            {/* Trial Banner */}
+            {user?.trial_status === "trial_active" && trialDaysRemaining !== null && (
+                <Card className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200" data-testid="trial-banner">
+                    <CardContent className="flex items-center justify-between p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-orange-100 rounded-full">
+                                <Gift className="h-5 w-5 text-orange-600" />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="font-semibold text-gray-900">Période d'essai</h3>
+                                    <Badge className="bg-orange-100 text-orange-700 border-orange-300">
+                                        {trialDaysRemaining} jours restants
+                                    </Badge>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                    Profitez de toutes les fonctionnalités • Limite: {user.invoice_limit || 9} factures
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <Calendar className="h-4 w-4" />
+                            <span>Expire le {new Date(user.trial_ends_at).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Trial Expired Banner */}
+            {user?.trial_status === "trial_expired" && (
+                <Card className="bg-gradient-to-r from-red-50 to-orange-50 border-red-200" data-testid="trial-expired-banner">
+                    <CardContent className="flex items-center justify-between p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-red-100 rounded-full">
+                                <AlertCircle className="h-5 w-5 text-red-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900">Période d'essai expirée</h3>
+                                <p className="text-sm text-gray-600">
+                                    Passez à un forfait payant pour continuer à créer des factures
+                                </p>
+                            </div>
+                        </div>
+                        <Button className="bg-orange-500 hover:bg-orange-600">
+                            Mettre à niveau
+                        </Button>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
