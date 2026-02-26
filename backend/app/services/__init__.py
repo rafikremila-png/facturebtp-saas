@@ -10,6 +10,14 @@ from .jwt_service import (
     validate_refresh_token,
     refresh_access_token,
 )
+from .service_request_service import (
+    ServiceRequestService,
+    ServiceRequestCreate,
+    ServiceRequestResponse,
+    ServiceRequestStatusUpdate,
+    SERVICE_CATALOG,
+    get_service_request_service,
+)
 
 __all__ = [
     "EmailService",
@@ -24,4 +32,10 @@ __all__ = [
     "validate_access_token",
     "validate_refresh_token",
     "refresh_access_token",
+    "ServiceRequestService",
+    "ServiceRequestCreate",
+    "ServiceRequestResponse",
+    "ServiceRequestStatusUpdate",
+    "SERVICE_CATALOG",
+    "get_service_request_service",
 ]
