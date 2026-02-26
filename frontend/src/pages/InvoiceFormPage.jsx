@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Save, Plus, Trash2, Package } from "lucide-react";
 import { toast } from "sonner";
+import UpgradeModal from "@/components/UpgradeModal";
 
 function InvoiceFormPage() {
     var navigate = useNavigate();
@@ -23,6 +24,14 @@ function InvoiceFormPage() {
     var [paymentMethod, setPaymentMethod] = useState("virement");
     var [notes, setNotes] = useState("");
     var [items, setItems] = useState([{ description: "", quantity: 1, unit_price: 0, vat_rate: 20, unit: "" }]);
+    
+    // Upgrade modal state
+    var [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    var [upgradeModalConfig, setUpgradeModalConfig] = useState({
+        title: "Mise à niveau requise",
+        message: "",
+        type: "limit"
+    });
 
     useEffect(function() {
         Promise.all([getClients(), getSettings(), getPredefinedCategories()]).then(function(results) {
@@ -54,7 +63,21 @@ function InvoiceFormPage() {
         };
         createInvoice(payload)
             .then(function() { toast.success("Créée"); navigate("/factures"); })
-            .catch(function() { toast.error("Erreur"); })
+            .catch(function(error) { 
+                // Handle 403 errors (trial/subscription limits)
+                if (error.response && error.response.status === 403) {
+                    var errorMessage = error.response.data?.detail || "Limite atteinte";
+                    var isExpired = errorMessage.toLowerCase().includes("expir");
+                    setUpgradeModalConfig({
+                        title: isExpired ? "Période d'essai expirée" : "Limite atteinte",
+                        message: errorMessage,
+                        type: isExpired ? "expired" : "limit"
+                    });
+                    setShowUpgradeModal(true);
+                } else {
+                    toast.error("Erreur lors de la création de la facture"); 
+                }
+            })
             .finally(function() { setSaving(false); });
     }
 
