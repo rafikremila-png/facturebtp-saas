@@ -498,6 +498,43 @@ export default function SettingsPage() {
                             </CardContent>
                         </Card>
 
+                        {/* Business Type / Type d'activité */}
+                        <Card className="border-blue-200 bg-blue-50/30">
+                            <CardHeader>
+                                <CardTitle className="font-['Barlow_Condensed'] flex items-center gap-2">
+                                    <Briefcase className="w-5 h-5 text-blue-600" />
+                                    Type d'activité
+                                </CardTitle>
+                                <CardDescription>
+                                    Détermine les catégories de prestations disponibles dans vos devis et factures
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="business_type">Votre métier principal</Label>
+                                    <Select 
+                                        value={formData.business_type} 
+                                        onValueChange={(v) => setFormData(prev => ({ ...prev, business_type: v }))}
+                                    >
+                                        <SelectTrigger className="w-full md:w-1/2" data-testid="business-type-select">
+                                            <SelectValue placeholder="Sélectionner votre type d'activité" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {businessTypes.types.map((type) => (
+                                                <SelectItem key={type} value={type}>
+                                                    {businessTypes.labels[type] || type}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="bg-blue-100 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+                                    <p className="font-medium mb-1">Impact sur les articles prédéfinis</p>
+                                    <p>En fonction de votre métier, seules les catégories pertinentes seront affichées lors de la création de devis et factures. Les utilisateurs "Général / Multi-corps" ont accès à toutes les catégories.</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         {/* Auto-entrepreneur Mode */}
                         <Card className={formData.is_auto_entrepreneur ? "border-amber-300 bg-amber-50/50" : ""}>
                             <CardHeader>
