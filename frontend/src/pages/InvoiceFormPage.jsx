@@ -102,7 +102,7 @@ function InvoiceFormPage() {
     
     function addPredefinedItem() {
         if (!selectedCategory || !selectedItem) { toast.error("Sélectionnez une catégorie et un article"); return; }
-        var category = categories.find(function(c) { return c.name === selectedCategory; });
+        var category = categories.find(function(c) { return c.id === selectedCategory; });
         if (!category) return;
         var item = category.items.find(function(i) { return i.id === selectedItem; });
         if (!item) return;
