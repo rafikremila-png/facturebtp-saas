@@ -28,6 +28,20 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import re
 
+# Stripe integration
+try:
+    from emergentintegrations.payments.stripe.checkout import (
+        StripeCheckout,
+        CheckoutSessionResponse,
+        CheckoutStatusResponse,
+        CheckoutSessionRequest
+    )
+    STRIPE_AVAILABLE = True
+except ImportError:
+    STRIPE_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Stripe integration not available - emergentintegrations not installed")
+
 # Import new modular services (AFTER .env is loaded)
 from app.services.email_service import get_email_service
 from app.services.otp_service import get_otp_service
