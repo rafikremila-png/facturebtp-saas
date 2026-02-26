@@ -20,6 +20,8 @@ import SettingsPage from "@/pages/SettingsPage";
 import ClientViewPage from "@/pages/ClientViewPage";
 import UsersPage from "@/pages/UsersPage";
 import ProfilePage from "@/pages/ProfilePage";
+import ServicesPage from "@/pages/ServicesPage";
+import ServiceRequestsPage from "@/pages/ServiceRequestsPage";
 import Layout from "@/components/Layout";
 
 const ProtectedRoute = ({ children }) => {
