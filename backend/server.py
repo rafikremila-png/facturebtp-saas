@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
+load_dotenv()
 from io import BytesIO
 import base64
 import resend
