@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getClients, createInvoice, getSettings, getPredefinedCategories } from "@/lib/api";
+import { getClients, createInvoice, getSettings, getDynamicCategoriesWithItems } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
