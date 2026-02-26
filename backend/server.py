@@ -45,6 +45,10 @@ from app.services.category_service import (
     VALID_BUSINESS_TYPES,
     BUSINESS_TYPE_LABELS,
 )
+from app.services.category_service_v2 import (
+    get_category_service_v2,
+    CategoryServiceV2,
+)
 from app.init import init_app_services, create_user_indexes
 
 # ReportLab imports for PDF
