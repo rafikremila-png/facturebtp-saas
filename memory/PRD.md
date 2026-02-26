@@ -188,6 +188,32 @@ Build a production-ready MVP web application for a French construction company (
 
 ## Changelog (Feb 2026)
 
+### Système de Catégories Dynamiques ✅ (Feb 26, 2026)
+- **Nouvelle architecture** : Catégories et articles stockés en base MongoDB (`service_categories`, `service_items`)
+- **Filtrage par métier** : Les catégories affichées dépendent du `business_type` de l'utilisateur
+- **7 types de métiers supportés** :
+  - Général / Multi-corps (voit toutes les catégories)
+  - Électricien
+  - Plombier
+  - Maçon
+  - Peintre
+  - Menuisier
+  - Installateur réseaux / IT
+- **9 catégories avec 50 articles prédéfinis** :
+  - Maçonnerie, Électricité, Plomberie, Peinture, Menuiserie
+  - Carrelage, Plâtrerie / Isolation, Rénovation générale
+  - Réseaux & Courants Faibles (nouveau)
+- **Interface utilisateur** :
+  - Sélecteur de type d'activité dans Paramètres > Entreprise
+  - Dropdowns dynamiques dans formulaires devis/factures
+  - Articles avec prix, unité et TVA par défaut
+- **API Endpoints** :
+  - `GET /api/business-types` - Liste des métiers disponibles
+  - `GET /api/categories` - Catégories filtrées par business_type
+  - `GET /api/categories/with-items` - Catégories avec leurs articles
+  - `GET /api/categories/{id}/items` - Articles d'une catégorie
+  - `POST /api/categories/seed` - Initialisation des données (admin)
+
 ### Tableau de Bord Financier du Projet ✅ (Feb 4, 2026)
 - **Dashboard complet** accessible depuis la page de détail du devis
 - **Double accès** :
