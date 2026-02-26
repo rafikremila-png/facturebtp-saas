@@ -81,19 +81,13 @@ ROLE_ADMIN = "admin"
 ROLE_USER = "user"
 VALID_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER]
 
+# Legacy Resend config (deprecated - now using SMTP)
+# Keep for backward compatibility with existing email sending in quotes/invoices
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
-
-RESEND_CONFIGURED = False
-if RESEND_API_KEY and not RESEND_API_KEY.startswith("re_123"):
-    resend.api_key = RESEND_API_KEY
-    RESEND_CONFIGURED = True
-else:
-    logging.warning("Resend API key not configured or using test key. Email sending disabled.")
+RESEND_CONFIGURED = False  # Disabled - using SMTP now
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL")
-if not FRONTEND_URL and RESEND_CONFIGURED:
-    logging.warning("FRONTEND_URL not set. Email links may not work correctly.")
 
 client = AsyncIOMotorClient(
     MONGO_URL,
