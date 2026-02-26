@@ -23,7 +23,7 @@ class EmailService:
     
     def __init__(self):
         self.smtp_host = os.environ.get("SMTP_HOST")
-        self.smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+        self.smtp_port = int(os.environ.get("SMTP_PORT", "2525"))  # Default to Mailtrap port
         self.smtp_user = os.environ.get("SMTP_USER")
         self.smtp_pass = os.environ.get("SMTP_PASS")
         self.smtp_from = os.environ.get("SMTP_FROM", "noreply@btpfacture.com")
@@ -36,6 +36,15 @@ class EmailService:
             self.smtp_user,
             self.smtp_pass
         ])
+        
+        # Debug log configuration at instantiation
+        logger.info(f"[EmailService] Initialized with:")
+        logger.info(f"  - SMTP_HOST: {self.smtp_host}")
+        logger.info(f"  - SMTP_PORT: {self.smtp_port}")
+        logger.info(f"  - SMTP_USER: {self.smtp_user}")
+        logger.info(f"  - SMTP_FROM: {self.smtp_from}")
+        logger.info(f"  - SMTP_PASS: {'***SET***' if self.smtp_pass else '***NOT SET***'}")
+        logger.info(f"  - Is Configured: {self._is_configured}")
         
         if not self._is_configured:
             logger.warning(
