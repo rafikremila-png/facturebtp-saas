@@ -269,7 +269,7 @@ export default function QuoteFormPage() {
     };
 
     const totals = calculateTotals();
-    const selectedCategoryItems = categories.find(c => c.name === selectedCategory)?.items || [];
+    const selectedCategoryItems = categories.find(c => c.id === selectedCategory)?.items || [];
 
     if (loading) {
         return (
