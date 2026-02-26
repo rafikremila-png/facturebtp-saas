@@ -245,22 +245,26 @@ class ServiceRequestService:
         cursor = self.collection.find({"user_id": user_id}).sort("created_at", -1)
         
         async for doc in cursor:
-            requests.append(ServiceRequestResponse(
-                id=doc["id"],
-                user_id=doc["user_id"],
-                service_type=doc["service_type"],
-                service_category=doc.get("service_category", "Non catégorisé"),
-                company_name=doc["company_name"],
-                contact_email=doc["contact_email"],
-                phone=doc["phone"],
-                quantity=doc.get("quantity"),
-                urgency=doc.get("urgency", "standard"),
-                message=doc.get("message"),
-                has_logo=bool(doc.get("logo_base64")),
-                status=doc["status"],
-                created_at=doc["created_at"],
-                updated_at=doc.get("updated_at"),
-            ))
+            try:
+                requests.append(ServiceRequestResponse(
+                    id=doc.get("id", ""),
+                    user_id=doc.get("user_id", user_id),
+                    service_type=doc.get("service_type", "Service inconnu"),
+                    service_category=doc.get("service_category", "Non catégorisé"),
+                    company_name=doc.get("company_name", ""),
+                    contact_email=doc.get("contact_email", doc.get("email", "")),
+                    phone=doc.get("phone", ""),
+                    quantity=doc.get("quantity"),
+                    urgency=doc.get("urgency", "standard"),
+                    message=doc.get("message"),
+                    has_logo=bool(doc.get("logo_base64")),
+                    status=doc.get("status", "new"),
+                    created_at=doc.get("created_at", ""),
+                    updated_at=doc.get("updated_at"),
+                ))
+            except Exception as e:
+                logger.warning(f"Error parsing service request: {e}")
+                continue
         
         return requests
     
