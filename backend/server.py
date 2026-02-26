@@ -39,6 +39,7 @@ from app.services.service_request_service import (
     ServiceRequestStatusUpdate,
     SERVICE_CATALOG,
 )
+from app.services.subscription_service import check_invoice_permission, get_user_invoice_stats
 from app.init import init_app_services, create_user_indexes
 
 # ReportLab imports for PDF
