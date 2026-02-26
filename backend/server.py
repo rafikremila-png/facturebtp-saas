@@ -814,6 +814,14 @@ class CompanySettings(BaseModel):
     default_retenue_garantie_duration_months: int = Field(12, ge=1, le=60)
     website: Optional[str] = Field(default="", max_length=200)
     document_theme_color: str = Field(default="blue", max_length=20)
+    business_type: str = Field(default="general", max_length=50)
+    
+    @validator('business_type')
+    def validate_business_type(cls, v):
+        valid_types = ["general", "electrician", "plumber", "mason", "painter", "carpenter", "it_installer"]
+        if v and v not in valid_types:
+            raise ValueError(f'Type d\'activité invalide. Valeurs autorisées: {valid_types}')
+        return v or "general"
     
     @validator('siret')
     def validate_siret(cls, v):
