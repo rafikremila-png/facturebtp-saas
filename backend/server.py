@@ -5013,6 +5013,69 @@ async def test_smtp_connection(user: dict = Depends(require_super_admin)):
             "error": str(e)
         }
 
+# ============== SERVICES PRO ==============
+
+@api_router.get("/services/catalog")
+async def get_services_catalog():
+    """Get the service catalog (public)"""
+    return SERVICE_CATALOG
+
+@api_router.post("/services/request", response_model=ServiceRequestResponse)
+async def create_service_request(
+    data: ServiceRequestCreate,
+    user: dict = Depends(get_current_user)
+):
+    """Create a new service request"""
+    service = get_service_request_service(db)
+    return await service.create_request(user["id"], data)
+
+@api_router.get("/services/requests/me")
+async def get_my_service_requests(user: dict = Depends(get_current_user)):
+    """Get current user's service requests"""
+    service = get_service_request_service(db)
+    requests = await service.get_user_requests(user["id"])
+    return requests
+
+@api_router.get("/services/requests")
+async def get_all_service_requests(
+    status: Optional[str] = None,
+    user: dict = Depends(require_admin)
+):
+    """Get all service requests (admin only)"""
+    service = get_service_request_service(db)
+    return await service.get_all_requests(status_filter=status)
+
+@api_router.get("/services/requests/{request_id}")
+async def get_service_request(
+    request_id: str,
+    user: dict = Depends(require_admin)
+):
+    """Get a specific service request (admin only)"""
+    service = get_service_request_service(db)
+    request = await service.get_request_by_id(request_id)
+    if not request:
+        raise HTTPException(status_code=404, detail="Demande non trouvée")
+    return request
+
+@api_router.put("/services/requests/{request_id}/status")
+async def update_service_request_status(
+    request_id: str,
+    data: ServiceRequestStatusUpdate,
+    user: dict = Depends(require_admin)
+):
+    """Update service request status (admin only)"""
+    service = get_service_request_service(db)
+    result = await service.update_status(request_id, data.status, data.admin_notes)
+    if not result:
+        raise HTTPException(status_code=404, detail="Demande non trouvée ou statut invalide")
+    return result
+
+@api_router.get("/services/stats")
+async def get_service_stats(user: dict = Depends(require_admin)):
+    """Get service request statistics (admin only)"""
+    service = get_service_request_service(db)
+    return await service.get_stats()
+
 # ============== HEALTH CHECK ==============
 
 @api_router.get("/health")
