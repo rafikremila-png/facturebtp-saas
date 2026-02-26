@@ -116,11 +116,17 @@ export default function SettingsPage() {
 
     const loadData = async () => {
         try {
-            const [settingsRes, categoriesRes, kitsRes] = await Promise.all([
+            const [settingsRes, categoriesRes, kitsRes, businessTypesRes] = await Promise.all([
                 getSettings(),
                 getPredefinedCategories(),
-                getKits()
+                getKits(),
+                getBusinessTypes()
             ]);
+            
+            // Set business types
+            if (businessTypesRes.data) {
+                setBusinessTypes(businessTypesRes.data);
+            }
             
             if (settingsRes.data) {
                 setFormData({
@@ -147,7 +153,13 @@ export default function SettingsPage() {
                     // Retenue de garantie settings
                     default_retenue_garantie_enabled: settingsRes.data.default_retenue_garantie_enabled || false,
                     default_retenue_garantie_rate: settingsRes.data.default_retenue_garantie_rate || 5.0,
-                    default_retenue_garantie_duration_months: settingsRes.data.default_retenue_garantie_duration_months || 12
+                    default_retenue_garantie_duration_months: settingsRes.data.default_retenue_garantie_duration_months || 12,
+                    // Website
+                    website: settingsRes.data.website || "",
+                    // Document appearance
+                    document_theme_color: settingsRes.data.document_theme_color || "blue",
+                    // Business type
+                    business_type: settingsRes.data.business_type || "general"
                 });
             }
             
