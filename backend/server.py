@@ -4940,11 +4940,71 @@ async def send_invoice_email(invoice_id: str, request: SendDocumentEmailRequest,
 
 @api_router.get("/email/status")
 async def get_email_status(user: dict = Depends(get_current_user)):
+    """Get email configuration status (both legacy Resend and new SMTP)"""
+    email_service = get_email_service()
     return {
-        "configured": RESEND_CONFIGURED,
-        "sender": SENDER_EMAIL if RESEND_CONFIGURED else None,
+        "smtp": {
+            "configured": email_service.is_configured,
+            "host": email_service.smtp_host,
+            "port": email_service.smtp_port,
+            "user": email_service.smtp_user,
+            "from": email_service.smtp_from,
+        },
+        "resend": {
+            "configured": RESEND_CONFIGURED,
+            "sender": SENDER_EMAIL if RESEND_CONFIGURED else None,
+        },
         "frontend_url": FRONTEND_URL
     }
+
+@api_router.get("/email/test-smtp")
+async def test_smtp_connection(user: dict = Depends(require_super_admin)):
+    """Test SMTP connection (super_admin only)"""
+    email_service = get_email_service()
+    
+    if not email_service.is_configured:
+        return {
+            "status": "error",
+            "message": "SMTP not configured",
+            "details": {
+                "SMTP_HOST": email_service.smtp_host or "NOT SET",
+                "SMTP_PORT": email_service.smtp_port,
+                "SMTP_USER": email_service.smtp_user or "NOT SET",
+                "SMTP_PASS": "SET" if email_service.smtp_pass else "NOT SET",
+            }
+        }
+    
+    import smtplib
+    import ssl
+    
+    try:
+        context = ssl.create_default_context()
+        with smtplib.SMTP(email_service.smtp_host, email_service.smtp_port, timeout=10) as server:
+            server.ehlo()
+            server.starttls(context=context)
+            server.ehlo()
+            server.login(email_service.smtp_user, email_service.smtp_pass)
+            return {
+                "status": "success",
+                "message": "SMTP connection successful",
+                "details": {
+                    "host": email_service.smtp_host,
+                    "port": email_service.smtp_port,
+                    "auth": "OK"
+                }
+            }
+    except smtplib.SMTPAuthenticationError as e:
+        return {
+            "status": "error",
+            "message": "SMTP authentication failed",
+            "error": str(e)
+        }
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": "SMTP connection failed",
+            "error": str(e)
+        }
 
 # ============== HEALTH CHECK ==============
 
