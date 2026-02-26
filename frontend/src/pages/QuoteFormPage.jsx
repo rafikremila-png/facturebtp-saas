@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getQuote, getClients, createQuote, updateQuote, getSettings, getDynamicCategoriesWithItems, getKits, createKit } from "@/lib/api";
+import { getQuote, getClients, createQuote, updateQuote, getSettings, getKits, createKit, getKitsV2 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,8 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, Save, Plus, Trash2, Package, Layers, BookmarkPlus, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Layers, BookmarkPlus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import ServiceItemSelectorV2 from "@/components/ServiceItemSelectorV2";
 
 export default function QuoteFormPage() {
     const { id } = useParams();
@@ -22,11 +23,7 @@ export default function QuoteFormPage() {
     const [vatRates, setVatRates] = useState([20.0, 10.0, 5.5, 2.1]);
     const [isAutoEntrepreneur, setIsAutoEntrepreneur] = useState(false);
     const [autoEntrepreneurMention, setAutoEntrepreneurMention] = useState("");
-    const [categories, setCategories] = useState([]);
-    const [selectedCategory, setSelectedCategory] = useState("");
-    const [selectedItem, setSelectedItem] = useState("");
-    const [kits, setKits] = useState([]);
-    const [showKitModal, setShowKitModal] = useState(false);
+    const [userKits, setUserKits] = useState([]);
     const [showSaveKitModal, setShowSaveKitModal] = useState(false);
     const [newKitName, setNewKitName] = useState("");
     const [newKitDescription, setNewKitDescription] = useState("");
@@ -44,34 +41,13 @@ export default function QuoteFormPage() {
 
     const loadData = async () => {
         try {
-            const [clientsRes, settingsRes, categoriesRes, kitsRes] = await Promise.all([
+            const [clientsRes, settingsRes, kitsRes] = await Promise.all([
                 getClients(),
                 getSettings(),
-                getDynamicCategoriesWithItems(),
                 getKits()
             ]);
             setClients(clientsRes.data);
-            
-            // Transform dynamic categories for the form
-            var cats = categoriesRes.data || [];
-            setCategories(cats.map(function(c) {
-                return {
-                    id: c.id,
-                    name: c.name,
-                    icon: c.icon,
-                    items: (c.items || []).map(function(item) {
-                        return {
-                            id: item.id,
-                            description: item.name,
-                            unit: item.unit || "unité",
-                            default_price: item.default_price || 0,
-                            default_vat_rate: 20 // Default VAT rate for dynamic items
-                        };
-                    })
-                };
-            }));
-            
-            setKits(kitsRes.data);
+            setUserKits(kitsRes.data || []);
             
             if (settingsRes.data.default_vat_rates?.length > 0) {
                 setVatRates(settingsRes.data.default_vat_rates);
@@ -129,10 +105,10 @@ export default function QuoteFormPage() {
             
             if (isEdit) {
                 await updateQuote(id, payload);
-                toast.success("Devis mis à jour avec succès");
+                toast.success("Devis mis à jour");
             } else {
                 await createQuote(payload);
-                toast.success("Devis créé avec succès");
+                toast.success("Devis créé");
             }
             navigate("/devis");
         } catch (error) {
@@ -149,34 +125,24 @@ export default function QuoteFormPage() {
         }));
     };
 
-    const addPredefinedItem = () => {
-        if (!selectedCategory || !selectedItem) {
-            toast.error("Sélectionnez une catégorie et un article");
-            return;
-        }
-        
-        const category = categories.find(c => c.id === selectedCategory);
-        if (!category) return;
-        
-        const item = category.items.find(i => i.id === selectedItem);
-        if (!item) return;
-        
+    // Handler for ServiceItemSelectorV2 - single item
+    const handleAddPredefinedItem = (item) => {
         setFormData(prev => ({
             ...prev,
-            items: [...prev.items, {
-                description: item.description,
-                quantity: 1,
-                unit_price: item.default_price,
-                vat_rate: item.default_vat_rate,
-                unit: item.unit
-            }]
+            items: [...prev.items, item]
         }));
-        
-        setSelectedItem("");
-        toast.success("Article ajouté");
     };
 
-    const addKit = (kit) => {
+    // Handler for ServiceItemSelectorV2 - multiple items (kit)
+    const handleAddMultipleItems = (newItems) => {
+        setFormData(prev => ({
+            ...prev,
+            items: [...prev.items.filter(i => i.description.trim()), ...newItems]
+        }));
+    };
+
+    // Handler for user custom kits (old system)
+    const addUserKit = (kit) => {
         const newItems = kit.items.map(item => ({
             description: item.description,
             quantity: item.quantity,
@@ -190,7 +156,6 @@ export default function QuoteFormPage() {
             items: [...prev.items.filter(item => item.description.trim()), ...newItems]
         }));
         
-        setShowKitModal(false);
         toast.success(`Kit "${kit.name}" ajouté avec ${kit.items.length} lignes`);
     };
 
@@ -221,12 +186,12 @@ export default function QuoteFormPage() {
             
             // Refresh kits list
             const kitsRes = await getKits();
-            setKits(kitsRes.data);
+            setUserKits(kitsRes.data);
             
             setShowSaveKitModal(false);
             setNewKitName("");
             setNewKitDescription("");
-            toast.success("Kit sauvegardé avec succès");
+            toast.success("Kit sauvegardé");
         } catch (error) {
             toast.error("Erreur lors de la sauvegarde du kit");
         }
@@ -269,7 +234,6 @@ export default function QuoteFormPage() {
     };
 
     const totals = calculateTotals();
-    const selectedCategoryItems = categories.find(c => c.id === selectedCategory)?.items || [];
 
     if (loading) {
         return (
@@ -334,130 +298,63 @@ export default function QuoteFormPage() {
                     </CardContent>
                 </Card>
 
-                {/* Predefined Items Selector */}
-                <Card className="border-orange-200 bg-orange-50/50">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="font-['Barlow_Condensed'] text-lg flex items-center gap-2">
-                            <Package className="w-5 h-5 text-orange-600" />
-                            Ajouter un article prédéfini
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <div className="space-y-1">
-                                <Label className="text-xs">Catégorie</Label>
-                                <Select value={selectedCategory} onValueChange={(v) => { setSelectedCategory(v); setSelectedItem(""); }}>
-                                    <SelectTrigger data-testid="category-select">
-                                        <SelectValue placeholder="Choisir une catégorie" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {categories.map(cat => (
-                                            <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1">
-                                <Label className="text-xs">Article</Label>
-                                <Select value={selectedItem} onValueChange={setSelectedItem} disabled={!selectedCategory}>
-                                    <SelectTrigger data-testid="predefined-item-select">
-                                        <SelectValue placeholder="Choisir un article" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {selectedCategoryItems.map(item => (
-                                            <SelectItem key={item.id} value={item.id}>
-                                                {item.description} ({item.default_price}€/{item.unit})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="flex items-end">
-                                <Button 
-                                    type="button" 
-                                    onClick={addPredefinedItem}
-                                    className="bg-orange-600 hover:bg-orange-700 w-full"
-                                    disabled={!selectedCategory || !selectedItem}
-                                    data-testid="add-predefined-btn"
-                                >
-                                    <Plus className="w-4 h-4 mr-2" />
-                                    Ajouter
-                                </Button>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                {/* V2 Service Item Selector - Same as Invoice page */}
+                <ServiceItemSelectorV2 
+                    onAddItem={handleAddPredefinedItem}
+                    onAddMultipleItems={handleAddMultipleItems}
+                />
 
-                {/* Renovation Kits */}
-                <Card className="border-blue-200 bg-blue-50/50">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="font-['Barlow_Condensed'] text-lg flex items-center gap-2">
-                            <Layers className="w-5 h-5 text-blue-600" />
-                            Kits de rénovation
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-wrap gap-2">
-                            <Button 
-                                type="button" 
-                                variant="outline"
-                                onClick={() => setShowKitModal(true)}
-                                className="border-blue-300 text-blue-700 hover:bg-blue-100"
-                                data-testid="add-kit-btn"
-                            >
-                                <Layers className="w-4 h-4 mr-2" />
-                                Ajouter un kit
-                            </Button>
-                            <Button 
-                                type="button" 
-                                variant="outline"
-                                onClick={() => setShowSaveKitModal(true)}
-                                className="border-green-300 text-green-700 hover:bg-green-100"
-                                disabled={formData.items.filter(i => i.description.trim()).length === 0}
-                                data-testid="save-kit-btn"
-                            >
-                                <BookmarkPlus className="w-4 h-4 mr-2" />
-                                Sauvegarder comme kit
-                            </Button>
-                        </div>
-                        {kits.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                {kits.slice(0, 5).map(kit => (
+                {/* User Custom Kits */}
+                {userKits.length > 0 && (
+                    <Card className="border-green-200 bg-green-50/50">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="font-['Barlow_Condensed'] text-lg flex items-center gap-2">
+                                <Layers className="w-5 h-5 text-green-600" />
+                                Mes kits personnalisés
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-wrap gap-2">
+                                {userKits.map(kit => (
                                     <Button
                                         key={kit.id}
                                         type="button"
-                                        variant="ghost"
+                                        variant="outline"
                                         size="sm"
-                                        onClick={() => addKit(kit)}
-                                        className="text-xs bg-white border hover:bg-blue-50"
+                                        onClick={() => addUserKit(kit)}
+                                        className="text-xs border-green-300 text-green-700 hover:bg-green-100"
                                     >
-                                        + {kit.name}
+                                        <Plus className="w-3 h-3 mr-1" />
+                                        {kit.name}
                                     </Button>
                                 ))}
-                                {kits.length > 5 && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setShowKitModal(true)}
-                                        className="text-xs text-blue-600"
-                                    >
-                                        Voir tous ({kits.length})
-                                    </Button>
-                                )}
                             </div>
-                        )}
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Line Items */}
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="font-['Barlow_Condensed']">Lignes du devis</CardTitle>
-                        <Button type="button" variant="outline" size="sm" onClick={addItem} data-testid="add-item-btn">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Ligne manuelle
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button 
+                                type="button" 
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowSaveKitModal(true)}
+                                disabled={formData.items.filter(i => i.description.trim()).length === 0}
+                                className="border-green-300 text-green-700 hover:bg-green-100"
+                                data-testid="save-kit-btn"
+                            >
+                                <BookmarkPlus className="w-4 h-4 mr-2" />
+                                Sauvegarder comme kit
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={addItem} data-testid="add-item-btn">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Ligne manuelle
+                            </Button>
+                        </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {/* Auto-entrepreneur banner */}
@@ -603,55 +500,6 @@ export default function QuoteFormPage() {
                     </Button>
                 </div>
             </form>
-
-            {/* Kit Selection Modal */}
-            <Dialog open={showKitModal} onOpenChange={setShowKitModal}>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle className="font-['Barlow_Condensed'] text-xl flex items-center gap-2">
-                            <Layers className="w-5 h-5 text-blue-600" />
-                            Sélectionner un kit de rénovation
-                        </DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-3 mt-4">
-                        {kits.length === 0 ? (
-                            <p className="text-center text-slate-500 py-8">Aucun kit disponible</p>
-                        ) : (
-                            kits.map(kit => (
-                                <div 
-                                    key={kit.id} 
-                                    className="border rounded-lg p-4 hover:bg-slate-50 cursor-pointer transition-colors"
-                                    onClick={() => addKit(kit)}
-                                    data-testid={`kit-option-${kit.id}`}
-                                >
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <h3 className="font-semibold text-slate-900">{kit.name}</h3>
-                                            {kit.description && (
-                                                <p className="text-sm text-slate-500 mt-1">{kit.description}</p>
-                                            )}
-                                            <p className="text-xs text-slate-400 mt-2">
-                                                {kit.items.length} lignes • {kit.is_default ? "Kit par défaut" : "Kit personnalisé"}
-                                            </p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-sm font-medium text-orange-600">
-                                                {kit.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0).toFixed(2)} € HT
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-3 text-xs text-slate-500">
-                                        {kit.items.slice(0, 3).map((item, idx) => (
-                                            <span key={idx}>{item.description}{idx < 2 && kit.items.length > idx + 1 ? " • " : ""}</span>
-                                        ))}
-                                        {kit.items.length > 3 && <span> +{kit.items.length - 3} autres</span>}
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
 
             {/* Save as Kit Modal */}
             <Dialog open={showSaveKitModal} onOpenChange={setShowSaveKitModal}>
