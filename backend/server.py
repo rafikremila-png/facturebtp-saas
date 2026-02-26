@@ -1609,7 +1609,11 @@ async def login(request: Request, user_data: UserLogin):
                 name=user["name"], 
                 role=user_role,
                 phone=user.get("phone"),
-                email_verified=user.get("email_verified", False)
+                email_verified=user.get("email_verified", False),
+                trial_status=user.get("plan"),
+                trial_started_at=user.get("trial_start"),
+                trial_ends_at=user.get("trial_end"),
+                invoice_limit=user.get("invoice_limit", 9)
             )
         )
         
