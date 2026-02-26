@@ -56,54 +56,54 @@ class ServiceRequestStatusUpdate(BaseModel):
 
 SERVICE_CATALOG = {
     "website_visibility": {
-        "name": "Site Web & Visibilité",
+        "name": "Sites Web et Visibilité",
         "icon": "Globe",
         "services": [
             {
                 "id": "website_onepage",
-                "name": "Site Web One-Page",
-                "description": "Site web professionnel one-page pour présenter votre activité",
+                "name": "Site Web d'une seule page",
+                "description": "Site vitrine professionnel d'une page",
                 "price": 490,
                 "price_label": "À partir de 490€",
             },
             {
                 "id": "website_redesign",
                 "name": "Refonte de Site Web",
-                "description": "Modernisation de votre site web existant",
+                "description": "Modernisation de votre site existant",
                 "price": 390,
                 "price_label": "À partir de 390€",
             },
             {
                 "id": "google_business",
                 "name": "Optimisation Google Business",
-                "description": "Optimisation de votre visibilité locale sur Google",
+                "description": "Visibilité locale optimisée sur Google",
                 "price": 150,
                 "price_label": "À partir de 150€",
             },
         ]
     },
     "business_cards": {
-        "name": "Cartes de Visite",
+        "name": "Cartes de visite",
         "icon": "CreditCard",
         "services": [
             {
                 "id": "cards_design",
-                "name": "Cartes de Visite – Design",
+                "name": "Cartes de visite - Design",
                 "description": "Création graphique professionnelle",
                 "price": 80,
                 "price_label": "À partir de 80€",
             },
             {
                 "id": "cards_print",
-                "name": "Cartes de Visite – Impression",
-                "description": "Impression haute qualité (500 exemplaires)",
+                "name": "Cartes de Visite - Impression",
+                "description": "Impression haute qualité (500 ex.)",
                 "price": 45,
                 "price_label": "À partir de 45€",
             },
             {
                 "id": "cards_pack",
-                "name": "Cartes de Visite – Pack Complet",
-                "description": "Design + Impression (500 exemplaires)",
+                "name": "Cartes de Visite - Pack Complet",
+                "description": "Design + Impression (500 ex.)",
                 "price": 99,
                 "price_label": "À partir de 99€",
                 "recommended": True,
@@ -111,27 +111,27 @@ SERVICE_CATALOG = {
         ]
     },
     "flyers_marketing": {
-        "name": "Flyers & Marketing",
+        "name": "Flyers et publicité",
         "icon": "FileText",
         "services": [
             {
                 "id": "flyers_design",
-                "name": "Flyers – Design",
-                "description": "Création graphique format A5 ou A4",
+                "name": "Flyers - Conception",
+                "description": "Création graphique A5 ou A4",
                 "price": 120,
                 "price_label": "À partir de 120€",
             },
             {
                 "id": "flyers_print",
-                "name": "Flyers – Impression",
-                "description": "Impression haute qualité (1000 exemplaires)",
+                "name": "Flyers - Impression",
+                "description": "Impression haute qualité (1000 ex.)",
                 "price": 90,
                 "price_label": "À partir de 90€",
             },
             {
                 "id": "flyers_pack",
-                "name": "Flyers – Pack Complet",
-                "description": "Design + Impression (1000 exemplaires)",
+                "name": "Flyers - Pack complet",
+                "description": "Design + Impression (1000 ex.)",
                 "price": 180,
                 "price_label": "À partir de 180€",
                 "recommended": True,
@@ -139,26 +139,26 @@ SERVICE_CATALOG = {
         ]
     },
     "it_support": {
-        "name": "Support Informatique",
+        "name": "Support informatique",
         "icon": "Settings",
         "services": [
             {
                 "id": "email_pro",
-                "name": "Email Professionnel",
-                "description": "Configuration email professionnel (@votreentreprise.com)",
+                "name": "Courriel Professionnel",
+                "description": "Adresse e-mail de configuration : @votreentreprise.fr",
                 "price": 60,
                 "price_label": "À partir de 60€",
             },
             {
                 "id": "domain_config",
-                "name": "Configuration Domaine",
-                "description": "Achat et configuration de nom de domaine",
+                "name": "Domaine de configuration",
+                "description": "Achat et configuration nom de domaine",
                 "price": 80,
                 "price_label": "À partir de 80€",
             },
             {
                 "id": "it_basic",
-                "name": "Support Technique Basique",
+                "name": "Support informatique de base",
                 "description": "Assistance technique ponctuelle",
                 "price": 50,
                 "price_label": "À partir de 50€",
