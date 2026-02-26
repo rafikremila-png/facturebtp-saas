@@ -352,7 +352,7 @@ export default function QuoteFormPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         {categories.map(cat => (
-                                            <SelectItem key={cat.name} value={cat.name}>{cat.name}</SelectItem>
+                                            <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
