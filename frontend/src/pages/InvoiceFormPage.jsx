@@ -162,6 +162,15 @@ function InvoiceFormPage() {
                 <Card><CardHeader><CardTitle>Notes</CardTitle></CardHeader><CardContent><Textarea value={notes} onChange={function(e) { setNotes(e.target.value); }} rows={3} /></CardContent></Card>
                 <div className="flex gap-3"><Button type="button" variant="outline" onClick={function() { navigate("/factures"); }}>Annuler</Button><Button type="submit" className="bg-orange-600" disabled={saving} data-testid="submit-btn"><Save className="w-4 h-4 mr-2" />{saving ? "..." : "Créer"}</Button></div>
             </form>
+            
+            {/* Upgrade Modal */}
+            <UpgradeModal 
+                open={showUpgradeModal} 
+                onOpenChange={setShowUpgradeModal}
+                title={upgradeModalConfig.title}
+                message={upgradeModalConfig.message}
+                type={upgradeModalConfig.type}
+            />
         </div>
     );
 }
