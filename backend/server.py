@@ -2600,6 +2600,12 @@ async def convert_quote_to_invoice(quote_id: str, user: dict = Depends(get_curre
 	
 	# ============== INVOICE ROUTES ==============
 
+@api_router.get("/invoices/stats/usage")
+async def get_invoice_usage_stats(user: dict = Depends(get_current_user)):
+    """Get invoice usage statistics for current user (trial limits, etc.)"""
+    stats = await get_user_invoice_stats(user["id"], db)
+    return stats
+
 @api_router.post("/invoices", response_model=InvoiceResponse)
 async def create_invoice(invoice_data: InvoiceCreate, user: dict = Depends(get_current_user)):
     try:
