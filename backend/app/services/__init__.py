@@ -18,6 +18,11 @@ from .service_request_service import (
     SERVICE_CATALOG,
     get_service_request_service,
 )
+from .subscription_service import (
+    check_invoice_permission,
+    get_user_invoice_stats,
+    TRIAL_INVOICE_LIMIT,
+)
 
 __all__ = [
     "EmailService",
@@ -38,4 +43,7 @@ __all__ = [
     "ServiceRequestStatusUpdate",
     "SERVICE_CATALOG",
     "get_service_request_service",
+    "check_invoice_permission",
+    "get_user_invoice_stats",
+    "TRIAL_INVOICE_LIMIT",
 ]
