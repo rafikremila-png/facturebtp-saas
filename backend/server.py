@@ -9,23 +9,26 @@ import os
 import logging
 import asyncio
 from pathlib import Path
+
+# ============== LOAD .ENV FIRST (before any other imports that use env vars) ==============
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env', override=True)
+
 from pydantic import BaseModel, Field, EmailStr, ConfigDict, validator
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
-load_dotenv()
 from io import BytesIO
 import base64
-import resend
 import secrets
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import re
 
-# Import new modular services
+# Import new modular services (AFTER .env is loaded)
 from app.services.email_service import get_email_service
 from app.services.otp_service import get_otp_service
 from app.services.rate_limit_service import get_rate_limiter, get_client_ip
