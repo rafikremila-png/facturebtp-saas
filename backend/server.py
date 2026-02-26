@@ -3019,6 +3019,10 @@ async def get_acomptes_summary(quote_id: str, user: dict = Depends(get_current_u
 
 @api_router.post("/quotes/{quote_id}/final-invoice", response_model=InvoiceResponse)
 async def create_final_invoice(quote_id: str, user: dict = Depends(get_current_user)):
+    # ========== INVOICE CREATION GUARD ==========
+    await check_invoice_permission(user, db, raise_exception=True)
+    # ============================================
+    
     if not validate_uuid(quote_id):
         raise HTTPException(status_code=400, detail="ID devis invalide")
     
