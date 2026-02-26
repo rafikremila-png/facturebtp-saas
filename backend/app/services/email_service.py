@@ -304,9 +304,20 @@ L'équipe BTP Facture
 _email_service: Optional[EmailService] = None
 
 
-def get_email_service() -> EmailService:
-    """Get or create singleton email service instance"""
+def get_email_service(force_reinit: bool = False) -> EmailService:
+    """
+    Get or create singleton email service instance.
+    
+    Args:
+        force_reinit: If True, recreate the instance (useful after .env reload)
+    """
     global _email_service
-    if _email_service is None:
+    if _email_service is None or force_reinit:
         _email_service = EmailService()
     return _email_service
+
+
+def reset_email_service() -> None:
+    """Reset the email service singleton (useful for testing or config reload)"""
+    global _email_service
+    _email_service = None
