@@ -155,7 +155,7 @@ export default function QuoteFormPage() {
             return;
         }
         
-        const category = categories.find(c => c.name === selectedCategory);
+        const category = categories.find(c => c.id === selectedCategory);
         if (!category) return;
         
         const item = category.items.find(i => i.id === selectedItem);
