@@ -219,4 +219,24 @@ export const deactivateUser = (userId) => api.patch(`/users/${userId}/deactivate
 // Delete user (super admin only)
 export const deleteUser = (userId) => api.delete(`/users/${userId}`);
 
+// ============== SUBSCRIPTION & BILLING ==============
+
+// Get available subscription plans
+export const getSubscriptionPlans = () => api.get('/subscription/plans');
+
+// Get current subscription status
+export const getSubscriptionStatus = () => api.get('/subscription/status');
+
+// Create checkout session for a plan
+export const createCheckoutSession = (planId, originUrl) => api.post('/subscription/checkout', { plan_id: planId, origin_url: originUrl });
+
+// Check checkout session status
+export const checkCheckoutStatus = (sessionId) => api.get(`/subscription/checkout/status/${sessionId}`);
+
+// Cancel subscription
+export const cancelSubscription = () => api.post('/subscription/cancel');
+
+// Check feature access
+export const checkFeatureAccess = (feature) => api.get(`/subscription/features/${feature}`);
+
 export default api;
