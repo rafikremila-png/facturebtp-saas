@@ -23,6 +23,12 @@ from .subscription_service import (
     get_user_invoice_stats,
     TRIAL_INVOICE_LIMIT,
 )
+from .category_service import (
+    CategoryService,
+    get_category_service,
+    VALID_BUSINESS_TYPES,
+    BUSINESS_TYPE_LABELS,
+)
 
 __all__ = [
     "EmailService",
@@ -46,4 +52,8 @@ __all__ = [
     "check_invoice_permission",
     "get_user_invoice_stats",
     "TRIAL_INVOICE_LIMIT",
+    "CategoryService",
+    "get_category_service",
+    "VALID_BUSINESS_TYPES",
+    "BUSINESS_TYPE_LABELS",
 ]
