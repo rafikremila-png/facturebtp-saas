@@ -66,7 +66,9 @@ export default function SettingsPage() {
         // Website
         website: "",
         // Document appearance
-        document_theme_color: "blue"
+        document_theme_color: "blue",
+        // Business type for dynamic categories
+        business_type: "general"
     });
 
     // Theme color options
