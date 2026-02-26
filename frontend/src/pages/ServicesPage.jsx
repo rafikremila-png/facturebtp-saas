@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -15,7 +14,7 @@ import {
   Globe, 
   CreditCard, 
   FileText, 
-  Settings, 
+  Monitor,
   Star,
   Clock,
   CheckCircle,
@@ -23,18 +22,20 @@ import {
   AlertCircle,
   Loader2,
   Upload,
-  Euro,
   Phone,
   Mail,
   Building,
-  MessageSquare
+  MessageSquare,
+  ShoppingBag,
+  Send,
+  Settings
 } from 'lucide-react';
 
 const SERVICE_ICONS = {
   Globe: Globe,
   CreditCard: CreditCard,
   FileText: FileText,
-  Settings: Settings,
+  Settings: Monitor,
 };
 
 const STATUS_CONFIG = {
@@ -43,6 +44,13 @@ const STATUS_CONFIG = {
   in_progress: { label: 'En cours', color: 'bg-purple-100 text-purple-800', icon: Clock },
   completed: { label: 'Terminé', color: 'bg-green-100 text-green-800', icon: CheckCircle },
   cancelled: { label: 'Annulé', color: 'bg-red-100 text-red-800', icon: XCircle },
+};
+
+const ICON_COLORS = {
+  website_visibility: 'bg-orange-100 text-orange-600',
+  business_cards: 'bg-orange-100 text-orange-600',
+  flyers_marketing: 'bg-orange-100 text-orange-600',
+  it_support: 'bg-orange-100 text-orange-600',
 };
 
 export default function ServicesPage() {
@@ -152,50 +160,54 @@ export default function ServicesPage() {
     return (
       <Card 
         key={service.id} 
-        className={`relative overflow-hidden transition-all hover:shadow-lg ${
-          isRecommended ? 'border-2 border-orange-500 shadow-orange-100' : ''
+        className={`relative overflow-hidden transition-all hover:shadow-lg bg-white ${
+          isRecommended ? 'border-2 border-orange-400' : 'border border-gray-200'
         }`}
       >
         {isRecommended && (
-          <div className="absolute top-0 right-0 bg-orange-500 text-white px-3 py-1 text-xs font-semibold flex items-center gap-1">
-            <Star className="h-3 w-3" />
-            Recommandé
+          <div className="absolute top-3 right-3">
+            <Badge className="bg-orange-100 text-orange-600 border-orange-300 flex items-center gap-1 text-xs font-medium">
+              <Star className="h-3 w-3 fill-orange-500" />
+              Recommandé
+            </Badge>
           </div>
         )}
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">{service.name}</CardTitle>
-          <CardDescription>{service.description}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 text-2xl font-bold text-orange-600">
-              <Euro className="h-5 w-5" />
-              {service.price}
+        <CardContent className="p-5">
+          <h3 className="font-semibold text-gray-900 text-base mb-1 pr-24">{service.name}</h3>
+          <p className="text-sm text-gray-500 mb-4">{service.description}</p>
+          
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-xs text-gray-400 mb-1">À partir de</p>
+              <div className="text-2xl font-bold text-gray-900">
+                {service.price} €
+              </div>
             </div>
             <Button 
               onClick={() => handleRequestService(service, categoryName)}
-              className={isRecommended ? 'bg-orange-500 hover:bg-orange-600' : ''}
+              className="bg-orange-500 hover:bg-orange-600 text-white flex items-center gap-2"
               data-testid={`request-${service.id}`}
             >
-              Demander
+              <Send className="h-4 w-4" />
+              Demandeur
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">{service.price_label}</p>
         </CardContent>
       </Card>
     );
   };
 
   const renderCategory = (categoryKey, category) => {
-    const IconComponent = SERVICE_ICONS[category.icon] || Settings;
+    const IconComponent = SERVICE_ICONS[category.icon] || Monitor;
+    const iconColorClass = ICON_COLORS[categoryKey] || 'bg-orange-100 text-orange-600';
     
     return (
       <div key={categoryKey} className="space-y-4">
-        <div className="flex items-center gap-3 border-b pb-2">
-          <div className="p-2 bg-orange-100 rounded-lg">
-            <IconComponent className="h-5 w-5 text-orange-600" />
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg ${iconColorClass}`}>
+            <IconComponent className="h-5 w-5" />
           </div>
-          <h2 className="text-xl font-semibold">{category.name}</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{category.name}</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {category.services.map(service => renderServiceCard(service, category.name))}
@@ -207,15 +219,15 @@ export default function ServicesPage() {
   const renderMyRequests = () => {
     if (myRequests.length === 0) {
       return (
-        <Card>
+        <Card className="bg-white">
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Aucune demande</h3>
-            <p className="text-muted-foreground text-center">
+            <FileText className="h-12 w-12 text-gray-300 mb-4" />
+            <h3 className="text-lg font-medium mb-2 text-gray-900">Aucune demande</h3>
+            <p className="text-gray-500 text-center">
               Vous n'avez pas encore fait de demande de service.
             </p>
             <Button 
-              className="mt-4"
+              className="mt-4 bg-orange-500 hover:bg-orange-600"
               onClick={() => setActiveTab('services')}
             >
               Découvrir nos services
@@ -232,12 +244,12 @@ export default function ServicesPage() {
           const StatusIcon = statusConfig.icon;
           
           return (
-            <Card key={request.id}>
+            <Card key={request.id} className="bg-white">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
-                    <h3 className="font-semibold">{request.service_type}</h3>
-                    <p className="text-sm text-muted-foreground">{request.service_category}</p>
+                    <h3 className="font-semibold text-gray-900">{request.service_type}</h3>
+                    <p className="text-sm text-gray-500">{request.service_category}</p>
                     {request.message && (
                       <p className="text-sm mt-2 text-gray-600">"{request.message}"</p>
                     )}
@@ -247,12 +259,12 @@ export default function ServicesPage() {
                       <StatusIcon className="h-3 w-3 mr-1" />
                       {statusConfig.label}
                     </Badge>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-gray-400">
                       {new Date(request.created_at).toLocaleDateString('fr-FR')}
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
+                <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
                   <span className="flex items-center gap-1">
                     <Clock className="h-4 w-4" />
                     {request.urgency === 'express' ? 'Express' : 'Standard'}
@@ -278,69 +290,89 @@ export default function ServicesPage() {
   }
 
   return (
-    <div className="space-y-6" data-testid="services-page">
+    <div className="space-y-6 bg-gray-50 min-h-screen p-6" data-testid="services-page">
       {/* Header */}
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold">Services Pro</h1>
-        <p className="text-muted-foreground mt-1">
-          Services professionnels pour développer votre activité BTP
-        </p>
+      <div className="flex items-center gap-3">
+        <ShoppingBag className="h-7 w-7 text-gray-900" />
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Services Pro</h1>
+          <p className="text-gray-500 text-sm">
+            Services pour professionnels développer votre activité BTP
+          </p>
+        </div>
       </div>
 
-      {/* Website Banner */}
-      {settings && !settings.website && (
-        <Card className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200">
-          <CardContent className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-100 rounded-full">
-                <Globe className="h-5 w-5 text-orange-600" />
-              </div>
-              <div>
-                <h3 className="font-medium">Vous n'avez pas encore de site web professionnel</h3>
-                <p className="text-sm text-muted-foreground">
-                  Augmentez votre visibilité et attirez plus de clients
-                </p>
-              </div>
-            </div>
-            <Button 
-              onClick={() => {
-                const webService = catalog.website_visibility?.services[0];
-                if (webService) {
-                  handleRequestService(webService, 'Site Web & Visibilité');
-                }
-              }}
-              className="bg-orange-500 hover:bg-orange-600"
-            >
-              Créer mon site
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="services" data-testid="tab-services">
-            Services
-          </TabsTrigger>
-          <TabsTrigger value="requests" data-testid="tab-requests">
-            Mes demandes
-            {myRequests.length > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {myRequests.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setActiveTab('services')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+            activeTab === 'services' 
+              ? 'bg-white text-gray-900 shadow-sm border border-gray-200' 
+              : 'text-gray-500 hover:bg-gray-100'
+          }`}
+          data-testid="tab-services"
+        >
+          <Settings className="h-4 w-4" />
+          Services
+        </button>
+        <button
+          onClick={() => setActiveTab('requests')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+            activeTab === 'requests' 
+              ? 'bg-white text-gray-900 shadow-sm border border-gray-200' 
+              : 'text-gray-500 hover:bg-gray-100'
+          }`}
+          data-testid="tab-requests"
+        >
+          <Clock className="h-4 w-4" />
+          Mes demandes
+          {myRequests.length > 0 && (
+            <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
+              {myRequests.length}
+            </span>
+          )}
+        </button>
+      </div>
 
-        <TabsContent value="services" className="space-y-8 mt-6">
+      {/* Content */}
+      {activeTab === 'services' ? (
+        <div className="space-y-8">
+          {/* Website Banner */}
+          {settings && !settings.website && (
+            <Card className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200">
+              <CardContent className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-100 rounded-full">
+                    <Globe className="h-5 w-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">Vous n'avez pas encore de site web professionnel</h3>
+                    <p className="text-sm text-gray-500">
+                      Augmentez votre visibilité et attirez plus de clients
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={() => {
+                    const webService = catalog.website_visibility?.services[0];
+                    if (webService) {
+                      handleRequestService(webService, 'Sites Web et Visibilité');
+                    }
+                  }}
+                  className="bg-orange-500 hover:bg-orange-600"
+                >
+                  Créer mon site
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+          
           {Object.entries(catalog).map(([key, category]) => renderCategory(key, category))}
-        </TabsContent>
-
-        <TabsContent value="requests" className="mt-6">
-          {renderMyRequests()}
-        </TabsContent>
-      </Tabs>
+        </div>
+      ) : (
+        renderMyRequests()
+      )}
 
       {/* Request Modal */}
       <Dialog open={showRequestModal} onOpenChange={setShowRequestModal}>
@@ -447,7 +479,7 @@ export default function ServicesPage() {
                 onChange={(e) => setFormData({...formData, logo: e.target.files[0]})}
               />
               {formData.logo && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-500">
                   Fichier sélectionné: {formData.logo.name}
                 </p>
               )}
