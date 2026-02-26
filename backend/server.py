@@ -2603,6 +2603,11 @@ async def convert_quote_to_invoice(quote_id: str, user: dict = Depends(get_curre
 @api_router.post("/invoices", response_model=InvoiceResponse)
 async def create_invoice(invoice_data: InvoiceCreate, user: dict = Depends(get_current_user)):
     try:
+        # ========== INVOICE CREATION GUARD ==========
+        # Check if user has permission to create invoice based on trial/subscription
+        await check_invoice_permission(user, db, raise_exception=True)
+        # ============================================
+        
         if not validate_uuid(invoice_data.client_id):
             raise HTTPException(status_code=400, detail="ID client invalide")
         
