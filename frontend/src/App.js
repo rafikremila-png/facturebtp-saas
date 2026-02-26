@@ -7,6 +7,7 @@ import ImpersonationBanner from "@/components/ImpersonationBanner";
 
 // Pages
 import LoginPage from "@/pages/LoginPage";
+import LandingPage from "@/pages/LandingPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ClientsPage from "@/pages/ClientsPage";
 import ClientFormPage from "@/pages/ClientFormPage";
@@ -86,6 +87,13 @@ const PublicRoute = ({ children }) => {
 function AppRoutes() {
     return (
         <Routes>
+            {/* Public Landing Pages */}
+            <Route path="/accueil" element={<LandingPage businessType="general" />} />
+            <Route path="/logiciel-facturation-electricien" element={<LandingPage businessType="electrician" />} />
+            <Route path="/logiciel-facturation-plombier" element={<LandingPage businessType="plumber" />} />
+            <Route path="/logiciel-facturation-peintre" element={<LandingPage businessType="painter" />} />
+            <Route path="/logiciel-facturation-installateur-reseau" element={<LandingPage businessType="it_installer" />} />
+            
             {/* Public client view - no auth required */}
             <Route path="/client/:type/:token" element={<ClientViewPage />} />
             
@@ -94,6 +102,7 @@ function AppRoutes() {
                     <LoginPage />
                 </PublicRoute>
             } />
+            
             <Route path="/" element={
                 <ProtectedRoute>
                     <Layout />
