@@ -482,8 +482,10 @@ Build a production-ready MVP web application for a French construction company (
 - `/app/test_reports/iteration_11.json` - OTP & Security features testing (Feb 24, 2026)
 - `/app/test_reports/iteration_12.json` - Trial & OTP Architecture testing (Feb 25, 2026)
 - `/app/test_reports/iteration_13.json` - Dynamic Categories testing (Feb 26, 2026)
+- `/app/test_reports/iteration_14.json` - Categories V2 with Subcategories & Kits testing (Feb 26, 2026)
 - `/app/backend/tests/test_rbac.py` - Tests unitaires RBAC
 - `/app/backend/tests/test_otp_features.py` - Tests unitaires OTP
 - `/app/backend/tests/test_trial_otp_architecture.py` - Tests architecture modulaire
 - `/app/backend/tests/test_e2e_registration_flow.py` - Tests E2E inscription
 - `/app/backend/tests/test_dynamic_categories.py` - Tests catégories dynamiques
+- `/app/backend/tests/test_categories_v2.py` - Tests catégories V2 avec sous-catégories
