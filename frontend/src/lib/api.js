@@ -112,13 +112,20 @@ export const uploadLogo = async (file) => {
     });
 };
 
-// Predefined Items
+// Predefined Items (Legacy - for backward compatibility)
 export const getPredefinedCategories = () => api.get('/predefined-items/categories');
 export const getPredefinedItems = (category) => api.get('/predefined-items', { params: { category } });
 export const createPredefinedItem = (data) => api.post('/predefined-items', data);
 export const updatePredefinedItem = (id, data) => api.put(`/predefined-items/${id}`, data);
 export const deletePredefinedItem = (id) => api.delete(`/predefined-items/${id}`);
 export const resetPredefinedItems = () => api.post('/predefined-items/reset');
+
+// Dynamic Service Categories (New system - filtered by business_type)
+export const getDynamicCategories = () => api.get('/categories');
+export const getDynamicCategoriesWithItems = () => api.get('/categories/with-items');
+export const getDynamicCategoryItems = (categoryId) => api.get(`/categories/${categoryId}/items`);
+export const searchCategoryItems = (query) => api.get('/categories/search/items', { params: { q: query } });
+export const getBusinessTypes = () => api.get('/business-types');
 
 // Renovation Kits
 export const getKits = () => api.get('/kits');
