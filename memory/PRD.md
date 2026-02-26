@@ -188,6 +188,35 @@ Build a production-ready MVP web application for a French construction company (
 
 ## Changelog (Feb 2026)
 
+### Système de Catégories V2 avec Sous-catégories et Kits ✅ (Feb 26, 2026)
+- **Architecture V2 complète** :
+  - `service_categories` : 7 catégories principales
+  - `service_subcategories` : 28 sous-catégories (4 par catégorie)
+  - `service_items` : 140 articles avec prix par défaut et prix suggérés par métier
+  - `service_kits` : 8 kits professionnels prédéfinis
+- **Prix intelligents** : Les prix s'adaptent automatiquement au type de métier de l'utilisateur
+- **Kits professionnels** :
+  - Installation électrique appartement T3 (electrician)
+  - Rénovation tableau électrique (electrician)
+  - Rénovation salle de bain complète (plumber)
+  - Installation chauffe-eau (plumber)
+  - Installation réseau bureau complet (it_installer)
+  - Rénovation appartement clé en main (general)
+  - Peinture appartement T3 (painter)
+  - Création salle de bain maçonnerie (mason)
+- **Nouveaux endpoints API V2** :
+  - `GET /api/v2/categories` - Catégories filtrées par business_type
+  - `GET /api/v2/categories/with-subcategories` - Avec sous-catégories
+  - `GET /api/v2/categories/{id}/subcategories` - Sous-catégories d'une catégorie
+  - `GET /api/v2/subcategories/{id}/items` - Articles avec smart_price
+  - `GET /api/v2/kits` - Kits filtrés par business_type
+  - `GET /api/v2/kits/{id}` - Kit avec articles étendus et total_ht
+- **Nouveau composant frontend** : `ServiceItemSelectorV2.jsx`
+  - Sélection en 3 étapes : Catégorie → Sous-catégorie → Article
+  - Dialog de sélection de kits avec aperçu détaillé
+  - Insertion automatique de tous les articles du kit
+- **Rétrocompatibilité** : Les anciens endpoints V1 fonctionnent toujours
+
 ### Système de Catégories Dynamiques ✅ (Feb 26, 2026)
 - **Nouvelle architecture** : Catégories et articles stockés en base MongoDB (`service_categories`, `service_items`)
 - **Filtrage par métier** : Les catégories affichées dépendent du `business_type` de l'utilisateur
