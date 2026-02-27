@@ -2657,6 +2657,12 @@ async def convert_quote_to_invoice(quote_id: str, user: dict = Depends(get_curre
     logger.info(f"Quote converted to invoice: {quote['quote_number']} -> {invoice_number}")
     
     return InvoiceResponse(**invoice_doc)
+
+@api_router.get("/quotes/stats/usage")
+async def get_quote_usage_stats(user: dict = Depends(get_current_user)):
+    """Get quote usage statistics for current user (trial limits, etc.)"""
+    stats = await get_user_quote_stats(user["id"], db)
+    return stats
 	
 	# ============== INVOICE ROUTES ==============
 
