@@ -541,16 +541,62 @@ Build a production-ready MVP web application for a French construction company (
 
 - **Tests** : 100% de réussite (iteration_17.json)
 
+### Système SaaS Complet ✅ (Feb 27, 2026)
+- **Structure des plans**:
+  - 3 plans: Essentiel (19€/mois), Pro (29€/mois), Business (59€/mois)
+  - Tarification annuelle avec -20% de réduction
+  - Limites dynamiques par plan (30/mois Essentiel, illimité Pro/Business)
+
+- **Compteur d'usage mensuel**:
+  - Comptage par mois calendaire (pas total)
+  - API `/api/saas/usage` retourne quote_usage, invoice_usage, limits
+  - Composant `UsageCounter.jsx` avec barres de progression colorées
+  - Couleurs: vert < 70%, orange 70-99%, rouge 100%
+
+- **Enforcement des limites**:
+  - Vérification avant création devis/factures via `PlansService`
+  - HTTP 403 avec message explicite si limite atteinte
+  - Super admin bypass les limites
+
+- **Intégration Stripe**:
+  - `StripeService` pour checkout sessions et webhooks
+  - Webhooks: checkout.session.completed, invoice.paid, subscription.deleted
+  - Mode test avec clé `sk_test_emergent` (à remplacer en production)
+
+- **Fonctionnalités Pro exclusives**:
+  - Relances automatiques impayés (`ReminderService`)
+  - Export comptable CSV (`CSVExportService`)
+  - Support prioritaire
+
+- **Page Pricing haute conversion** (`/tarifs`):
+  - Hero section avec CTA "Essai gratuit 14 jours"
+  - Toggle Mensuel/Annuel avec économies affichées
+  - Plan Pro mis en avant avec badge "Le plus populaire"
+  - Bannière urgence "Offre fondateur -20% à vie"
+  - FAQ et CTA final
+
+- **Nouveaux endpoints API**:
+  - `GET /api/saas/plans` - Liste des plans avec prix
+  - `GET /api/saas/subscription` - Info abonnement utilisateur
+  - `GET /api/saas/usage` - Statistiques d'utilisation
+  - `POST /api/saas/checkout` - Créer session Stripe
+  - `POST /api/saas/webhook` - Webhook Stripe
+  - `GET /api/export/invoices/csv` - Export factures (Pro)
+  - `GET /api/export/quotes/csv` - Export devis (Pro)
+  - `GET /api/reminders/*` - Endpoints relances (Pro)
+
+- **Tests** : 100% de réussite (iteration_18.json)
+
 ## Remaining Backlog
 
 ### P0 - Critical
-- None
+- Configurer vraies clés Stripe (Price IDs) en production
 
 ### P1 - Important
-- Calcul dynamique du temps d'essai restant (compte à rebours frontend)
-- Blocage création documents après expiration essai (modal upgrade)
+- Envoi réel des emails de relance (actuellement enregistrement seul)
+- Page de gestion abonnement utilisateur
 
 ### P2 - Nice to Have
-- Recherche d'articles par nom (endpoint `/api/v3/items/search` déjà prêt)
-- Export statistiques en CSV
+- Dashboard analytics détaillé
 - Notifications email automatiques
+- Multi-utilisateurs pour Pro/Business
