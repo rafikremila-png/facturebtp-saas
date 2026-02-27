@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getQuote, getClients, createQuote, updateQuote, getSettings, getKits, createKit, getKitsV2 } from "@/lib/api";
+import { getQuote, getClients, createQuote, updateQuote, getSettings, getKits, createKit, getKitsV3 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ArrowLeft, Save, Plus, Trash2, Layers, BookmarkPlus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import ServiceItemSelectorV2 from "@/components/ServiceItemSelectorV2";
+import ServiceItemSelector from "@/components/ServiceItemSelector";
 
 export default function QuoteFormPage() {
     const { id } = useParams();
