@@ -70,6 +70,15 @@ from app.services.category_service_v2 import (
     get_category_service_v2,
     CategoryServiceV2,
 )
+from app.services.category_service_simple import (
+    CategoryServiceSimple,
+    VALID_BUSINESS_TYPES as VALID_BUSINESS_TYPES_SIMPLE,
+    BUSINESS_TYPE_LABELS as BUSINESS_TYPE_LABELS_SIMPLE,
+)
+
+# Helper to get simplified category service
+def get_category_service_simple(database):
+    return CategoryServiceSimple(database)
 from app.init import init_app_services, create_user_indexes
 
 # ReportLab imports for PDF
