@@ -48,14 +48,14 @@ export default function LoginPage() {
                 navigate("/");
             } else {
                 // Register - this will require OTP verification
+                // business_type is now set in Settings, defaults to "general"
                 await axios.post(`${API}/auth/register`, {
                     email,
                     password,
                     name,
                     phone,
                     company_name: companyName,
-                    address,
-                    business_type: businessType
+                    address
                 });
                 toast.success("Code de vérification envoyé par email");
                 setStep("otp");
