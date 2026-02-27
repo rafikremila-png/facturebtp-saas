@@ -143,8 +143,8 @@ function InvoiceFormPage() {
                     </CardContent>
                 </Card>
 
-                {/* V2 Service Item Selector with subcategories and kits */}
-                <ServiceItemSelectorV2 
+                {/* Simplified Service Item Selector */}
+                <ServiceItemSelector 
                     onAddItem={handleAddPredefinedItem}
                     onAddMultipleItems={handleAddMultipleItems}
                 />
