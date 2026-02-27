@@ -6119,6 +6119,47 @@ async def export_accounting_summary(
     )
 
 
+# ============== ADMIN METRICS ENDPOINTS (Super Admin Only) ==============
+
+@api_router.get("/admin/metrics")
+async def get_admin_metrics(
+    force_refresh: bool = False,
+    user: dict = Depends(require_super_admin)
+):
+    """Get SaaS metrics dashboard data (MRR, Churn, Subscribers)"""
+    metrics_service = get_admin_metrics_service(db)
+    return await metrics_service.get_metrics(force_refresh=force_refresh)
+
+
+@api_router.get("/admin/metrics/subscribers")
+async def get_admin_subscribers(
+    status: Optional[str] = None,
+    plan: Optional[str] = None,
+    limit: int = 50,
+    skip: int = 0,
+    user: dict = Depends(require_super_admin)
+):
+    """Get detailed list of subscribers"""
+    metrics_service = get_admin_metrics_service(db)
+    return await metrics_service.get_detailed_subscribers(
+        status=status,
+        plan=plan,
+        limit=limit,
+        skip=skip
+    )
+
+
+@api_router.get("/admin/metrics/mrr-history")
+async def get_mrr_history(
+    months: int = 6,
+    user: dict = Depends(require_super_admin)
+):
+    """Get MRR history for the last N months"""
+    metrics_service = get_admin_metrics_service(db)
+    metrics = await metrics_service.get_metrics()
+    return metrics.get("mrr_history", [])
+
+
 # ============== HEALTH CHECK ==============
 
 @api_router.get("/health")
