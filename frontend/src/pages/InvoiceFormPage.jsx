@@ -250,6 +250,8 @@ function InvoiceFormPage() {
                 title={upgradeModalConfig.title}
                 message={upgradeModalConfig.message}
                 type={upgradeModalConfig.type}
+                documentType={upgradeModalConfig.documentType || "facture"}
+                usage={upgradeModalConfig.usage}
             />
         </div>
     );
