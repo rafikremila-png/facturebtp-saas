@@ -587,6 +587,27 @@ Build a production-ready MVP web application for a French construction company (
 
 - **Tests** : 100% de réussite (iteration_18.json)
 
+## Nettoyage V2 (Décembre 2025)
+
+### Fichiers supprimés
+- `backend/app/services/category_service_v2.py` - Ancien service avec sous-catégories
+- `frontend/src/components/ServiceItemSelectorV2.jsx` - Ancien sélecteur V2
+- `backend/tests/test_categories_v2.py` - Tests V2 obsolètes
+- `backend/tests/test_landing_registration_v2.py` - Tests V2 obsolètes
+- `test_reports/pytest/pytest_results_categories_v2.xml` - Rapports V2
+- `test_reports/pytest/pytest_results_landing_v2.xml` - Rapports V2
+
+### Code nettoyé
+- `server.py` : Suppression import V2, endpoints V2 (/api/v2/*), initialisation V2
+- `api.js` : Suppression des fonctions API V2
+- `QuoteFormPage.jsx` : Mise à jour commentaires (V2 → standard)
+
+### Résultat
+- Application plus légère et maintenable
+- Seul le système V3 simplifié (Catégorie → Article) reste actif
+- ~1700 lignes de code backend supprimées
+- ~500 lignes de code frontend supprimées
+
 ## Remaining Backlog
 
 ### P0 - Critical
