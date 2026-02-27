@@ -53,7 +53,7 @@ from app.services.service_request_service import (
     ServiceRequestStatusUpdate,
     SERVICE_CATALOG,
 )
-from app.services.subscription_service import check_invoice_permission, get_user_invoice_stats
+from app.services.subscription_service import check_invoice_permission, get_user_invoice_stats, check_quote_permission, get_user_quote_stats
 from app.services.stripe_subscription_service import (
     get_stripe_subscription_service,
     StripeSubscriptionService,
