@@ -3523,7 +3523,13 @@ async def get_situations_summary(quote_id: str, user: dict = Depends(get_current
 @api_router.post("/quotes/{quote_id}/situation/final-invoice", response_model=InvoiceResponse)
 async def create_situation_final_invoice(quote_id: str, user: dict = Depends(get_current_user)):
     # ========== INVOICE CREATION GUARD ==========
-    await check_invoice_permission(user, db, raise_exception=True)
+    plans_service = get_plans_service(db)
+    permission = await plans_service.check_invoice_permission(user)
+    if not permission.get("allowed"):
+        raise HTTPException(
+            status_code=403,
+            detail=permission.get("message", "Vous n'avez pas la permission de créer une facture")
+        )
     # ============================================
     
     if not validate_uuid(quote_id):
