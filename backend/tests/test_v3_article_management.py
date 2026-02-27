@@ -5,11 +5,13 @@ Tests for:
 - V3 kits API (8 kits)
 - Quote stats/usage API (trial limits)
 - Quote creation with trial limit check
+- Registration without business_type
 """
 
 import pytest
 import requests
 import os
+import time
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
@@ -40,16 +42,15 @@ class TestV3CategoriesAPI:
         else:
             pytest.skip(f"Login failed: {login_response.status_code}")
     
-    def test_v3_categories_list(self):
+    def test_v3_categories_list_returns_10_categories(self):
         """Test GET /api/v3/categories returns 10 categories"""
         response = self.session.get(f"{BASE_URL}/api/v3/categories")
         
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
-        data = response.json()
-        assert "categories" in data, "Response should contain 'categories' key"
-        
-        categories = data["categories"]
+        # Response is a direct array
+        categories = response.json()
+        assert isinstance(categories, list), "Response should be a list"
         assert len(categories) == 10, f"Expected 10 categories, got {len(categories)}"
         
         # Verify category structure
@@ -64,16 +65,15 @@ class TestV3CategoriesAPI:
         category_names = [cat["name"] for cat in categories]
         print(f"  Categories: {category_names}")
     
-    def test_v3_categories_with_items(self):
+    def test_v3_categories_with_items_returns_239_items(self):
         """Test GET /api/v3/categories/with-items returns categories with 239 items total"""
         response = self.session.get(f"{BASE_URL}/api/v3/categories/with-items")
         
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
-        data = response.json()
-        assert "categories" in data, "Response should contain 'categories' key"
-        
-        categories = data["categories"]
+        # Response is a direct array
+        categories = response.json()
+        assert isinstance(categories, list), "Response should be a list"
         assert len(categories) == 10, f"Expected 10 categories, got {len(categories)}"
         
         # Count total items
@@ -83,17 +83,15 @@ class TestV3CategoriesAPI:
             total_items += len(cat["items"])
         
         # Should have 239 items total
-        assert total_items >= 150, f"Expected at least 150 items, got {total_items}"
+        assert total_items == 239, f"Expected 239 items, got {total_items}"
         print(f"✓ V3 Categories with items returns {len(categories)} categories with {total_items} total items")
         
-        # Verify item structure (no subcategories)
+        # Verify item structure (no subcategories - direct category->item)
         for cat in categories:
             for item in cat.get("items", []):
                 assert "name" in item, "Item should have 'name'"
                 assert "unit" in item, "Item should have 'unit'"
                 assert "default_price" in item, "Item should have 'default_price'"
-                # Should NOT have subcategory field
-                # Items are directly under category (simplified structure)
     
     def test_v3_single_category(self):
         """Test GET /api/v3/categories/{category_id} returns single category"""
@@ -101,7 +99,7 @@ class TestV3CategoriesAPI:
         list_response = self.session.get(f"{BASE_URL}/api/v3/categories")
         assert list_response.status_code == 200
         
-        categories = list_response.json()["categories"]
+        categories = list_response.json()
         if len(categories) > 0:
             category_id = categories[0]["id"]
             
@@ -109,9 +107,8 @@ class TestV3CategoriesAPI:
             assert response.status_code == 200, f"Expected 200, got {response.status_code}"
             
             data = response.json()
-            assert "category" in data, "Response should contain 'category' key"
-            assert data["category"]["id"] == category_id
-            print(f"✓ Single category endpoint works for category: {data['category']['name']}")
+            assert data["id"] == category_id
+            print(f"✓ Single category endpoint works for category: {data['name']}")
     
     def test_v3_category_items(self):
         """Test GET /api/v3/categories/{category_id}/items returns items for category"""
@@ -119,7 +116,7 @@ class TestV3CategoriesAPI:
         list_response = self.session.get(f"{BASE_URL}/api/v3/categories")
         assert list_response.status_code == 200
         
-        categories = list_response.json()["categories"]
+        categories = list_response.json()
         if len(categories) > 0:
             category_id = categories[0]["id"]
             category_name = categories[0]["name"]
@@ -127,10 +124,9 @@ class TestV3CategoriesAPI:
             response = self.session.get(f"{BASE_URL}/api/v3/categories/{category_id}/items")
             assert response.status_code == 200, f"Expected 200, got {response.status_code}"
             
-            data = response.json()
-            assert "items" in data, "Response should contain 'items' key"
+            items = response.json()
+            assert isinstance(items, list), "Response should be a list"
             
-            items = data["items"]
             print(f"✓ Category '{category_name}' has {len(items)} items")
             
             # Verify items have correct structure
@@ -162,16 +158,15 @@ class TestV3KitsAPI:
         else:
             pytest.skip(f"Login failed: {login_response.status_code}")
     
-    def test_v3_kits_list(self):
+    def test_v3_kits_list_returns_8_kits(self):
         """Test GET /api/v3/kits returns 8 kits"""
         response = self.session.get(f"{BASE_URL}/api/v3/kits")
         
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
-        data = response.json()
-        assert "kits" in data, "Response should contain 'kits' key"
-        
-        kits = data["kits"]
+        # Response is a direct array
+        kits = response.json()
+        assert isinstance(kits, list), "Response should be a list"
         assert len(kits) == 8, f"Expected 8 kits, got {len(kits)}"
         
         # Verify kit structure
@@ -192,7 +187,7 @@ class TestV3KitsAPI:
         list_response = self.session.get(f"{BASE_URL}/api/v3/kits")
         assert list_response.status_code == 200
         
-        kits = list_response.json()["kits"]
+        kits = list_response.json()
         if len(kits) > 0:
             kit_id = kits[0]["id"]
             
@@ -200,12 +195,11 @@ class TestV3KitsAPI:
             assert response.status_code == 200, f"Expected 200, got {response.status_code}"
             
             data = response.json()
-            assert "kit" in data, "Response should contain 'kit' key"
-            assert data["kit"]["id"] == kit_id
-            print(f"✓ Single kit endpoint works for kit: {data['kit']['name']}")
+            assert data["id"] == kit_id
+            print(f"✓ Single kit endpoint works for kit: {data['name']}")
 
 
-class TestQuoteStatsAPI:
+class TestQuoteStatsUsageAPI:
     """Test Quote Stats/Usage API for trial limits"""
     
     @pytest.fixture(autouse=True)
@@ -227,28 +221,24 @@ class TestQuoteStatsAPI:
         else:
             pytest.skip(f"Login failed: {login_response.status_code}")
     
-    def test_quote_stats_endpoint(self):
-        """Test GET /api/quotes/stats returns proper trial limits"""
-        response = self.session.get(f"{BASE_URL}/api/quotes/stats")
+    def test_quote_stats_usage_endpoint(self):
+        """Test GET /api/quotes/stats/usage returns proper trial limits"""
+        response = self.session.get(f"{BASE_URL}/api/quotes/stats/usage")
         
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
         data = response.json()
         
-        # Should contain trial limit info
-        # Expected fields: quotes_this_month, quotes_limit, is_trial, can_create_quote
-        print(f"✓ Quote stats response: {data}")
-        
         # Verify structure
-        assert "quotes_this_month" in data or "count" in data, "Should have quote count"
+        assert "quote_count" in data, "Should have quote_count"
+        assert "can_create" in data, "Should have can_create"
+        assert "trial_status" in data, "Should have trial_status"
         
-        # Check for trial limit (9 quotes during trial)
-        if "quotes_limit" in data:
-            print(f"  Quote limit: {data['quotes_limit']}")
-        if "is_trial" in data:
-            print(f"  Is trial: {data['is_trial']}")
-        if "can_create_quote" in data:
-            print(f"  Can create quote: {data['can_create_quote']}")
+        print(f"✓ Quote stats usage response:")
+        print(f"  Quote count: {data.get('quote_count')}")
+        print(f"  Quote limit: {data.get('quote_limit')}")
+        print(f"  Can create: {data.get('can_create')}")
+        print(f"  Trial status: {data.get('trial_status')}")
 
 
 class TestQuoteCreationWithTrialLimit:
@@ -289,7 +279,7 @@ class TestQuoteCreationWithTrialLimit:
                     "client_id": client_id,
                     "items": [
                         {
-                            "description": "Test item",
+                            "description": "Test item for trial limit check",
                             "quantity": 1,
                             "unit": "unité",
                             "unit_price": 100,
@@ -297,7 +287,7 @@ class TestQuoteCreationWithTrialLimit:
                         }
                     ],
                     "validity_days": 30,
-                    "notes": "Test quote"
+                    "notes": "Test quote for trial limit"
                 }
                 
                 response = self.session.post(f"{BASE_URL}/api/quotes", json=quote_data)
@@ -314,6 +304,7 @@ class TestQuoteCreationWithTrialLimit:
                         quote_id = response.json().get("id")
                         if quote_id:
                             self.session.delete(f"{BASE_URL}/api/quotes/{quote_id}")
+                            print(f"  Cleaned up test quote {quote_id}")
             else:
                 pytest.skip("No clients available for quote creation test")
         else:
@@ -329,16 +320,16 @@ class TestRegistrationWithoutBusinessType:
         session.headers.update({"Content-Type": "application/json"})
         
         # Generate unique email for test
-        import time
         test_email = f"test_no_btype_{int(time.time())}@test.com"
         
-        # Register without business_type
+        # Register without business_type (but with required phone field)
         register_data = {
             "email": test_email,
             "password": "TestPass123!",
             "name": "Test User No BType",
-            "company_name": "Test Company"
-            # Note: NO business_type field
+            "company_name": "Test Company",
+            "phone": "0123456789"
+            # Note: NO business_type field - should default to "general"
         }
         
         response = session.post(f"{BASE_URL}/api/auth/register", json=register_data)
@@ -352,9 +343,9 @@ class TestRegistrationWithoutBusinessType:
         # Verify user was created with default business_type
         if "user" in data:
             user = data["user"]
-            # business_type should default to "general" or not be required
             print(f"  User created: {user.get('email')}")
             if "business_type" in user:
+                assert user.get("business_type") == "general", f"Expected default business_type 'general', got {user.get('business_type')}"
                 print(f"  Default business_type: {user.get('business_type')}")
 
 
