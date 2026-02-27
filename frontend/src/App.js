@@ -8,6 +8,7 @@ import ImpersonationBanner from "@/components/ImpersonationBanner";
 // Pages
 import LoginPage from "@/pages/LoginPage";
 import LandingPage from "@/pages/LandingPage";
+import PricingPage from "@/pages/PricingPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ClientsPage from "@/pages/ClientsPage";
 import ClientFormPage from "@/pages/ClientFormPage";
