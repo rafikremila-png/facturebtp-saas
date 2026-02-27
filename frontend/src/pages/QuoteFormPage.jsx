@@ -123,7 +123,28 @@ export default function QuoteFormPage() {
             }
             navigate("/devis");
         } catch (error) {
-            toast.error("Erreur lors de l'enregistrement du devis");
+            if (error.response && error.response.status === 403) {
+                const errorMessage = error.response.data?.detail || "Limite atteinte";
+                const isExpired = errorMessage.toLowerCase().includes("expir");
+                
+                // Extract usage info from message if available (e.g., "9/9 devis")
+                const usageMatch = errorMessage.match(/(\d+)\/(\d+)/);
+                let usageInfo = null;
+                if (usageMatch) {
+                    usageInfo = { current: parseInt(usageMatch[1]), limit: parseInt(usageMatch[2]) };
+                }
+                
+                setUpgradeModalConfig({
+                    title: isExpired ? "Période d'essai expirée" : "Limite atteinte",
+                    message: errorMessage,
+                    type: isExpired ? "expired" : "limit",
+                    documentType: "devis",
+                    usage: usageInfo
+                });
+                setShowUpgradeModal(true);
+            } else {
+                toast.error("Erreur lors de l'enregistrement du devis");
+            }
         } finally {
             setSaving(false);
         }
