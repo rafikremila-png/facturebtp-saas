@@ -1,6 +1,6 @@
 """
 Subscription Service for BTP Facture
-Handles trial limits and subscription checks for invoice creation
+Handles trial limits and subscription checks for invoice and quote creation
 """
 
 import logging
@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 TRIAL_INVOICE_LIMIT = 9
+TRIAL_QUOTE_LIMIT = 9
 ROLE_SUPER_ADMIN = "super_admin"
 
 
