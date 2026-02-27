@@ -140,6 +140,17 @@ export const getKitsV2 = () => api.get('/v2/kits');
 export const getKitV2 = (kitId) => api.get(`/v2/kits/${kitId}`);
 export const seedCategoriesV2 = (force = false) => api.post(`/v2/categories/seed?force=${force}`);
 
+// Service Categories V3 (Simplified - No Subcategories, Enriched Library)
+export const getCategoriesV3 = () => api.get('/v3/categories');
+export const getCategoriesWithItemsV3 = () => api.get('/v3/categories/with-items');
+export const getCategoryV3 = (categoryId) => api.get(`/v3/categories/${categoryId}`);
+export const getCategoryItemsV3 = (categoryId) => api.get(`/v3/categories/${categoryId}/items`);
+export const getItemV3 = (itemId) => api.get(`/v3/items/${itemId}`);
+export const searchItemsV3 = (query) => api.get('/v3/items/search', { params: { q: query } });
+export const getKitsV3 = () => api.get('/v3/kits');
+export const getKitV3 = (kitId) => api.get(`/v3/kits/${kitId}`);
+export const seedCategoriesV3 = (force = false) => api.post(`/v3/categories/seed?force=${force}`);
+
 // Renovation Kits
 export const getKits = () => api.get('/kits');
 export const getKit = (id) => api.get(`/kits/${id}`);
