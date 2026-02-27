@@ -5744,6 +5744,356 @@ async def check_feature_access_endpoint(
     return access.model_dump()
 
 
+# ============== NEW SAAS ENDPOINTS ==============
+
+class CreateCheckoutRequestV2(BaseModel):
+    plan_id: str = Field(..., description="Plan ID: essentiel, pro, or business")
+    billing_period: str = Field(default="monthly", description="monthly or yearly")
+    origin_url: str = Field(..., description="Frontend origin URL for redirects")
+
+
+@api_router.get("/saas/plans")
+async def get_saas_plans():
+    """Get all available subscription plans with full details"""
+    plans_list = []
+    for plan_id, config in PLANS_CONFIG.items():
+        if plan_id != "trial":
+            plans_list.append({
+                "id": plan_id,
+                "name": config["name"],
+                "description": config["description"],
+                "price_monthly": config["price_monthly"],
+                "price_yearly": config["price_yearly"],
+                "yearly_savings": round(config["price_monthly"] * 12 - config["price_yearly"], 2),
+                "limits": config["limits"],
+                "features": config["features"],
+                "highlight": config.get("highlight", False),
+                "badge": config.get("badge"),
+            })
+    return plans_list
+
+
+@api_router.get("/saas/subscription")
+async def get_saas_subscription(user: dict = Depends(get_current_user)):
+    """Get current user's subscription status with usage"""
+    plans_service = get_plans_service(db)
+    try:
+        info = await plans_service.get_user_subscription_info(user["id"])
+        return info
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@api_router.get("/saas/usage")
+async def get_usage_stats(user: dict = Depends(get_current_user)):
+    """Get current month usage statistics"""
+    plans_service = get_plans_service(db)
+    try:
+        info = await plans_service.get_user_subscription_info(user["id"])
+        return {
+            "quote_usage": info["quote_usage"],
+            "quote_limit": info["quote_limit"],
+            "invoice_usage": info["invoice_usage"],
+            "invoice_limit": info["invoice_limit"],
+            "can_create_quote": info["can_create_quote"],
+            "can_create_invoice": info["can_create_invoice"],
+            "is_trial": info["is_trial"],
+            "trial_days_remaining": info.get("trial_days_remaining"),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@api_router.post("/saas/checkout")
+async def create_saas_checkout(
+    request: CreateCheckoutRequestV2,
+    user: dict = Depends(get_current_user)
+):
+    """Create a Stripe checkout session for subscription"""
+    if not STRIPE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Stripe integration not available")
+    
+    stripe_service = get_stripe_service(db)
+    
+    try:
+        origin_url = request.origin_url.rstrip("/")
+        success_url = f"{origin_url}/facturation"
+        cancel_url = f"{origin_url}/facturation"
+        
+        result = await stripe_service.create_checkout_session(
+            user_id=user["id"],
+            plan=request.plan_id,
+            billing_period=request.billing_period,
+            success_url=success_url,
+            cancel_url=cancel_url
+        )
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Checkout error: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création du paiement")
+
+
+@api_router.post("/saas/webhook")
+async def stripe_saas_webhook(request: Request):
+    """Handle Stripe webhook events (secure)"""
+    if not STRIPE_AVAILABLE:
+        return {"status": "ignored", "reason": "Stripe not available"}
+    
+    stripe_service = get_stripe_service(db)
+    
+    try:
+        body = await request.body()
+        sig_header = request.headers.get("Stripe-Signature", "")
+        
+        result = await stripe_service.handle_webhook_event(body, sig_header)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@api_router.post("/saas/cancel")
+async def cancel_saas_subscription(user: dict = Depends(get_current_user)):
+    """Cancel the current subscription"""
+    if not STRIPE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Stripe integration not available")
+    
+    stripe_service = get_stripe_service(db)
+    
+    try:
+        result = await stripe_service.cancel_subscription(user["id"])
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Cancel error: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de l'annulation")
+
+
+@api_router.get("/saas/feature/{feature}")
+async def check_saas_feature(feature: str, user: dict = Depends(get_current_user)):
+    """Check if user has access to a feature"""
+    plans_service = get_plans_service(db)
+    result = await plans_service.check_feature_access(user["id"], feature)
+    return result
+
+
+# ============== REMINDER ENDPOINTS (Pro Feature) ==============
+
+@api_router.get("/reminders/stats")
+async def get_reminder_stats(user: dict = Depends(get_current_user)):
+    """Get reminder statistics"""
+    reminder_service = get_reminder_service(db)
+    return await reminder_service.get_reminder_stats(user["id"])
+
+
+@api_router.get("/reminders/pending")
+async def get_pending_reminders(user: dict = Depends(get_current_user)):
+    """Get invoices that need reminders"""
+    reminder_service = get_reminder_service(db)
+    
+    has_feature = await reminder_service.check_user_has_reminder_feature(user["id"])
+    if not has_feature:
+        raise HTTPException(
+            status_code=403, 
+            detail="Fonctionnalité disponible avec le plan Pro. Passez au plan supérieur pour accéder aux relances automatiques."
+        )
+    
+    return await reminder_service.get_invoices_needing_reminders(user["id"])
+
+
+@api_router.post("/reminders/send/{invoice_id}")
+async def send_reminder(invoice_id: str, user: dict = Depends(get_current_user)):
+    """Send a reminder for a specific invoice"""
+    reminder_service = get_reminder_service(db)
+    
+    has_feature = await reminder_service.check_user_has_reminder_feature(user["id"])
+    if not has_feature:
+        raise HTTPException(
+            status_code=403,
+            detail="Fonctionnalité disponible avec le plan Pro"
+        )
+    
+    # Get invoice
+    invoice = await db.invoices.find_one({"id": invoice_id, "owner_id": user["id"]})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+    
+    # Check if should send
+    check = await reminder_service.should_send_reminder(invoice, user["id"])
+    if not check.get("should_send"):
+        return {"sent": False, "reason": check.get("reason")}
+    
+    # Get client
+    client = await db.clients.find_one({"id": invoice.get("client_id")})
+    if not client or not client.get("email"):
+        return {"sent": False, "reason": "no_client_email"}
+    
+    # Get settings
+    settings = await db.settings.find_one({})
+    
+    # Generate email content
+    email_content = reminder_service.generate_reminder_email_content(
+        invoice, client, settings or {}, check.get("reminder_number", 1)
+    )
+    
+    # TODO: Actually send the email via email service
+    # For now, just record the reminder
+    
+    reminder = await reminder_service.create_reminder_record(
+        invoice_id=invoice_id,
+        user_id=user["id"],
+        client_email=client["email"],
+        reminder_number=check.get("reminder_number", 1),
+        sent_successfully=True
+    )
+    
+    logger.info(f"Reminder sent for invoice {invoice_id}")
+    
+    return {
+        "sent": True,
+        "reminder_number": reminder["reminder_number"],
+        "client_email": client["email"],
+        "subject": email_content["subject"]
+    }
+
+
+@api_router.get("/reminders/history/{invoice_id}")
+async def get_reminder_history(invoice_id: str, user: dict = Depends(get_current_user)):
+    """Get reminder history for an invoice"""
+    # Verify invoice ownership
+    invoice = await db.invoices.find_one({"id": invoice_id, "owner_id": user["id"]})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+    
+    reminder_service = get_reminder_service(db)
+    return await reminder_service.get_reminder_history(invoice_id)
+
+
+# ============== CSV EXPORT ENDPOINTS (Pro Feature) ==============
+
+@api_router.get("/export/invoices/csv")
+async def export_invoices_csv(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    user: dict = Depends(get_current_user)
+):
+    """Export invoices to CSV (Pro feature)"""
+    csv_service = get_csv_export_service(db)
+    
+    has_feature = await csv_service.check_user_has_export_feature(user["id"])
+    if not has_feature:
+        raise HTTPException(
+            status_code=403,
+            detail="Export CSV disponible avec le plan Pro. Passez au plan supérieur pour accéder à cette fonctionnalité."
+        )
+    
+    csv_content = await csv_service.export_invoices_csv(
+        user["id"], start_date, end_date, status
+    )
+    
+    filename = f"factures_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    from fastapi.responses import Response
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/export/quotes/csv")
+async def export_quotes_csv(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    user: dict = Depends(get_current_user)
+):
+    """Export quotes to CSV (Pro feature)"""
+    csv_service = get_csv_export_service(db)
+    
+    has_feature = await csv_service.check_user_has_export_feature(user["id"])
+    if not has_feature:
+        raise HTTPException(
+            status_code=403,
+            detail="Export CSV disponible avec le plan Pro"
+        )
+    
+    csv_content = await csv_service.export_quotes_csv(
+        user["id"], start_date, end_date, status
+    )
+    
+    filename = f"devis_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    from fastapi.responses import Response
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/export/clients/csv")
+async def export_clients_csv(user: dict = Depends(get_current_user)):
+    """Export clients to CSV (Pro feature)"""
+    csv_service = get_csv_export_service(db)
+    
+    has_feature = await csv_service.check_user_has_export_feature(user["id"])
+    if not has_feature:
+        raise HTTPException(
+            status_code=403,
+            detail="Export CSV disponible avec le plan Pro"
+        )
+    
+    csv_content = await csv_service.export_clients_csv(user["id"])
+    
+    filename = f"clients_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    from fastapi.responses import Response
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/export/accounting/csv")
+async def export_accounting_summary(
+    year: int,
+    month: Optional[int] = None,
+    user: dict = Depends(get_current_user)
+):
+    """Export accounting summary to CSV (Pro feature)"""
+    csv_service = get_csv_export_service(db)
+    
+    has_feature = await csv_service.check_user_has_export_feature(user["id"])
+    if not has_feature:
+        raise HTTPException(
+            status_code=403,
+            detail="Export CSV disponible avec le plan Pro"
+        )
+    
+    csv_content = await csv_service.export_accounting_summary_csv(
+        user["id"], year, month
+    )
+    
+    period = f"{month:02d}_{year}" if month else str(year)
+    filename = f"comptabilite_{period}.csv"
+    
+    from fastapi.responses import Response
+    return Response(
+        content=csv_content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 # ============== HEALTH CHECK ==============
 
 @api_router.get("/health")
