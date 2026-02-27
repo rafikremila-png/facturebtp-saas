@@ -78,10 +78,6 @@ from app.services.category_service import (
     VALID_BUSINESS_TYPES,
     BUSINESS_TYPE_LABELS,
 )
-from app.services.category_service_v2 import (
-    get_category_service_v2,
-    CategoryServiceV2,
-)
 from app.services.category_service_simple import (
     CategoryServiceSimple,
     VALID_BUSINESS_TYPES as VALID_BUSINESS_TYPES_SIMPLE,
