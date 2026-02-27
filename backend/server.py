@@ -61,6 +61,17 @@ from app.services.stripe_subscription_service import (
     PlanType,
     SubscriptionStatus,
 )
+# New SaaS services
+from app.services.plans_service import (
+    get_plans_service,
+    PlansService,
+    PLANS_CONFIG,
+    FEATURE_LABELS,
+    TRIAL_DURATION_DAYS,
+)
+from app.services.stripe_service import get_stripe_service, StripeService
+from app.services.reminder_service import get_reminder_service, ReminderService
+from app.services.csv_export_service import get_csv_export_service, CSVExportService
 from app.services.category_service import (
     get_category_service,
     VALID_BUSINESS_TYPES,
