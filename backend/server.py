@@ -2694,7 +2694,13 @@ async def create_invoice(invoice_data: InvoiceCreate, user: dict = Depends(get_c
     try:
         # ========== INVOICE CREATION GUARD ==========
         # Check if user has permission to create invoice based on trial/subscription
-        await check_invoice_permission(user, db, raise_exception=True)
+        plans_service = get_plans_service(db)
+        permission = await plans_service.check_invoice_permission(user)
+        if not permission.get("allowed"):
+            raise HTTPException(
+                status_code=403,
+                detail=permission.get("message", "Vous n'avez pas la permission de créer une facture")
+            )
         # ============================================
         
         if not validate_uuid(invoice_data.client_id):
