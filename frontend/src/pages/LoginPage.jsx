@@ -6,22 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Mail, Lock, User, Eye, EyeOff, Phone, Building, MapPin, ArrowLeft, CheckCircle, Briefcase } from "lucide-react";
+import { Building2, Mail, Lock, User, Eye, EyeOff, Phone, Building, MapPin, ArrowLeft, CheckCircle } from "lucide-react";
 import OTPInput from "@/components/OTPInput";
 import axios from "axios";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
-const BUSINESS_TYPES = {
-    general: "Général / Multi-corps",
-    electrician: "Électricien",
-    plumber: "Plombier",
-    painter: "Peintre",
-    mason: "Maçon",
-    carpenter: "Menuisier",
-    it_installer: "Installateur réseaux / IT"
-};
 
 export default function LoginPage() {
     const [searchParams] = useSearchParams();
@@ -33,7 +22,6 @@ export default function LoginPage() {
     const [phone, setPhone] = useState("");
     const [companyName, setCompanyName] = useState("");
     const [address, setAddress] = useState("");
-    const [businessType, setBusinessType] = useState("general");
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [otpCode, setOtpCode] = useState("");
@@ -43,13 +31,9 @@ export default function LoginPage() {
     // Handle URL parameters for registration
     useEffect(() => {
         const mode = searchParams.get("mode");
-        const bt = searchParams.get("business_type");
         
         if (mode === "register") {
             setIsLogin(false);
-        }
-        if (bt && BUSINESS_TYPES[bt]) {
-            setBusinessType(bt);
         }
     }, [searchParams]);
 
