@@ -5795,6 +5795,13 @@ async def startup_db_client():
         if not seed_stats_v2.get("skipped", False):
             logger.info(f"Seeded V2: {seed_stats_v2['categories']} categories, {seed_stats_v2['subcategories']} subcategories, {seed_stats_v2['items']} items, {seed_stats_v2['kits']} kits")
         
+        # Initialize simplified category service V3 (no subcategories, enriched library)
+        category_service_v3 = get_category_service_simple(db)
+        await category_service_v3.init_indexes()
+        seed_stats_v3 = await category_service_v3.seed_all(force=False)
+        if not seed_stats_v3.get("skipped", False):
+            logger.info(f"Seeded V3 (simplified): {seed_stats_v3['categories']} categories, {seed_stats_v3['items']} items, {seed_stats_v3['kits']} kits")
+        
         logger.info("Database indexes created")
         
         # Initialize super admin account
