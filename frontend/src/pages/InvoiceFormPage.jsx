@@ -227,8 +227,8 @@ function InvoiceFormPage() {
                     <Button type="button" variant="outline" onClick={() => navigate("/factures")}>
                         Annuler
                     </Button>
-                    <Button type="submit" className="bg-orange-600" disabled={saving} data-testid="submit-btn">
-                        <Save className="w-4 h-4 mr-2" />{saving ? "..." : "Créer"}
+                    <Button type="submit" className="bg-orange-600 hover:bg-orange-700" disabled={saving} data-testid="submit-btn">
+                        <Save className="w-4 h-4 mr-2" />{saving ? "Création..." : "Créer la facture"}
                     </Button>
                 </div>
             </form>
