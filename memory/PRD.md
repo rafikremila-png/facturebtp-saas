@@ -507,3 +507,50 @@ Build a production-ready MVP web application for a French construction company (
 - `/app/backend/tests/test_dynamic_categories.py` - Tests catégories dynamiques
 - `/app/backend/tests/test_categories_v2.py` - Tests catégories V2 avec sous-catégories
 - `/app/backend/tests/test_landing_registration_v2.py` - Tests landing pages et inscription
+
+### Système d'Articles Simplifié V3 ✅ (Feb 27, 2026)
+- **Simplification du système d'articles**:
+  - Suppression des sous-catégories - Architecture directe `Catégorie → Article`
+  - Nouveau service `category_service_simple.py` avec 239 articles professionnels
+  - 10 catégories métiers: Électricité, Réseaux/IT, Plomberie, Chauffage/Clim, Maçonnerie, Peinture, Menuiserie, Carrelage, Plâtrerie, Rénovation
+  - 8 kits prédéfinis par type de métier
+  - Prix intelligents basés sur le `business_type` de l'utilisateur
+
+- **Refactoring UX inscription/paramètres**:
+  - Champ `business_type` retiré du formulaire d'inscription
+  - Sélecteur `business_type` déplacé dans la page Paramètres ("Type d'activité")
+  - Les nouveaux utilisateurs commencent en mode "Général / Multi-corps"
+
+- **Limite de devis pendant l'essai**:
+  - Nouvelle fonction `check_quote_permission()` dans `subscription_service.py`
+  - Limite de 9 devis pendant la période d'essai (comme les factures)
+  - Nouvel endpoint `/api/quotes/stats/usage` pour les statistiques
+
+- **Nouveaux endpoints API V3**:
+  - `GET /api/v3/categories` - Catégories filtrées par métier
+  - `GET /api/v3/categories/with-items` - Catégories avec articles
+  - `GET /api/v3/categories/{id}/items` - Articles d'une catégorie
+  - `GET /api/v3/kits` - Kits filtrés par métier
+  - `GET /api/v3/kits/{id}` - Détail d'un kit avec articles
+  - `POST /api/v3/categories/seed` - Seeding des données V3
+
+- **Nouveau composant frontend**:
+  - `ServiceItemSelector.jsx` - Sélecteur simplifié sans sous-catégories
+  - Utilisé par les pages `InvoiceFormPage.jsx` et `QuoteFormPage.jsx`
+  - Dialogue de sélection de kits intégré
+
+- **Tests** : 100% de réussite (iteration_17.json)
+
+## Remaining Backlog
+
+### P0 - Critical
+- None
+
+### P1 - Important
+- Calcul dynamique du temps d'essai restant (compte à rebours frontend)
+- Blocage création documents après expiration essai (modal upgrade)
+
+### P2 - Nice to Have
+- Recherche d'articles par nom (endpoint `/api/v3/items/search` déjà prêt)
+- Export statistiques en CSV
+- Notifications email automatiques
