@@ -5354,6 +5354,99 @@ async def seed_categories_v2(
     return {"message": "Données V2 initialisées", "stats": stats}
 
 
+# ============== CATEGORIES V3 API (Simplified - No Subcategories) ==============
+
+@api_router.get("/v3/categories")
+async def get_categories_v3(user: dict = Depends(get_current_user)):
+    """Get categories filtered by user's business type (simplified, no subcategories)"""
+    category_service = get_category_service_simple(db)
+    business_type = user.get("business_type", "general")
+    return await category_service.get_categories_for_user(business_type)
+
+
+@api_router.get("/v3/categories/with-items")
+async def get_categories_with_items_v3(user: dict = Depends(get_current_user)):
+    """Get categories with their items (simplified structure)"""
+    category_service = get_category_service_simple(db)
+    business_type = user.get("business_type", "general")
+    return await category_service.get_categories_with_items(business_type)
+
+
+@api_router.get("/v3/categories/{category_id}")
+async def get_category_v3(category_id: str, user: dict = Depends(get_current_user)):
+    """Get a single category by ID"""
+    category_service = get_category_service_simple(db)
+    category = await category_service.get_category_by_id(category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Catégorie non trouvée")
+    return category
+
+
+@api_router.get("/v3/categories/{category_id}/items")
+async def get_category_items_v3(category_id: str, user: dict = Depends(get_current_user)):
+    """Get items for a category with smart prices"""
+    category_service = get_category_service_simple(db)
+    business_type = user.get("business_type", "general")
+    return await category_service.get_items_by_category(category_id, business_type)
+
+
+@api_router.get("/v3/items/{item_id}")
+async def get_item_v3(item_id: str, user: dict = Depends(get_current_user)):
+    """Get a single item with smart price"""
+    category_service = get_category_service_simple(db)
+    business_type = user.get("business_type", "general")
+    
+    item = await category_service.get_item_by_id(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Article non trouvé")
+    
+    item["smart_price"] = await category_service.get_smart_price(item_id, business_type)
+    return item
+
+
+@api_router.get("/v3/items/search")
+async def search_items_v3(q: str, user: dict = Depends(get_current_user)):
+    """Search items by name"""
+    if not q or len(q) < 2:
+        raise HTTPException(status_code=400, detail="Requête de recherche trop courte (min 2 caractères)")
+    
+    category_service = get_category_service_simple(db)
+    business_type = user.get("business_type", "general")
+    return await category_service.search_items(q, business_type)
+
+
+@api_router.get("/v3/kits")
+async def get_kits_v3(user: dict = Depends(get_current_user)):
+    """Get kits filtered by user's business type"""
+    category_service = get_category_service_simple(db)
+    business_type = user.get("business_type", "general")
+    return await category_service.get_kits_for_user(business_type)
+
+
+@api_router.get("/v3/kits/{kit_id}")
+async def get_kit_v3(kit_id: str, user: dict = Depends(get_current_user)):
+    """Get a kit with expanded items and smart prices"""
+    category_service = get_category_service_simple(db)
+    business_type = user.get("business_type", "general")
+    
+    kit = await category_service.get_kit_with_items(kit_id, business_type)
+    if not kit:
+        raise HTTPException(status_code=404, detail="Kit non trouvé")
+    
+    return kit
+
+
+@api_router.post("/v3/categories/seed")
+async def seed_categories_v3(
+    force: bool = False,
+    user: dict = Depends(require_super_admin)
+):
+    """Seed simplified categories, items, and kits (super_admin only)"""
+    category_service = get_category_service_simple(db)
+    stats = await category_service.seed_all(force=force)
+    return {"message": "Données V3 initialisées", "stats": stats}
+
+
 # ============== STRIPE SUBSCRIPTION ENDPOINTS ==============
 
 class CreateCheckoutRequest(BaseModel):
