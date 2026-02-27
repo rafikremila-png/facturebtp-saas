@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ArrowLeft, Save, Plus, Trash2, Layers, BookmarkPlus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import ServiceItemSelector from "@/components/ServiceItemSelector";
+import UpgradeModal from "@/components/UpgradeModal";
 
 export default function QuoteFormPage() {
     const { id } = useParams();
@@ -27,6 +28,16 @@ export default function QuoteFormPage() {
     const [showSaveKitModal, setShowSaveKitModal] = useState(false);
     const [newKitName, setNewKitName] = useState("");
     const [newKitDescription, setNewKitDescription] = useState("");
+    
+    // Upgrade modal state
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [upgradeModalConfig, setUpgradeModalConfig] = useState({
+        title: "Mise à niveau requise",
+        message: "",
+        type: "limit",
+        documentType: "devis",
+        usage: null
+    });
     
     const [formData, setFormData] = useState({
         client_id: "",
