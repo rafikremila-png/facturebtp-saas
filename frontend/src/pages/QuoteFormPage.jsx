@@ -298,8 +298,8 @@ export default function QuoteFormPage() {
                     </CardContent>
                 </Card>
 
-                {/* V2 Service Item Selector - Same as Invoice page */}
-                <ServiceItemSelectorV2 
+                {/* Simplified Service Item Selector */}
+                <ServiceItemSelector 
                     onAddItem={handleAddPredefinedItem}
                     onAddMultipleItems={handleAddMultipleItems}
                 />
