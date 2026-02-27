@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import UpgradeModal from "@/components/UpgradeModal";
-import ServiceItemSelectorV2 from "@/components/ServiceItemSelectorV2";
+import ServiceItemSelector from "@/components/ServiceItemSelector";
 
 function InvoiceFormPage() {
     const navigate = useNavigate();
