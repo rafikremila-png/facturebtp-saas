@@ -232,7 +232,8 @@ class AdminMetricsService:
             data["price"] = PLAN_PRICES.get(plan_id, 0)
             data["mrr_contribution"] = data["active"] * data["price"]
         
-        return list(plans_data.values())
+        # Return as list, not dict
+        return list(plans_data.values()) if plans_data else []
     
     async def _get_churn_rate(self) -> Dict[str, Any]:
         """Calculate churn rate for current month"""
