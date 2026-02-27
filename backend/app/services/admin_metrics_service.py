@@ -224,18 +224,23 @@ class AdminMetricsService:
         # Organize by plan
         plans_data = {}
         for item in result:
-            plan = item["_id"]["plan"] or "trial"
-            status = item["_id"]["status"]
-            count = item["count"]
-            
-            if plan not in plans_data:
-                plans_data[plan] = {"plan": plan, "active": 0, "trial": 0, "total": 0}
-            
-            if status == "active":
-                plans_data[plan]["active"] = count
-            elif status == "trial":
-                plans_data[plan]["trial"] = count
-            plans_data[plan]["total"] += count
+            try:
+                id_field = item.get("_id") or {}
+                plan = id_field.get("plan") or "trial"
+                status = id_field.get("status") or "trial"
+                count = item.get("count", 0)
+                
+                if plan not in plans_data:
+                    plans_data[plan] = {"plan": plan, "active": 0, "trial": 0, "total": 0}
+                
+                if status == "active":
+                    plans_data[plan]["active"] = count
+                elif status == "trial":
+                    plans_data[plan]["trial"] = count
+                plans_data[plan]["total"] += count
+            except Exception as e:
+                logger.warning(f"Error processing plan breakdown item: {e}")
+                continue
         
         # Add plan details
         for plan_id, data in plans_data.items():
