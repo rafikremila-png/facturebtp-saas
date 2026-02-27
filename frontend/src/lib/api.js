@@ -250,4 +250,57 @@ export const cancelSubscription = () => api.post('/subscription/cancel');
 // Check feature access
 export const checkFeatureAccess = (feature) => api.get(`/subscription/features/${feature}`);
 
+// ============== SAAS / NEW SUBSCRIPTION SYSTEM ==============
+
+// Get SaaS plans with full details
+export const getSaaSPlans = () => api.get('/saas/plans');
+
+// Get user's subscription info with usage
+export const getSaaSSubscription = () => api.get('/saas/subscription');
+
+// Get usage stats (quotes/invoices this month)
+export const getUsageStats = () => api.get('/saas/usage');
+
+// Create checkout session for SaaS plan
+export const createSaaSCheckout = (planId, billingPeriod, originUrl) => 
+    api.post('/saas/checkout', { plan_id: planId, billing_period: billingPeriod, origin_url: originUrl });
+
+// Cancel SaaS subscription
+export const cancelSaaSSubscription = () => api.post('/saas/cancel');
+
+// Check SaaS feature access
+export const checkSaaSFeature = (feature) => api.get(`/saas/feature/${feature}`);
+
+// ============== REMINDERS (Pro Feature) ==============
+
+// Get reminder stats
+export const getReminderStats = () => api.get('/reminders/stats');
+
+// Get pending reminders
+export const getPendingReminders = () => api.get('/reminders/pending');
+
+// Send reminder for invoice
+export const sendReminder = (invoiceId) => api.post(`/reminders/send/${invoiceId}`);
+
+// Get reminder history for invoice
+export const getReminderHistory = (invoiceId) => api.get(`/reminders/history/${invoiceId}`);
+
+// ============== CSV EXPORT (Pro Feature) ==============
+
+// Export invoices to CSV
+export const exportInvoicesCSV = (params) => 
+    api.get('/export/invoices/csv', { params, responseType: 'blob' });
+
+// Export quotes to CSV
+export const exportQuotesCSV = (params) => 
+    api.get('/export/quotes/csv', { params, responseType: 'blob' });
+
+// Export clients to CSV
+export const exportClientsCSV = () => 
+    api.get('/export/clients/csv', { responseType: 'blob' });
+
+// Export accounting summary
+export const exportAccountingCSV = (year, month) => 
+    api.get('/export/accounting/csv', { params: { year, month }, responseType: 'blob' });
+
 export default api;
