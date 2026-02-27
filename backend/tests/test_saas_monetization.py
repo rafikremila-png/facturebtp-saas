@@ -7,7 +7,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://chantier-pro-11.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://facture-express-2.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
 ADMIN_EMAIL = "admin@btpfacture.com"
@@ -196,7 +196,7 @@ class TestSaaSCheckoutEndpoint:
             json={
                 "plan_id": "pro",
                 "billing_period": "monthly",
-                "origin_url": "https://chantier-pro-11.preview.emergentagent.com"
+                "origin_url": "https://facture-express-2.preview.emergentagent.com"
             }
         )
         # With test Stripe key, this will return 500 (expected)

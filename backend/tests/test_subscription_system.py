@@ -241,7 +241,7 @@ class TestCheckoutSession:
             headers=headers,
             json={
                 "plan_id": "pro",
-                "origin_url": "https://chantier-pro-11.preview.emergentagent.com"
+                "origin_url": "https://facture-express-2.preview.emergentagent.com"
             }
         )
         
