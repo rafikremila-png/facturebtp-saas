@@ -2432,7 +2432,13 @@ async def get_company_settings():
 @api_router.post("/quotes", response_model=QuoteResponse)
 async def create_quote(quote_data: QuoteCreate, user: dict = Depends(get_current_user)):
     # Check if user has permission to create quote (trial/subscription limits)
-    await check_quote_permission(user, db, raise_exception=True)
+    plans_service = get_plans_service(db)
+    permission = await plans_service.check_quote_permission(user)
+    if not permission.get("allowed"):
+        raise HTTPException(
+            status_code=403,
+            detail=permission.get("message", "Vous n'avez pas la permission de créer un devis")
+        )
     
     try:
         if not validate_uuid(quote_data.client_id):
