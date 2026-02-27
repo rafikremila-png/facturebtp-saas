@@ -100,24 +100,34 @@ class AdminMetricsService:
             return_exceptions=True
         )
         
-        # Handle any errors
+        # Handle any errors - use appropriate empty values based on expected type
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(f"Metric calculation {i} failed: {result}")
-                results[i] = {}
+                # Use empty list for array results, empty dict for object results
+                if i in [2, 5]:  # plan_breakdown and mrr_history should be lists
+                    results[i] = []
+                else:
+                    results[i] = {}
         
         subscriber_counts, mrr_data, plan_breakdown, churn_data, new_subs, mrr_history = results
         
+        # Ensure plan_breakdown and mrr_history are lists
+        if not isinstance(plan_breakdown, list):
+            plan_breakdown = list(plan_breakdown.values()) if isinstance(plan_breakdown, dict) else []
+        if not isinstance(mrr_history, list):
+            mrr_history = []
+        
         return {
-            "mrr": mrr_data.get("mrr", 0),
-            "arr": mrr_data.get("mrr", 0) * 12,
-            "active_subscribers": subscriber_counts.get("active", 0),
-            "trial_users": subscriber_counts.get("trial", 0),
-            "expired_users": subscriber_counts.get("expired", 0),
-            "total_users": subscriber_counts.get("total", 0),
-            "churn_rate": churn_data.get("churn_rate", 0),
-            "churn_count": churn_data.get("churned_count", 0),
-            "new_subscribers_this_month": new_subs.get("count", 0),
+            "mrr": mrr_data.get("mrr", 0) if isinstance(mrr_data, dict) else 0,
+            "arr": (mrr_data.get("mrr", 0) if isinstance(mrr_data, dict) else 0) * 12,
+            "active_subscribers": subscriber_counts.get("active", 0) if isinstance(subscriber_counts, dict) else 0,
+            "trial_users": subscriber_counts.get("trial", 0) if isinstance(subscriber_counts, dict) else 0,
+            "expired_users": subscriber_counts.get("expired", 0) if isinstance(subscriber_counts, dict) else 0,
+            "total_users": subscriber_counts.get("total", 0) if isinstance(subscriber_counts, dict) else 0,
+            "churn_rate": churn_data.get("churn_rate", 0) if isinstance(churn_data, dict) else 0,
+            "churn_count": churn_data.get("churned_count", 0) if isinstance(churn_data, dict) else 0,
+            "new_subscribers_this_month": new_subs.get("count", 0) if isinstance(new_subs, dict) else 0,
             "plan_breakdown": plan_breakdown,
             "mrr_history": mrr_history,
             "calculated_at": datetime.now(timezone.utc).isoformat()
