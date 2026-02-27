@@ -96,6 +96,9 @@ function AppRoutes() {
             <Route path="/logiciel-facturation-peintre" element={<LandingPage businessType="painter" />} />
             <Route path="/logiciel-facturation-installateur-reseau" element={<LandingPage businessType="it_installer" />} />
             
+            {/* Public Pricing Page */}
+            <Route path="/tarifs" element={<PricingPage />} />
+            
             {/* Public client view - no auth required */}
             <Route path="/client/:type/:token" element={<ClientViewPage />} />
             
