@@ -157,7 +157,7 @@ export default function QuoteFormPage() {
         }));
     };
 
-    // Handler for ServiceItemSelectorV2 - single item
+    // Handler for ServiceItemSelector - single item
     const handleAddPredefinedItem = (item) => {
         setFormData(prev => ({
             ...prev,
@@ -165,7 +165,7 @@ export default function QuoteFormPage() {
         }));
     };
 
-    // Handler for ServiceItemSelectorV2 - multiple items (kit)
+    // Handler for ServiceItemSelector - multiple items (kit)
     const handleAddMultipleItems = (newItems) => {
         setFormData(prev => ({
             ...prev,
