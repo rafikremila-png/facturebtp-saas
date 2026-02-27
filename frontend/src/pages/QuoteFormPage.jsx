@@ -583,6 +583,17 @@ export default function QuoteFormPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            
+            {/* Upgrade Modal */}
+            <UpgradeModal 
+                open={showUpgradeModal} 
+                onOpenChange={setShowUpgradeModal}
+                title={upgradeModalConfig.title}
+                message={upgradeModalConfig.message}
+                type={upgradeModalConfig.type}
+                documentType={upgradeModalConfig.documentType || "devis"}
+                usage={upgradeModalConfig.usage}
+            />
         </div>
     );
 }
