@@ -525,7 +525,8 @@ class PlansService:
         plan: str,
         stripe_customer_id: str,
         stripe_subscription_id: str,
-        current_period_end: Optional[str] = None
+        current_period_end: Optional[str] = None,
+        billing_cycle: Optional[str] = None
     ) -> bool:
         """Activate a paid subscription"""
         if plan not in ["essentiel", "pro", "business"]:
@@ -541,13 +542,17 @@ class PlansService:
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
+        # Store billing cycle if provided
+        if billing_cycle:
+            update_data["subscription_cycle"] = billing_cycle
+        
         result = await self.users.update_one(
             {"id": user_id},
             {"$set": update_data}
         )
         
         if result.modified_count > 0:
-            logger.info(f"Subscription activated: user={user_id}, plan={plan}")
+            logger.info(f"Subscription activated: user={user_id}, plan={plan}, cycle={billing_cycle}")
             return True
         return False
     
