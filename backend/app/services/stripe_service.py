@@ -200,6 +200,7 @@ class StripeService:
         """Handle checkout.session.completed event"""
         user_id = session.get("metadata", {}).get("user_id")
         plan = session.get("metadata", {}).get("plan")
+        billing_cycle = session.get("metadata", {}).get("billing_period", "monthly")
         subscription_id = session.get("subscription")
         customer_id = session.get("customer")
         
@@ -218,22 +219,24 @@ class StripeService:
             except Exception as e:
                 logger.warning(f"Could not retrieve subscription: {e}")
         
-        # Activate subscription
+        # Activate subscription with billing cycle
         success = await self.plans_service.activate_subscription(
             user_id=user_id,
             plan=plan,
             stripe_customer_id=customer_id,
             stripe_subscription_id=subscription_id,
-            current_period_end=current_period_end
+            current_period_end=current_period_end,
+            billing_cycle=billing_cycle
         )
         
-        logger.info(f"Checkout completed: user={user_id}, plan={plan}, success={success}")
+        logger.info(f"Checkout completed: user={user_id}, plan={plan}, cycle={billing_cycle}, success={success}")
         
         return {
             "handled": True,
             "event": "checkout_completed",
             "user_id": user_id,
             "plan": plan,
+            "billing_cycle": billing_cycle,
             "success": success
         }
     
