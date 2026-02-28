@@ -3,6 +3,7 @@ Plans Service for BTP Facture SaaS
 Handles subscription plans, limits, and feature gating
 """
 
+import os
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, List
@@ -28,16 +29,32 @@ class SubscriptionStatus(str, Enum):
     PAST_DUE = "past_due"
 
 
+# Load Stripe Price IDs from environment
+def get_stripe_price_ids():
+    """Load Stripe Price IDs from environment variables"""
+    return {
+        "essentiel": {
+            "monthly": os.environ.get("STRIPE_PRICE_ESSENTIEL_MONTHLY"),
+            "yearly": os.environ.get("STRIPE_PRICE_ESSENTIEL_YEARLY"),
+        },
+        "pro": {
+            "monthly": os.environ.get("STRIPE_PRICE_PRO_MONTHLY"),
+            "yearly": os.environ.get("STRIPE_PRICE_PRO_YEARLY"),
+        },
+        "business": {
+            "monthly": os.environ.get("STRIPE_PRICE_BUSINESS_MONTHLY"),
+            "yearly": os.environ.get("STRIPE_PRICE_BUSINESS_YEARLY"),
+        },
+    }
+
+
 # Plan configuration with pricing and features
-# Price IDs will be replaced with real Stripe Price IDs
 PLANS_CONFIG = {
     "essentiel": {
         "name": "Essentiel",
         "description": "Pour les artisans débutants",
         "price_monthly": 19.00,
         "price_yearly": 182.40,  # 19 * 12 * 0.8 = 20% discount
-        "stripe_price_id_monthly": "price_essentiel_monthly",  # Replace with real Stripe Price ID
-        "stripe_price_id_yearly": "price_essentiel_yearly",    # Replace with real Stripe Price ID
         "limits": {
             "quotes_per_month": 30,
             "invoices_per_month": 30,
@@ -61,8 +78,6 @@ PLANS_CONFIG = {
         "description": "Pour les professionnels actifs",
         "price_monthly": 29.00,
         "price_yearly": 278.40,  # 29 * 12 * 0.8 = 20% discount
-        "stripe_price_id_monthly": "price_pro_monthly",  # Replace with real Stripe Price ID
-        "stripe_price_id_yearly": "price_pro_yearly",    # Replace with real Stripe Price ID
         "limits": {
             "quotes_per_month": -1,  # Unlimited
             "invoices_per_month": -1,  # Unlimited
@@ -86,12 +101,10 @@ PLANS_CONFIG = {
         "description": "Pour les entreprises en croissance",
         "price_monthly": 59.00,
         "price_yearly": 566.40,  # 59 * 12 * 0.8 = 20% discount
-        "stripe_price_id_monthly": "price_business_monthly",  # Replace with real Stripe Price ID
-        "stripe_price_id_yearly": "price_business_yearly",    # Replace with real Stripe Price ID
         "limits": {
             "quotes_per_month": -1,  # Unlimited
             "invoices_per_month": -1,  # Unlimited
-            "max_users": 10,  # 5+ users
+            "max_users": 5,  # 5 users for Business
         },
         "features": {
             "pdf_export": True,
@@ -101,7 +114,7 @@ PLANS_CONFIG = {
             "csv_export": True,
             "priority_support": True,
             "branding_customization": True,
-            "api_access": True,  # Future feature
+            "api_access": True,
         },
         "highlight": False,
         "badge": "Entreprise",
@@ -111,8 +124,6 @@ PLANS_CONFIG = {
         "description": "14 jours d'essai gratuit",
         "price_monthly": 0,
         "price_yearly": 0,
-        "stripe_price_id_monthly": None,
-        "stripe_price_id_yearly": None,
         "limits": {
             "quotes_per_month": 9,  # Total during trial, not monthly
             "invoices_per_month": 9,  # Total during trial, not monthly
