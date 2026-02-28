@@ -197,11 +197,12 @@ class PlansService:
         return config.get("features", {})
     
     def get_stripe_price_id(self, plan: str, billing_period: str = "monthly") -> Optional[str]:
-        """Get Stripe Price ID for a plan and billing period"""
-        config = self.get_plan_config(plan)
-        if billing_period == "yearly":
-            return config.get("stripe_price_id_yearly")
-        return config.get("stripe_price_id_monthly")
+        """Get Stripe Price ID for a plan and billing period from environment"""
+        price_ids = get_stripe_price_ids()
+        plan_prices = price_ids.get(plan)
+        if not plan_prices:
+            return None
+        return plan_prices.get(billing_period)
     
     # ============== MONTHLY USAGE TRACKING ==============
     
