@@ -9,7 +9,7 @@ import stripe
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from app.services.plans_service import PLANS_CONFIG, get_plans_service
+from app.services.plans_service import PLANS_CONFIG, get_plans_service, get_stripe_price_ids
 
 logger = logging.getLogger(__name__)
 
