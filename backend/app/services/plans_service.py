@@ -322,6 +322,7 @@ class PlansService:
             # Stripe info
             "stripe_customer_id": user.get("stripe_customer_id"),
             "stripe_subscription_id": user.get("stripe_subscription_id"),
+            "subscription_cycle": user.get("subscription_cycle", "monthly"),
             "current_period_end": user.get("current_period_end"),
         }
     
