@@ -46,12 +46,13 @@ class StripeService:
         if not plan_config:
             raise ValueError(f"Plan config not found: {plan}")
         
-        # Get price ID
-        if billing_period == "yearly":
-            price_id = plan_config.get("stripe_price_id_yearly")
-        else:
-            price_id = plan_config.get("stripe_price_id_monthly")
+        # Get price ID from environment
+        price_ids = get_stripe_price_ids()
+        plan_prices = price_ids.get(plan)
+        if not plan_prices:
+            raise ValueError(f"No price configuration for plan: {plan}")
         
+        price_id = plan_prices.get(billing_period)
         if not price_id:
             raise ValueError(f"No price ID for {plan} {billing_period}")
         
