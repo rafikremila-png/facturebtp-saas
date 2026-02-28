@@ -611,7 +611,7 @@ Build a production-ready MVP web application for a French construction company (
 ## Remaining Backlog
 
 ### P0 - Critical
-- Configurer vraies clés Stripe (Price IDs) en production
+- ✅ **DONE** Intégration Price IDs Stripe LIVE (Décembre 2025)
 
 ### P1 - Important
 - Envoi réel des emails de relance (actuellement enregistrement seul)
@@ -621,3 +621,34 @@ Build a production-ready MVP web application for a French construction company (
 - Dashboard analytics détaillé
 - Notifications email automatiques
 - Multi-utilisateurs pour Pro/Business
+
+## Configuration Stripe LIVE (Décembre 2025)
+
+### Price IDs configurés
+| Plan | Mensuel | Annuel |
+|------|---------|--------|
+| Essentiel | `price_1T5bpbGs4YZg7ViPIrNCjOb2` | `price_1T5bpbGs4YZg7ViPschfXI5H` |
+| Pro | `price_1T5bxFGs4YZg7ViPPTBWG75z` | `price_1T5bxFGs4YZg7ViP1VgQisAa` |
+| Business | `price_1T5c4AGs4YZg7ViPlwC3xi4j` | `price_1T5c4AGs4YZg7ViPincxYzMs` |
+
+### Variables d'environnement (.env backend)
+```
+STRIPE_PRICE_ESSENTIEL_MONTHLY=price_1T5bpbGs4YZg7ViPIrNCjOb2
+STRIPE_PRICE_ESSENTIEL_YEARLY=price_1T5bpbGs4YZg7ViPschfXI5H
+STRIPE_PRICE_PRO_MONTHLY=price_1T5bxFGs4YZg7ViPPTBWG75z
+STRIPE_PRICE_PRO_YEARLY=price_1T5bxFGs4YZg7ViP1VgQisAa
+STRIPE_PRICE_BUSINESS_MONTHLY=price_1T5c4AGs4YZg7ViPlwC3xi4j
+STRIPE_PRICE_BUSINESS_YEARLY=price_1T5c4AGs4YZg7ViPincxYzMs
+```
+
+### Configuration Production requise
+1. Remplacer `STRIPE_API_KEY` par la vraie clé secrète Stripe (sk_live_...)
+2. Configurer `STRIPE_WEBHOOK_SECRET` pour sécuriser les webhooks
+3. Redéployer l'application
+
+### Fonctionnalités implémentées
+- Checkout dynamique par plan et période (monthly/yearly)
+- Mapping correct des plans (essentiel, pro, business)
+- Stockage du cycle de facturation (`subscription_cycle`)
+- Webhook sécurisé pour activation automatique
+- Limites par plan : Essentiel (30/mois, 1 user), Pro (illimité, 3 users), Business (illimité, 5 users)
