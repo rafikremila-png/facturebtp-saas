@@ -8,6 +8,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 // Role constants (must match backend)
 export const ROLE_SUPER_ADMIN = "super_admin";
 export const ROLE_ADMIN = "admin";
+
 export const ROLE_USER = "user";
 
 export const AuthProvider = ({ children }) => {
