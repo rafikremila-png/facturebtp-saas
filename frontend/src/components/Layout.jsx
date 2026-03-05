@@ -40,6 +40,7 @@ const adminNavItems = [
     { to: "/utilisateurs", icon: UserCog, label: "Utilisateurs", adminOnly: true },
     { to: "/demandes-services", icon: ClipboardList, label: "Demandes Services", adminOnly: true },
     { to: "/admin/metrics", icon: BarChart3, label: "Métriques SaaS", adminOnly: true },
+    { to: "/admin/analytics", icon: Users, label: "Analytics Utilisateurs", adminOnly: true },
 ];
 
 const ROLE_BADGES = {
