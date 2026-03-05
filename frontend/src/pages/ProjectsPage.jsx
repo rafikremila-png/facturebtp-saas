@@ -596,7 +596,7 @@ export default function ProjectsPage() {
                                         <SelectValue placeholder="Sélectionner un client" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">Aucun client</SelectItem>
+                                        <SelectItem value="none">Aucun client</SelectItem>
                                         {clients.map((client) => (
                                             <SelectItem key={client.id} value={client.id}>
                                                 {client.company_name || client.name}
@@ -796,7 +796,7 @@ export default function ProjectsPage() {
                                             <SelectValue placeholder="Sélectionner" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">Aucun client</SelectItem>
+                                            <SelectItem value="none">Aucun client</SelectItem>
                                             {clients.map((client) => (
                                                 <SelectItem key={client.id} value={client.id}>
                                                     {client.company_name || client.name}
