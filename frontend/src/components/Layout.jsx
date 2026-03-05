@@ -18,7 +18,9 @@ import {
     ClipboardList,
     CreditCard,
     BarChart3,
-    Sparkles
+    Sparkles,
+    Library,
+    FolderKanban
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -27,8 +29,10 @@ import { Badge } from "@/components/ui/badge";
 const navItems = [
     { to: "/", icon: LayoutDashboard, label: "Tableau de bord", exact: true },
     { to: "/clients", icon: Users, label: "Clients" },
+    { to: "/chantiers", icon: FolderKanban, label: "Chantiers" },
     { to: "/devis", icon: FileText, label: "Devis" },
     { to: "/factures", icon: Receipt, label: "Factures" },
+    { to: "/bibliotheque", icon: Library, label: "Bibliothèque" },
     { to: "/ai-assistant", icon: Sparkles, label: "Assistant IA" },
     { to: "/services", icon: Briefcase, label: "Services Pro" },
     { to: "/facturation", icon: CreditCard, label: "Facturation" },
