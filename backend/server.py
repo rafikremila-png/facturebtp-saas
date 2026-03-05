@@ -1819,6 +1819,90 @@ async def update_profile(profile_data: UserProfileUpdate, user: dict = Depends(g
         email_verified=updated_user.get("email_verified", False)
     )
 
+@api_router.get("/profile/completion")
+async def get_profile_completion(user: dict = Depends(get_current_user)):
+    """Get profile completion status for the current user"""
+    # Get user settings
+    user_settings = await db.user_settings.find_one({"user_id": user["id"]}, {"_id": 0})
+    
+    completion_items = []
+    
+    # Profile checks
+    completion_items.append({
+        "key": "name",
+        "label": "Nom complet",
+        "completed": bool(user.get("name") and len(user.get("name", "")) > 2),
+        "category": "profil"
+    })
+    completion_items.append({
+        "key": "phone",
+        "label": "Téléphone",
+        "completed": bool(user.get("phone")),
+        "category": "profil"
+    })
+    completion_items.append({
+        "key": "email_verified",
+        "label": "Email vérifié",
+        "completed": user.get("email_verified", False),
+        "category": "profil"
+    })
+    
+    # Company checks from settings
+    if user_settings:
+        completion_items.extend([
+            {"key": "company_name", "label": "Nom entreprise", 
+             "completed": bool(user_settings.get("company_name")), "category": "entreprise"},
+            {"key": "address", "label": "Adresse", 
+             "completed": bool(user_settings.get("address")), "category": "entreprise"},
+            {"key": "logo", "label": "Logo", 
+             "completed": bool(user_settings.get("logo_base64")), "category": "entreprise"},
+            {"key": "siret", "label": "SIRET", 
+             "completed": bool(user_settings.get("siret") and len(user_settings.get("siret", "").replace(" ", "")) >= 14), "category": "legal"},
+            {"key": "vat_number", "label": "N° TVA", 
+             "completed": bool(user_settings.get("vat_number")), "category": "legal"},
+            {"key": "iban", "label": "IBAN", 
+             "completed": bool(user_settings.get("iban") and len(user_settings.get("iban", "").replace(" ", "")) >= 15), "category": "bancaire"},
+            {"key": "bic", "label": "BIC", 
+             "completed": bool(user_settings.get("bic")), "category": "bancaire"},
+            {"key": "invoice_footer", "label": "Mentions factures", 
+             "completed": bool(user_settings.get("invoice_footer") or user_settings.get("invoice_notes")), "category": "entreprise"},
+        ])
+    else:
+        # No settings yet - mark all as incomplete
+        completion_items.extend([
+            {"key": "company_name", "label": "Nom entreprise", "completed": False, "category": "entreprise"},
+            {"key": "address", "label": "Adresse", "completed": False, "category": "entreprise"},
+            {"key": "logo", "label": "Logo", "completed": False, "category": "entreprise"},
+            {"key": "siret", "label": "SIRET", "completed": False, "category": "legal"},
+            {"key": "vat_number", "label": "N° TVA", "completed": False, "category": "legal"},
+            {"key": "iban", "label": "IBAN", "completed": False, "category": "bancaire"},
+            {"key": "bic", "label": "BIC", "completed": False, "category": "bancaire"},
+            {"key": "invoice_footer", "label": "Mentions factures", "completed": False, "category": "entreprise"},
+        ])
+    
+    # Calculate totals
+    completed_count = sum(1 for item in completion_items if item["completed"])
+    total_count = len(completion_items)
+    completion_percentage = int((completed_count / total_count) * 100) if total_count > 0 else 0
+    
+    # Summary by category
+    summary = {}
+    for category in ["profil", "entreprise", "legal", "bancaire"]:
+        cat_items = [i for i in completion_items if i["category"] == category]
+        summary[category] = sum(1 for i in cat_items if i["completed"])
+        summary[f"{category}_total"] = len(cat_items)
+    
+    return {
+        "user_id": user["id"],
+        "user_name": user.get("name"),
+        "user_email": user.get("email"),
+        "completion_percentage": completion_percentage,
+        "completed_count": completed_count,
+        "total_count": total_count,
+        "items": completion_items,
+        "summary": summary
+    }
+
 @api_router.get("/auth/impersonation-status")
 async def get_impersonation_status(user: dict = Depends(get_current_user)):
     """Check if current session is an impersonation session"""
