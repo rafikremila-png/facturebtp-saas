@@ -26,6 +26,7 @@ export default function UsersPage() {
     const [loading, setLoading] = useState(true);
     const [selectedUser, setSelectedUser] = useState(null);
     const [userDetail, setUserDetail] = useState(null);
+    const [profileCompletion, setProfileCompletion] = useState(null);
     const [loadingDetail, setLoadingDetail] = useState(false);
     
     // OTP dialogs state
