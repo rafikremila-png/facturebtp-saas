@@ -6181,6 +6181,343 @@ async def get_project_types(user: dict = Depends(get_current_user)):
         ]
     }
 
+# ============== ELECTRONIC SIGNATURE ==============
+
+from app.services.advanced_features_service import (
+    get_signature_service,
+    get_pdf_analysis_service,
+    get_image_analysis_service,
+    get_marketing_service
+)
+
+class SignatureRequest(BaseModel):
+    quote_id: str
+    client_email: EmailStr
+    client_name: str
+
+class SignQuoteRequest(BaseModel):
+    signature_data: str  # Base64 image
+
+@api_router.post("/signatures/request")
+async def create_signature_request(
+    request: SignatureRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Create electronic signature request for a quote"""
+    # Verify quote exists and belongs to user
+    quote = await db.quotes.find_one({"id": request.quote_id, "owner_id": user["id"]})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    signature_service = get_signature_service(db)
+    result = await signature_service.create_signature_request(
+        quote_id=request.quote_id,
+        client_email=request.client_email,
+        client_name=request.client_name,
+        owner_id=user["id"]
+    )
+    
+    return result
+
+@api_router.get("/signatures/status/{signature_token}")
+async def get_signature_status(signature_token: str):
+    """Get signature status (public endpoint)"""
+    signature_service = get_signature_service(db)
+    return await signature_service.get_signature_status(signature_token)
+
+@api_router.post("/signatures/sign/{signature_token}")
+async def sign_quote(
+    signature_token: str,
+    request: SignQuoteRequest,
+    req: Request = None
+):
+    """Sign a quote electronically (public endpoint)"""
+    signature_service = get_signature_service(db)
+    
+    ip_address = req.client.host if req else None
+    user_agent = req.headers.get("user-agent") if req else None
+    
+    try:
+        result = await signature_service.sign_quote(
+            signature_token=signature_token,
+            signature_data=request.signature_data,
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# ============== INVOICE ONLINE PAYMENT ==============
+
+@api_router.post("/invoices/{invoice_id}/payment-link")
+async def create_invoice_payment_link(
+    invoice_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Create Stripe payment link for an invoice"""
+    invoice = await db.invoices.find_one({"id": invoice_id, "owner_id": user["id"]})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture non trouvée")
+    
+    if invoice.get("status") == "paid":
+        raise HTTPException(status_code=400, detail="Cette facture est déjà payée")
+    
+    # Get company settings for name
+    settings = await db.settings.find_one({"type": "company"})
+    company_name = settings.get("company_name", "FactureBTP") if settings else "FactureBTP"
+    
+    try:
+        if STRIPE_AVAILABLE:
+            import stripe
+            stripe.api_key = os.environ.get("STRIPE_API_KEY")
+            
+            # Create payment link
+            amount_cents = int(invoice["total_ttc"] * 100)
+            
+            session = stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[{
+                    "price_data": {
+                        "currency": "eur",
+                        "unit_amount": amount_cents,
+                        "product_data": {
+                            "name": f"Facture {invoice['invoice_number']}",
+                            "description": f"Paiement facture {company_name}",
+                        },
+                    },
+                    "quantity": 1,
+                }],
+                mode="payment",
+                success_url=f"{FRONTEND_URL}/factures/{invoice_id}?payment=success",
+                cancel_url=f"{FRONTEND_URL}/factures/{invoice_id}?payment=cancelled",
+                metadata={
+                    "invoice_id": invoice_id,
+                    "invoice_number": invoice["invoice_number"],
+                    "owner_id": user["id"],
+                },
+            )
+            
+            # Store payment session
+            await db.invoices.update_one(
+                {"id": invoice_id},
+                {"$set": {
+                    "payment_session_id": session.id,
+                    "payment_url": session.url,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            
+            return {
+                "payment_url": session.url,
+                "session_id": session.id,
+                "amount": invoice["total_ttc"],
+                "expires_at": datetime.fromtimestamp(session.expires_at).isoformat() if hasattr(session, 'expires_at') else None,
+            }
+        else:
+            raise HTTPException(status_code=503, detail="Service de paiement non disponible")
+            
+    except Exception as e:
+        logger.error(f"Payment link creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création du lien de paiement")
+
+@api_router.post("/webhook/invoice-payment")
+async def handle_invoice_payment_webhook(request: Request):
+    """Handle Stripe webhook for invoice payments"""
+    if not STRIPE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Stripe non disponible")
+    
+    import stripe
+    stripe.api_key = os.environ.get("STRIPE_API_KEY")
+    
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET_INVOICE")
+    
+    try:
+        if webhook_secret:
+            event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        else:
+            event = stripe.Event.construct_from(json.loads(payload), stripe.api_key)
+        
+        if event["type"] == "checkout.session.completed":
+            session = event["data"]["object"]
+            invoice_id = session.get("metadata", {}).get("invoice_id")
+            
+            if invoice_id:
+                await db.invoices.update_one(
+                    {"id": invoice_id},
+                    {"$set": {
+                        "status": "paid",
+                        "paid_at": datetime.now(timezone.utc).isoformat(),
+                        "payment_method": "stripe",
+                        "stripe_session_id": session["id"],
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                logger.info(f"Invoice {invoice_id} marked as paid via Stripe")
+        
+        return {"received": True}
+        
+    except Exception as e:
+        logger.error(f"Invoice payment webhook error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# ============== PDF PLAN ANALYSIS ==============
+
+@api_router.post("/ai/analyze-plan-pdf")
+async def analyze_plan_pdf(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user)
+):
+    """Analyze a construction plan PDF"""
+    if not file.content_type == "application/pdf":
+        raise HTTPException(status_code=400, detail="Le fichier doit être un PDF")
+    
+    contents = await file.read()
+    if len(contents) > 20 * 1024 * 1024:  # 20MB limit
+        raise HTTPException(status_code=400, detail="Le fichier ne doit pas dépasser 20MB")
+    
+    pdf_service = get_pdf_analysis_service()
+    result = pdf_service.analyze_pdf(contents)
+    
+    logger.info(f"PDF plan analyzed for user {user['id']}")
+    
+    return result
+
+# ============== IMAGE ANALYSIS ==============
+
+@api_router.post("/ai/analyze-site-photo")
+async def analyze_site_photo(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user)
+):
+    """Analyze a construction site photo"""
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Le fichier doit être une image")
+    
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:  # 10MB limit
+        raise HTTPException(status_code=400, detail="L'image ne doit pas dépasser 10MB")
+    
+    image_service = get_image_analysis_service()
+    result = image_service.analyze_basic(contents)
+    
+    logger.info(f"Site photo analyzed for user {user['id']}")
+    
+    return result
+
+# ============== MARKETING AUTOMATION ==============
+
+@api_router.get("/marketing/notifications")
+async def get_marketing_notifications(user: dict = Depends(get_current_user)):
+    """Get marketing notifications for current user"""
+    marketing_service = get_marketing_service(db)
+    notifications = await marketing_service.get_marketing_notifications(user["id"])
+    return {"notifications": notifications}
+
+@api_router.get("/marketing/website-status")
+async def check_website_status(user: dict = Depends(get_current_user)):
+    """Check if user has a website configured"""
+    marketing_service = get_marketing_service(db)
+    return await marketing_service.check_website_status(user["id"])
+
+@api_router.post("/marketing/request-website")
+async def request_website_creation(user: dict = Depends(get_current_user)):
+    """Request website creation service"""
+    marketing_service = get_marketing_service(db)
+    
+    # Get user and company info
+    settings = await db.settings.find_one({"type": "company"})
+    company_name = settings.get("company_name", "") if settings else ""
+    
+    return await marketing_service.create_website_request(
+        user_id=user["id"],
+        company_name=company_name,
+        email=user.get("email", ""),
+        phone=settings.get("phone") if settings else None,
+    )
+
+# ============== AI QUOTE EXPORT ==============
+
+@api_router.post("/ai/export-to-quote")
+async def export_ai_quote_to_system(
+    ai_quote: Dict[str, Any] = Body(...),
+    client_id: Optional[str] = Body(None),
+    user: dict = Depends(get_current_user)
+):
+    """Export AI-generated quote items to a new quote in the system"""
+    
+    # Validate AI quote structure
+    if "items" not in ai_quote or not ai_quote["items"]:
+        raise HTTPException(status_code=400, detail="Aucun article à exporter")
+    
+    # Get next quote number
+    last_quote = await db.quotes.find_one(
+        {"owner_id": user["id"]},
+        sort=[("quote_number", -1)]
+    )
+    
+    if last_quote and last_quote.get("quote_number"):
+        try:
+            last_num = int(last_quote["quote_number"].replace("DEV-", ""))
+            next_num = last_num + 1
+        except:
+            next_num = 1
+    else:
+        next_num = 1
+    
+    quote_number = f"DEV-{next_num:04d}"
+    
+    # Convert AI items to quote items format
+    quote_items = []
+    for item in ai_quote["items"]:
+        quote_items.append({
+            "description": item.get("description", ""),
+            "quantity": float(item.get("quantity", 1)),
+            "unit": item.get("unit", "unité"),
+            "unit_price": float(item.get("unit_price", 0)),
+            "vat_rate": float(item.get("vat_rate", 20.0)),
+        })
+    
+    # Create quote document
+    quote_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    quote_doc = {
+        "id": quote_id,
+        "quote_number": quote_number,
+        "owner_id": user["id"],
+        "client_id": client_id,
+        "items": quote_items,
+        "total_ht": ai_quote.get("total_ht", 0),
+        "total_vat": ai_quote.get("total_vat", 0),
+        "total_ttc": ai_quote.get("total_ttc", 0),
+        "status": "draft",
+        "validity_days": 30,
+        "notes": f"Généré par Assistant IA - {ai_quote.get('project_type', 'Projet')} - {ai_quote.get('surface', '')}m²",
+        "created_at": now,
+        "updated_at": now,
+        "ai_generated": True,
+        "ai_metadata": {
+            "project_type": ai_quote.get("project_type"),
+            "surface": ai_quote.get("surface"),
+            "location": ai_quote.get("location"),
+            "regional_multiplier": ai_quote.get("regional_multiplier"),
+        }
+    }
+    
+    await db.quotes.insert_one(quote_doc)
+    
+    logger.info(f"AI quote exported to system: {quote_number} for user {user['id']}")
+    
+    return {
+        "success": True,
+        "quote_id": quote_id,
+        "quote_number": quote_number,
+        "message": f"Devis {quote_number} créé avec succès",
+    }
+
 # ============== MAIN APP SETUP ==============
 
 app.include_router(api_router)
