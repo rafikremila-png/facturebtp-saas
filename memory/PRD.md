@@ -698,3 +698,48 @@ STRIPE_PRICE_BUSINESS_YEARLY=price_1T5c4AGs4YZg7ViPincxYzMs
 - `frontend/src/pages/AIAssistantPage.jsx` : Page complète avec 5 onglets
 - `frontend/src/pages/SignaturePage.jsx` : Page de signature publique
 
+## Bug Fixes (Mars 2026)
+
+### Issue 1: Connexion Base de Données ✅ (5 Mars 2026)
+- **Problème** : Le fichier `.env` contenait `DB_NAME="test_database"` avec des guillemets
+- **Impact** : Connexion à une mauvaise base de données causant des erreurs d'authentification et d'incohérence des données
+- **Solution** : Vérification et confirmation que `DB_NAME=test_database` (sans guillemets) est correct
+- **Statut** : RÉSOLU
+
+### Issue 2: Paramètres Utilisateur & Upload Logo ✅ (5 Mars 2026)
+- **Problème** : Les paramètres ne se sauvegardaient pas et le logo ne s'uploadait pas
+- **Cause** : Symptôme de l'Issue 1 (mauvaise connexion DB)
+- **Solution** : Correction de l'Issue 1 a résolu ce problème
+- **Tests** :
+  - `GET /api/settings` : ✅ Retourne les données
+  - `PUT /api/settings` : ✅ Sauvegarde les modifications
+  - `POST /api/settings/logo` : ✅ Upload le logo
+- **Statut** : RÉSOLU
+
+### Issue 3: Interface Admin Cassée ✅ (5 Mars 2026)
+- **Problème** : Chevauchement de texte dans la barre latérale (nom utilisateur, email, badge "Super Admin" se superposaient)
+- **Cause** : `position: absolute` sur la section utilisateur causant un chevauchement avec les liens admin
+- **Solution** : Refactoring du Layout.jsx avec Flexbox :
+  - Sidebar utilise `flex flex-col`
+  - Navigation scrollable avec `flex-1 overflow-y-auto`
+  - Section utilisateur avec `flex-shrink-0`
+  - Badge "Super Admin" aligné horizontalement
+- **Fichier modifié** : `/app/frontend/src/components/Layout.jsx`
+- **Statut** : RÉSOLU
+
+### Tests Complets (5 Mars 2026)
+- **Backend** : 100% (20/20 tests passés)
+- **Frontend** : 100% (toutes fonctionnalités vérifiées)
+- **Rapport** : `/app/test_reports/iteration_20.json`
+
+## Prochaines Étapes (P1)
+
+### UI des Fonctionnalités Avancées
+1. **Analyse PDF Plans IA** - Ajouter upload fichier dans AIAssistantPage.jsx
+2. **Signature Électronique** - Compléter SignaturePage.jsx
+3. **Paiement en Ligne** - Bouton "Payer maintenant" sur les factures
+4. **Dashboard Admin Utilisateurs** - Page de gestion complète
+
+### Bugs à Investiguer (P2)
+1. **Vérification Email** - Emails non reçus (configuration SMTP à vérifier)
+
