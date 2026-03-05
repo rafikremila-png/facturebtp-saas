@@ -108,11 +108,19 @@ async def migrate_clients(mongo_db, pg_session):
     
     mongo_clients = await mongo_db.clients.find({}).to_list(length=50000)
     count = 0
+    skipped = 0
     
     for mc in mongo_clients:
+        user_id = mc.get('user_id')
+        
+        # Skip clients without user_id (orphan data)
+        if not user_id:
+            skipped += 1
+            continue
+        
         client = Client(
             id=mc.get('id', generate_uuid()),
-            user_id=mc.get('user_id'),
+            user_id=user_id,
             name=mc.get('name', 'Unknown'),
             email=mc.get('email'),
             phone=mc.get('phone'),
@@ -127,7 +135,7 @@ async def migrate_clients(mongo_db, pg_session):
         count += 1
     
     await pg_session.flush()
-    logger.info(f"  Migrated {count} clients")
+    logger.info(f"  Migrated {count} clients (skipped {skipped} orphans)")
     return count
 
 
