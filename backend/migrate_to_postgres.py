@@ -145,8 +145,16 @@ async def migrate_quotes(mongo_db, pg_session):
     
     mongo_quotes = await mongo_db.quotes.find({}).to_list(length=50000)
     count = 0
+    skipped = 0
     
     for mq in mongo_quotes:
+        user_id = mq.get('user_id')
+        
+        # Skip quotes without user_id
+        if not user_id:
+            skipped += 1
+            continue
+        
         # Map old status to new status
         status_map = {
             'brouillon': 'draft',
@@ -158,7 +166,7 @@ async def migrate_quotes(mongo_db, pg_session):
         
         quote = Quote(
             id=mq.get('id', generate_uuid()),
-            user_id=mq.get('user_id'),
+            user_id=user_id,
             client_id=mq.get('client_id'),
             quote_number=mq.get('quote_number', f"DEV-{count:04d}"),
             title=mq.get('title'),
@@ -178,7 +186,7 @@ async def migrate_quotes(mongo_db, pg_session):
         count += 1
     
     await pg_session.flush()
-    logger.info(f"  Migrated {count} quotes")
+    logger.info(f"  Migrated {count} quotes (skipped {skipped} orphans)")
     return count
 
 
