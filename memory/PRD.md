@@ -727,10 +727,53 @@ STRIPE_PRICE_BUSINESS_YEARLY=price_1T5c4AGs4YZg7ViPincxYzMs
 - **Fichier modifié** : `/app/frontend/src/components/Layout.jsx`
 - **Statut** : RÉSOLU
 
+## Nouvelles Fonctionnalités Admin (5 Mars 2026)
+
+### 1. Suppression d'utilisateurs pour les Admins ✅
+- **Avant** : Seul le super_admin pouvait supprimer des utilisateurs
+- **Après** : Les admins peuvent supprimer des utilisateurs réguliers (avec OTP)
+- **Restrictions** :
+  - Admin NE PEUT PAS supprimer un autre admin (seul super_admin peut)
+  - Super Admin est protégé contre la suppression
+  - Auto-suppression interdite
+- **Fichier modifié** : `/app/backend/server.py` (DELETE /api/users/{user_id})
+
+### 2. Indicateur de Progression du Profil ✅
+- **Nouvel endpoint** : `GET /api/users/{user_id}/profile-completion`
+- **Structure retournée** :
+  ```json
+  {
+    "user_id": "...",
+    "completion_percentage": 54,
+    "completed_count": 6,
+    "total_count": 11,
+    "items": [...],
+    "summary": {
+      "profil": 2, "profil_total": 3,
+      "entreprise": 3, "entreprise_total": 4,
+      "legal": 1, "legal_total": 2,
+      "bancaire": 0, "bancaire_total": 2
+    }
+  }
+  ```
+- **11 éléments vérifiés** :
+  - Profil : nom, téléphone, email vérifié
+  - Entreprise : nom entreprise, adresse, logo, site web
+  - Légal : SIRET (14 chiffres), N° TVA
+  - Bancaire : IBAN (≥15 car.), BIC
+
+### 3. Interface Admin Améliorée ✅
+- **Fiche utilisateur** avec toutes les infos non-sensibles
+- **Carte "Progression du profil"** avec :
+  - Pourcentage global (couleur : vert ≥80%, ambre ≥50%, rouge <50%)
+  - 4 catégories avec barres de progression
+  - Liste détaillée des éléments avec ✓/✗
+- **Fichier modifié** : `/app/frontend/src/pages/UsersPage.jsx`
+
 ### Tests Complets (5 Mars 2026)
-- **Backend** : 100% (20/20 tests passés)
+- **Backend** : 100% (14/14 tests passés)
 - **Frontend** : 100% (toutes fonctionnalités vérifiées)
-- **Rapport** : `/app/test_reports/iteration_20.json`
+- **Rapport** : `/app/test_reports/iteration_21.json`
 
 ## Prochaines Étapes (P1)
 
