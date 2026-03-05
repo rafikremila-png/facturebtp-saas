@@ -61,8 +61,12 @@ export default function UsersPage() {
     const loadUserDetail = async (userId) => {
         setLoadingDetail(true);
         try {
-            const response = await api.get(`/users/${userId}`);
-            setUserDetail(response.data);
+            const [userRes, completionRes] = await Promise.all([
+                api.get(`/users/${userId}`),
+                api.get(`/users/${userId}/profile-completion`)
+            ]);
+            setUserDetail(userRes.data);
+            setProfileCompletion(completionRes.data);
             setSelectedUser(userId);
         } catch (error) {
             toast.error("Erreur lors du chargement des détails");
