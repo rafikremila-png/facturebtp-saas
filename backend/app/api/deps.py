@@ -52,6 +52,19 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         
         client.close()
         
+        # Sync user to PostgreSQL (for new features)
+        try:
+            from app.core.database import AsyncSessionLocal
+            from app.services.user_sync_service import ensure_user_in_postgres
+            
+            async with AsyncSessionLocal() as pg_session:
+                await ensure_user_in_postgres(pg_session, user_id)
+                await pg_session.commit()
+        except Exception as e:
+            # Don't fail if sync fails - just log it
+            import logging
+            logging.getLogger(__name__).warning(f"User sync to PostgreSQL failed: {e}")
+        
         return {"id": user_id, "role": role, **payload}
     except jwt.ExpiredSignatureError:
         raise HTTPException(
