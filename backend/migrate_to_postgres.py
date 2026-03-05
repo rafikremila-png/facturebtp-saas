@@ -253,11 +253,19 @@ async def migrate_work_items(mongo_db, pg_session):
     
     mongo_items = await mongo_db.predefined_items.find({}).to_list(length=50000)
     count = 0
+    skipped = 0
     
     for mi in mongo_items:
+        user_id = mi.get('user_id')
+        
+        # Skip items without user_id
+        if not user_id:
+            skipped += 1
+            continue
+        
         work_item = WorkItem(
             id=mi.get('id', generate_uuid()),
-            user_id=mi.get('user_id'),
+            user_id=user_id,
             name=mi.get('description', 'Unknown'),
             description=mi.get('description'),
             category=mi.get('category'),
@@ -271,7 +279,7 @@ async def migrate_work_items(mongo_db, pg_session):
         count += 1
     
     await pg_session.flush()
-    logger.info(f"  Migrated {count} work items")
+    logger.info(f"  Migrated {count} work items (skipped {skipped} orphans)")
     return count
 
 
