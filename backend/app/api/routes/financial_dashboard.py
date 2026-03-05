@@ -68,7 +68,7 @@ async def get_financial_dashboard(
     total_revenue = float(result.scalar() or 0)
     
     # Total paid
-    total_paid_query = select(func.coalesce(func.sum(Invoice.paid_amount), 0)).where(
+    total_paid_query = select(func.coalesce(func.sum(Invoice.amount_paid), 0)).where(
         and_(*conditions)
     )
     result = await db.execute(total_paid_query)
