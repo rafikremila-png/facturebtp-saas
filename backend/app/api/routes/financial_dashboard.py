@@ -83,7 +83,7 @@ async def get_financial_dashboard(
         Invoice.due_date < now
     ]
     overdue_query = select(
-        func.coalesce(func.sum(Invoice.total_ttc - Invoice.paid_amount), 0)
+        func.coalesce(func.sum(Invoice.total_ttc - Invoice.amount_paid), 0)
     ).where(and_(*overdue_conditions))
     result = await db.execute(overdue_query)
     total_overdue = float(result.scalar() or 0)
