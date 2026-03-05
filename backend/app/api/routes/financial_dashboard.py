@@ -287,12 +287,12 @@ async def export_financial_excel(
     for row, inv in enumerate(invoices, 2):
         ws.cell(row=row, column=1, value=inv.invoice_number)
         ws.cell(row=row, column=2, value=inv.invoice_date.strftime("%Y-%m-%d") if inv.invoice_date else "")
-        ws.cell(row=row, column=3, value=inv.client_name or "")
-        ws.cell(row=row, column=4, value=round(inv.total_ht or 0, 2))
+        ws.cell(row=row, column=3, value=inv.title or "")
+        ws.cell(row=row, column=4, value=round(inv.subtotal_ht or 0, 2))
         ws.cell(row=row, column=5, value=round(inv.total_vat or 0, 2))
         ws.cell(row=row, column=6, value=round(inv.total_ttc or 0, 2))
-        ws.cell(row=row, column=7, value=round(inv.paid_amount or 0, 2))
-        ws.cell(row=row, column=8, value=round((inv.total_ttc or 0) - (inv.paid_amount or 0), 2))
+        ws.cell(row=row, column=7, value=round(inv.amount_paid or 0, 2))
+        ws.cell(row=row, column=8, value=round((inv.total_ttc or 0) - (inv.amount_paid or 0), 2))
         ws.cell(row=row, column=9, value=inv.status or "")
         ws.cell(row=row, column=10, value=inv.due_date.strftime("%Y-%m-%d") if inv.due_date else "")
     
