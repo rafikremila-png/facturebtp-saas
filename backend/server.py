@@ -164,9 +164,12 @@ app = FastAPI(
 @app.get("/")
 def home():
     return {
-        "message": "FactureBTP API",
-        "documentation": "https://facturebtp-saas.onrender.com/docs",
-        "status": "API running"
+        "service": "BTP Invoice API",
+        "status": "running",
+        "version": "2.0.0",
+        "documentation": "/docs",
+        "health": "/api/health",
+        "environment": ENVIRONMENT
     }
 
 app.state.limiter = limiter
