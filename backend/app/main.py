@@ -123,6 +123,9 @@ app.include_router(clients.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(quotes.router, prefix="/api")
 app.include_router(invoices.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
+app.include_router(work_items.router, prefix="/api")
+app.include_router(financial.router, prefix="/api")
 
 
 # Legacy compatibility routes - redirect to new endpoints
