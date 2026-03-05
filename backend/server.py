@@ -6749,6 +6749,17 @@ try:
 except Exception as e:
     logger.warning(f"Could not load some modular routes: {e}")
 
+# Include PostgreSQL routes (new features)
+if PG_ROUTES_AVAILABLE:
+    try:
+        app.include_router(pg_admin_routes.router, prefix="/api")
+        app.include_router(pg_work_items_routes.router, prefix="/api")
+        app.include_router(pg_financial_routes.router, prefix="/api")
+        app.include_router(pg_projects_routes.router, prefix="/api")
+        logger.info("✅ PostgreSQL routes loaded successfully")
+    except Exception as e:
+        logger.warning(f"Could not load PostgreSQL routes: {e}")
+
 cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
 cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
 
