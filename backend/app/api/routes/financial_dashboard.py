@@ -210,8 +210,8 @@ async def export_financial_csv(
         writer.writerow([
             inv.invoice_number,
             inv.invoice_date.strftime("%Y-%m-%d") if inv.invoice_date else "",
-            inv.client_name or "",
-            round(inv.total_ht or 0, 2),
+            inv.title or "",
+            round(inv.subtotal_ht or 0, 2),
             round(inv.total_vat or 0, 2),
             round(inv.total_ttc or 0, 2),
             round(inv.amount_paid or 0, 2),
