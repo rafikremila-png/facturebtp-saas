@@ -1,261 +1,180 @@
 <analysis>**original_problem_statement:**
-The user wants to transform their FactureBTP project into a complete, production-ready SaaS platform for construction companies. The primary goals are to fix critical UI bugs, implement a multi-company architecture, and add a suite of advanced features.
+The user wants to transform their FactureBTP project into a complete, production-ready SaaS platform for construction companies. Initially, this involved fixing critical bugs. The scope then expanded dramatically into a full architectural refactoring and the implementation of a comprehensive feature set.
 
 **PRODUCT REQUIREMENTS:**
 
-1.  **Critical Bug Fixes:**
-    *   Fix the company logo upload functionality.
-    *   Fix the user settings page, which currently fails to save data.
-    *   Fix the admin interface layout issues (alignment, spacing, overlapping text).
-    *   Fix the email verification system to ensure emails are sent and delivered.
+The user has mandated a complete, multi-phase rebuild to be executed continuously. The final application must include:
 
-2.  **Core SaaS Features (Implementation/Verification):**
-    *   **Multi-Company Architecture:** Ensure all data (clients, projects, quotes, invoices) is isolated by a .
-    *   **Project Management ():** Implement a full CRUD system for projects.
-    *   **Online Payments:** Allow clients to pay invoices online via Stripe.
-    *   **Electronic Signatures:** Allow clients to digitally sign quotes.
-    *   **Accounting Export:** Add a feature to export invoices and payments to CSV/Excel.
-    *   **Automatic Invoice Reminders:** Create a system to send automated email reminders for unpaid invoices.
+1.  **Architecture:**
+    *   Migrate the backend from a monolithic FastAPI/MongoDB structure to a modular FastAPI/PostgreSQL (Supabase) architecture.
+    *   Use Supabase for database, authentication, and file storage.
+    *   Ensure all database tables are correctly related and indexed for a multi-tenant SaaS.
 
-3.  **AI-Powered Features:**
-    *   **AI Quote Generation:** An endpoint that suggests quote items based on project details.
-    *   **AI Pricing System:** A hybrid model using a local pricing database for standard plans and an external AI (OpenAI) for the Business plan.
-    *   **AI Project Cost Estimation:** An endpoint to estimate labor, materials, and total cost.
-    *   **AI Site Photo Analysis:** An endpoint to suggest work items by analyzing a construction site photo.
-    *   **AI Plan PDF Analysis:** A new feature to analyze uploaded construction plan PDFs, extract measurements, and generate quote items.
+2.  **Core BTP Features:**
+    *   **Project Management ():** Full CRUD for projects, linking quotes, invoices, and tasks.
+    *   **Construction Site Planning:** Timeline view, task scheduling, and milestone tracking.
+    *   **Margin Tracking:** Track revenue and expenses to calculate profit margins per project.
+    *   **Progress Invoicing ():** Percentage-based billing and retainage management.
+    *   **Work Library ():** A reusable library of services and materials for quick quote generation.
+    *   **BTP VAT Calculation:** Automatic handling of multiple and reduced VAT rates specific to the construction industry.
 
-4.  **Marketing and Upsell Features:**
-    *   **Marketing Automation:** Trigger notifications if a company has not added its website.
-    *   **Website Creation Service:** Add an upsell button/flow for a website creation service.
+3.  **Financial & Automation Tools:**
+    *   **Financial Dashboard:** Analytics on revenue, invoices, payment delays, and top clients.
+    *   **Recurring Invoices:** Automated generation of invoices on a set schedule.
+    *   **Automatic Invoice Reminders:** A system to send scheduled email reminders for unpaid invoices.
+    *   **Accounting Export:** Export financial data (invoices, payments, VAT) to CSV/Excel.
+    *   **Stripe Online Payment:** A Pay Now button on invoices to process payments via Stripe Checkout.
 
-5.  **Admin & Security:**
-    *   **Admin User Management:** An admin dashboard to manage all platform users (CRUD, suspend).
-    *   **Security:** Ensure all secrets are in environment variables, CORS is correctly configured, and a health check endpoint is available for Render.
+4.  **Advanced Features:**
+    *   **AI PDF Analysis:** Use Gemini to analyze uploaded construction plan PDFs and extract data.
+    *   **Legal Electronic Signatures:** A secure flow for clients to sign quotes electronically.
+    *   **Client Portal:** A secure, token-based portal for clients to view/sign quotes, view/pay invoices, and see their history without creating an account.
+
+5.  **Admin & Marketing:**
+    *   **Global Admin Dashboard:** Metrics on users, revenue, and platform activity.
+    *   **Marketing Automation:** System for sending announcements, reminders, and onboarding messages.
 
 **User's preferred language**: French
 
 **what currently exists?**
-The application is a comprehensive but buggy full-stack React/FastAPI SaaS platform. Most foundational features are implemented, including user authentication, multi-tenancy concepts (), CRUD for clients, quotes, and invoices, PDF generation, and a 3-tier Stripe subscription system.
+The application is in a major transitional state. The previous session started with a functional, but buggy, monolithic FastAPI/MongoDB application. The agent successfully fixed critical UI/DB bugs.
 
-In the last session, the agent added the backend infrastructure for many advanced features, including AI quote generation, project estimation, PDF plan analysis, electronic signatures, and online payments by creating new services (, ) and API endpoints. A basic frontend page () was created to host some of these new AI features.
+Following this, the agent began a massive, user-directed refactoring. It has scaffolded a new modular backend architecture intended for PostgreSQL. This includes a new directory structure () with empty or placeholder files for services, SQLAlchemy models, Pydantic schemas, and API routes. The necessary dependencies for PostgreSQL and Gemini have been installed.
+
+However, the old monolithic  and MongoDB database are still the active components. The new architecture is just a skeleton and is not integrated or functional.
 
 **Last working item**:
-- **Last item agent was working:** The agent was debugging a critical and complex issue where user settings could not be saved and user roles were inconsistent. The agent correctly identified the root cause: an incorrectly formatted  variable in the  file ( with quotes instead of ). This caused the application to connect to the wrong database, leading to inconsistent user data and authentication failures. The agent edited the  file but the session timed out before the fix could be verified and propagated.
-- **Status:** IN PROGRESS
+- **Last item agent was working:** The agent was in Phase 1 of a major backend refactoring. It created the file structure for a new modular architecture and standardized the new API routes by creating a shared authentication dependency in . The goal was to build the foundation for migrating from MongoDB to PostgreSQL and replacing the monolithic .
+- **Status:** BLOCKED
 - **Agent Testing Done:** N
-- **Which testing method agent to use?** manual testing by curl. The agent should first verify the  file is correct, then restart the backend (backend: stopped
-backend: started), and finally test the login and settings endpoints with  to confirm user data is now consistent.
+- **Which testing method agent to use?** backend testing agent. This is a major refactor that will require comprehensive testing once a phase is complete. Initial integration will require  tests.
 - **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
-- **Issue 1: Critical Database and Authentication Instability (P0 - BLOCKER)**
-- **Issue 2: User Settings & Logo Upload Not Working (P1)**
-- **Issue 3: Broken Admin Interface Layout (P1)**
-- **Issue 4: Email Verification Not Working (P2)**
+- **Issue 1: Backend Refactoring and Migration is Blocked (P0 - BLOCKER)**
 
 **Issues Detail:**
 - **Issue 1:**
-    - **Description:** The application is connecting to the wrong MongoDB database due to a formatting error in the  file ( includes quotes). This has led to a state of data inconsistency, where there are duplicate user accounts across different databases, causing login to return outdated user roles and settings to fail. This is a critical blocker rendering the app unusable.
-    - **Attempted fixes:** The agent identified the incorrect quotes in  and attempted to remove them. However, the session timed out before the fix could be confirmed by restarting the server and re-testing.
+    - **Description:** The user mandated a full backend migration from MongoDB to PostgreSQL (Supabase). The agent started scaffolding the new architecture but proceeded without obtaining the necessary Supabase connection URI from the user. The entire refactoring and migration process is now blocked until this credential is provided.
+    - **Attempted fixes:** The agent asked for the URI, but when the user responded with a simple oui, the agent moved on to creating files instead of waiting for the actual connection string.
     - **Next debug checklist:**
-        1.  View  to confirm  (no quotes).
-        2.  Restart the backend service: backend: stopped
-backend: started.
-        3.  Test the login endpoint for user  and verify the returned token payload contains the correct  role.
-        4.  Using the new token, test the  endpoint to confirm it no longer returns an Access denied error.
-    - **Why fix this issue and what will be achieved with the fix?** This will stabilize the entire platform by ensuring it connects to the correct database, resolving all authentication, session, and data persistence problems.
-    - **Status:** IN PROGRESS
-    - **Is recurring issue?** Y
-    - **Should Test frontend/backend/both after fix?** backend
-- **Issue 2:**
-    - **Description:** Users cannot save their company settings or upload a logo, as shown in the user-provided screenshot. This is a direct symptom of Issue 1, as the API requests are being rejected due to incorrect permissions from an outdated user token.
-    - **Next debug checklist:** This issue will likely be resolved by fixing Issue 1. After fixing the DB connection, test the settings save functionality from the frontend.
-    - **Why fix this issue and what will be achieved with the fix?** This will restore core functionality, allowing users to configure their accounts and company details, which is essential for PDF generation and branding.
+        1.  **Immediately ask the user for the Supabase Database Connection URI.** Emphasize that no further progress can bemade without it.
+        2.  Once the URI is obtained, add it to the  file.
+        3.  Establish a connection to the Supabase DB in .
+        4.  Use  to initialize the database and apply the schema defined in .
+        5.  Begin implementing the logic within the placeholder service files, starting with user management and authentication against Supabase.
+    - **Why fix this issue and what will be achieved with the fix?** This is the primary directive from the user. Resolving this will unblock the entire project and allow the creation of the scalable, production-ready platform the user requested.
     - **Status:** BLOCKED
-    - **Is recurring issue?** Y
+    - **Is recurring issue?** N
     - **Should Test frontend/backend/both after fix?** both
-    - **Blocked on other issue:** Issue 1
-- **Issue 3:**
-    - **Description:** The user reported and provided a screenshot of a broken admin interface with alignment, spacing, and text overlap issues.
-    - **Next debug checklist:** This task has not been started. The agent needs to identify the relevant admin components/pages and fix the Tailwind CSS classes to create a clean, responsive layout.
-    - **Why fix this issue and what will be achieved with the fix?** Improves usability for admin users who need to manage the platform.
-    - **Status:** NOT STARTED
-    - **Should Test frontend/backend/both after fix?** frontend
-- **Issue 4:**
-    - **Description:** The user reported that email verification is not working. The agent has not investigated this.
-    - **Next debug checklist:** Review the email service configuration in  (SMTP settings) and the code in . Check the backend logs for any SMTP connection or delivery errors.
-    - **Why fix this issue and what will be achieved with the fix?** Improves account security and ensures new users can validate their accounts.
-    - **Status:** NOT STARTED
-    - **Should Test frontend/backend/both after fix?** backend
+    - **Blocked on other issue:** Awaiting user input (Supabase URI).
 
 **In progress Task List**:
-- **Task 1: Production-Ready SaaS Transformation**
-    - **Where to resume:** The immediate priority is to solve the database connection issue (Issue 1). Once the backend is stable, the next step is to continue building the UI for the new advanced features (AI, e-signature, etc.) for which the backend endpoints have already been created.
-    - **What will be achieved with this?** A stable, feature-complete, and production-ready SaaS platform as per the user's detailed requirements.
-    - **Status:** IN PROGRESS
+- **Task 1: Phase 1 - Architecture & Migration**
+    - **Where to resume:** Blocked. The agent must obtain the Supabase connection URI from the user. After that, it should resume by connecting to the database, applying the schema, and starting to implement the logic in the new service files, beginning with authentication.
+    - **What will be achieved with this?** A stable, modular, PostgreSQL-based backend foundation.
+    - **Status:** BLOCKED
     - **Should Test frontend/backend/both after fix?** both
-    - **Blocked on something:** Blocked on resolving Issue 1.
+    - **Blocked on something:** Awaiting Supabase connection URI from the user.
 
 **Upcoming and Future Tasks**
-- **Upcoming Tasks:**
-  - **(P1) Implement AI PDF Plan Analysis UI:** Add a file upload component to  to call the  endpoint and display the results.
-  - **(P1) Implement Electronic Signature Flow:** Build out the  to allow clients to view a quote and submit a signature, calling the  endpoint.
-  - **(P1) Implement Online Invoice Payment UI:** Create a Pay Now button or page for invoices that initiates a Stripe checkout session via the  endpoint.
-  - **(P1) Build Admin User Management Dashboard:** Create a new frontend page for admins to list, edit, and manage platform users, connected to the necessary admin API endpoints.
+The user has requested all phases be executed sequentially without interruption.
 
-- **Future Tasks:**
-  - **(P2) Build Accounting Export Feature:** Add a section in the dashboard for users to export their financial data, with date filters.
-  - **(P2) Build Invoice Reminder System:** Create the backend logic and a UI for setting up and managing automatic invoice reminders.
-  - **(P2) Implement Marketing Automation UI:** Add the in-app notifications and dashboard banners that trigger when a user's company website is missing.
-  - **(P2) Refactor Project Management:** Create a dedicated  collection in MongoDB and refactor the backend to manage projects as a separate entity, rather than just a  field on quotes/invoices.
+*   **Upcoming Tasks (To be executed continuously):**
+    *   **(P0) Phase 2: BTP Core Features:** Implement Project Management, Site Planning, Margin Tracking, Progress Invoicing, and the Work Library.
+    *   **(P0) Phase 3: Financial Tools:** Implement the Financial Dashboard, Recurring Invoices, Automatic Reminders, and Accounting Export.
+    *   **(P0) Phase 4: Advanced Features:** Implement AI PDF Analysis, Electronic Signatures, the Client Portal, and Stripe Payments.
+    *   **(P0) Phase 5: Admin & Marketing:** Implement the global Admin Dashboard and Marketing Automation.
+
+*   **Future Tasks:**
+    *   None. All requested features are part of the immediate roadmap.
 
 **Completed work in this session**
-- **Code Refactoring:** Successfully removed all obsolete V2 code, including services, components, tests, and API endpoints from .
-- **Deployment Fixes:** Created and configured , , and  to fix common Render deployment issues for a React+FastAPI project.
-- **Login Bug Fix:** Corrected invalid API endpoints in  (e.g.,  to ), resolving a major login failure.
-- **Feature Scaffolding (Backend):**
-    - Implemented a new  with endpoints for AI-powered quote generation and project estimation.
-    - Implemented a new  with endpoints for AI PDF analysis, electronic signatures, online invoice payments, and marketing automation.
-- **Feature Scaffolding (Frontend):**
-    - Created a new  and  and added them to the router and sidebar navigation.
+- **Critical Bug Fixes (Pre-Refactor):**
+    - Fixed database connection issue.
+    - Fixed user settings save/load and company logo upload functionality.
+    - Fixed the broken admin sidebar layout.
+- **New Admin Features (Pre-Refactor):**
+    - Implemented a user profile completion indicator on the  page.
+    - Granted admins the permission to delete users.
+    - Added a detailed user information modal for admins.
+- **Architectural Scaffolding:**
+    - Created a complete, modular directory structure for the new PostgreSQL backend.
+    - Created placeholder files for all required services, API routes, SQLAlchemy models, and Pydantic schemas.
+    - Installed all necessary dependencies for the new stack (psycopg2, sqlalchemy, google-generativeai, etc.).
 
 **Earlier issues found/mentioned but not fixed**
-- All known unfixed issues are captured in the **All Pending/In progress Issue list**.
+- **Email Verification Not Working:** This was an issue from the initial project but was deprioritized due to the major refactoring. It should be addressed within the new architecture's .
 
 **Known issue recurrence from previous fork**
 - None.
 
 **Code Architecture**
-
+- **Current:** Monolithic FastAPI () with a React frontend and MongoDB database.
+- **Target (In Progress):** A modular FastAPI backend connecting to a PostgreSQL database. The new structure separates concerns into , , , and  directories. The frontend will need to be updated to communicate with the new API endpoints.
 
 **Key Technical Concepts**
-- **Backend:** FastAPI, Motor (async MongoDB), Pydantic, JWT.
+- **Backend:** FastAPI, PostgreSQL (target), SQLAlchemy, Alembic, Pydantic, JWT.
 - **Frontend:** React, React Router, Axios, Shadcn/UI, Tailwind CSS.
-- **Database:** MongoDB.
-- **Integrations:** Stripe, Mailtrap (SMTP), OpenAI (planned).
-- **PDF Processing:** usage: pdfplumber [-h] [--structure | --structure-text]
-                  [--format {csv,json,text}] [--types TYPES [TYPES ...]]
-                  [--include-attrs INCLUDE_ATTRS [INCLUDE_ATTRS ...]]
-                  [--exclude-attrs EXCLUDE_ATTRS [EXCLUDE_ATTRS ...]]
-                  [--laparams LAPARAMS] [--precision PRECISION]
-                  [--pages PAGES [PAGES ...]] [--indent INDENT]
-                  [infile]
-
-positional arguments:
-  infile
-
-options:
-  -h, --help            show this help message and exit
-  --structure           Write the structure tree as JSON. All other arguments
-                        except --pages, --laparams, and --indent will be
-                        ignored
-  --structure-text      Write the structure tree as JSON including text
-                        contents. All other arguments except --pages,
-                        --laparams, and --indent will be ignored
-  --format {csv,json,text}
-  --types TYPES [TYPES ...]
-  --include-attrs INCLUDE_ATTRS [INCLUDE_ATTRS ...]
-                        Include *only* these object attributes in output.
-  --exclude-attrs EXCLUDE_ATTRS [EXCLUDE_ATTRS ...]
-                        Exclude these object attributes from output.
-  --laparams LAPARAMS
-  --precision PRECISION
-  --pages PAGES [PAGES ...]
-  --indent INDENT       Indent level for JSON pretty-printing., .
+- **Database:** MongoDB (current) -> PostgreSQL/Supabase (target).
+- **Integrations:** Stripe, Gemini (via Emergent LLM Key), Supabase.
 
 **key DB schema**
-- ****: Contains , ,  ('user', 'admin', 'super_admin'), . The agent identified a problem with duplicate users due to a database connection issue.
-- ****: Contains company-specific settings like , , , etc.
-- The user has requested a more robust multi-company schema where every document (clients, quotes, invoices, etc.) has a . This needs to be fully verified and implemented.
-- The user has requested a dedicated  collection.
+- The new, target schema is defined with SQLAlchemy in . It includes tables for , , , , , , and all other entities requested by the user. It is not yet active.
 
 **changes in tech stack**
-- Added usage: pdfplumber [-h] [--structure | --structure-text]
-                  [--format {csv,json,text}] [--types TYPES [TYPES ...]]
-                  [--include-attrs INCLUDE_ATTRS [INCLUDE_ATTRS ...]]
-                  [--exclude-attrs EXCLUDE_ATTRS [EXCLUDE_ATTRS ...]]
-                  [--laparams LAPARAMS] [--precision PRECISION]
-                  [--pages PAGES [PAGES ...]] [--indent INDENT]
-                  [infile]
-
-positional arguments:
-  infile
-
-options:
-  -h, --help            show this help message and exit
-  --structure           Write the structure tree as JSON. All other arguments
-                        except --pages, --laparams, and --indent will be
-                        ignored
-  --structure-text      Write the structure tree as JSON including text
-                        contents. All other arguments except --pages,
-                        --laparams, and --indent will be ignored
-  --format {csv,json,text}
-  --types TYPES [TYPES ...]
-  --include-attrs INCLUDE_ATTRS [INCLUDE_ATTRS ...]
-                        Include *only* these object attributes in output.
-  --exclude-attrs EXCLUDE_ATTRS [EXCLUDE_ATTRS ...]
-                        Exclude these object attributes from output.
-  --laparams LAPARAMS
-  --precision PRECISION
-  --pages PAGES [PAGES ...]
-  --indent INDENT       Indent level for JSON pretty-printing. and  for PDF analysis capabilities.
+- **Database:** Complete migration from MongoDB to PostgreSQL.
+- **ORM/Driver:** Switching from Motor to SQLAlchemy.
+- **AI Provider:** Switched from a plan for OpenAI to a requirement for Gemini 3 Flash.
+- **Infrastructure:** Adopting Supabase for Database, Authentication, and File Storage.
 
 **All files of reference**
-- ****: **CRITICAL.** This file contains the root cause of the current instability. It needs to be verified to ensure  has no quotes.
-- ****: The main FastAPI application file, heavily modified with all new API endpoints.
-- ****: New service for AI-powered quote and project estimation.
-- ****: New service for PDF analysis, e-signatures, and online payments.
-- ****: New frontend page for AI tools, needs to be fully implemented.
-- ****: Was fixed to use correct API paths for authentication.
-- ****: New file to configure deployment on Render.
+- : The legacy monolithic file, still active.
+- : The root directory for the new modular architecture.
+- : Defines the target PostgreSQL database schema.
+- : Contains the (currently empty) business logic services.
+- : **CRITICAL:** This file is missing the  needed to proceed.
 
 **Areas that need refactoring**:
-- **Project Management:** The current system uses a simple  text field. This should be refactored into a full-fledged  collection with its own CRUD API, as requested by the user.
-- **Data Isolation:** A thorough review is needed to ensure  is applied consistently across all relevant data models and API queries to enforce strict multi-company data separation.
+- The entire backend is the subject of the refactoring. The primary goal is to replace  with the new modular, PostgreSQL-based architecture.
+- The frontend will require a subsequent overhaul to align with the new API.
 
 **key api endpoints**
-- : Generates a quote using the local pricing DB.
-- : Estimates project costs.
-- : (New) Analyzes a construction plan PDF.
-- : (New) Endpoint for electronically signing a quote.
-- : (New) Endpoint for initiating online payment for an invoice.
-- : (New) Upsell endpoint for website creation.
-- : Endpoint to save company settings, currently failing due to permission issues.
+- A full suite of new API endpoints has been scaffolded in . They are not yet implemented.
 
 **Critical Info for New Agent**
-- **The top priority is to fix the database connection.** The previous agent found that the  file has  (with quotes), causing the app to connect to a non-existent database named  instead of . This explains all the recent strange behavior with authentication and data inconsistency. You must first verify the  file is corrected, restart the backend, and then test the login/settings flow to confirm the system is stable before proceeding with any other task.
-- Once the database issue is resolved, the main task is to build out the frontend UIs for the numerous backend features that were just added (AI tools, e-signatures, online payments).
+- **IMMEDIATE BLOCKER:** You **MUST** obtain the **Supabase connection URI** from the user. The entire project is halted until you get this credential. The previous agent failed to secure it. Do not proceed with any other task until this is resolved.
+- **CONTINUOUS EXECUTION:** The user has explicitly instructed to implement all 5 phases of the project continuously, without pausing for confirmation between phases.
+- **RESUME PHASE 1:** Once unblocked, your task is to continue the architectural refactoring. This means connecting to the database, applying the schema with Alembic, implementing the business logic in the new service files (starting with auth), and beginning the process of replacing the old MongoDB code in  with the new modular logic.
 
 **documents and test reports created in this job**
 - 
 - 
--  (updated with new feature status)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Requests a complete production-ready SaaS with numerous features including AI quote generation, project estimation, and bug fixes for logo upload and settings. (PARTIALLY ADDRESSED)
-2.  **User:** Confirms the next set of P1/P2 priorities: e-signatures, online payments, PDF analysis, and enabling the AI-generated quote to be exported. (PARTIALLY ADDRESSED)
-3.  **User:** Re-iterates the priority to fix the settings/logo upload issue and implement multi-user per company. Provides a screenshot of the broken admin page. (IN PROGRESS)
+1.  **User (message 109):** Provided a very detailed, multi-phase plan for a complete architectural refactoring and feature implementation. (PENDING)
+2.  **User (message 112):** Confirmed the agent should execute all 5 phases continuously. Specified technologies (Gemini, Supabase/PostgreSQL) and implementation details. (PENDING)
+3.  **User (message 119):** Replied oui (yes) to a question, which was likely the request for the Supabase URI, but did not provide the actual URI. (ACTION REQUIRED: URI IS STILL PENDING)
 
 **Project Health Check:**
-- **Broken:** The application is currently in a critical but recoverable state. The authentication and data persistence layers are unstable due to the database connection misconfiguration. This is a blocker.
-- **Mocked:**
-    - Stripe integration uses test keys.
-    - SMTP service uses Mailtrap for sandbox email testing.
+- **Broken:** The application is in a non-functional, transitional state. The backend is a hybrid of an old, working system and a new, incomplete scaffold. This refactoring must be completed for the app to be stable.
+- **Mocked:** Stripe, Mailtrap.
 
 **3rd Party Integrations**
-- **Stripe:** Used for SaaS subscriptions. Configured via environment variables. Does not use Emergent LLM Key.
-- **Mailtrap:** Used as an SMTP sandbox for testing emails.
-- **OpenAI:** Planned for the Business tier AI features. Requires  in the environment.
+- **Stripe:** For SaaS payments. (Requires User API Key)
+- **Mailtrap:** SMTP sandbox for email testing.
+- **Gemini 3 Flash:** For AI PDF analysis. (Uses Emergent LLM Key)
+- **Supabase (PostgreSQL):** For database, authentication, and file storage. (**Connection URI required from user**)
 
 **Testing status**
-- **Testing agent used after significant changes:** NO
+- **Testing agent used after significant changes:** YES, for the pre-refactor bug fixes.
 - **Troubleshoot agent used after agent stuck in loop:** NO
 - **Test files created:** None
-- **Known regressions:** The entire user authentication and settings system has regressed due to the database connection issue.
+- **Known regressions:** The application is in a planned state of regression due to the ongoing architectural overhaul.
 
 **Credentials to test flow:**
 - **Admin:**  / 
-- **User:**  /  (This user should have an 'admin' role once the database issue is fixed).
+- **User:**  / 
 
 **What agent forgot to execute**
-- The agent correctly identified the root cause of the main bug (database connection due to  formatting) but timed out before it could verify the fix by restarting the server and re-testing. This is the most critical pending action.</analysis>
+- The agent failed to halt and wait for the critical **Supabase connection URI** from the user. It incorrectly proceeded with file creation after receiving a vague oui, leaving the entire project in a blocked state. This is the most critical mistake to rectify.</analysis>

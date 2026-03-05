@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class BTPInvoiceAPITester:
-    def __init__(self, base_url="https://chantier-manager-15.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://batiment-facture-1.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.token = None
         self.user_id = None
