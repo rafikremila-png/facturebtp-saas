@@ -1,322 +1,282 @@
 """
 Client Portal Service
-Secure client access for quotes, invoices, and payments
+Secure token-based access for clients to view quotes, invoices, and sign documents
+No client account required - access via secure token links
 """
-import uuid
-import secrets
-from typing import Optional, Dict, Any, List
-from datetime import datetime, timezone, timedelta
 import logging
+import secrets
+from datetime import datetime, timezone, timedelta
+from typing import Optional, List, Dict, Any
 
-from app.core.config import settings
-from app.core.database import db, is_mongodb
-from app.core.security import create_client_access_token, decode_token
+from sqlalchemy import select, update, and_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.models import Client, Quote, Invoice, QuoteSignature, Payment
+from app.core.security import generate_uuid
 
 logger = logging.getLogger(__name__)
 
+
 class ClientPortalService:
-    """Service for client portal access"""
+    """Service for client portal functionality"""
     
-    @staticmethod
-    async def generate_access_link(client_id: str, user_id: str, 
-                                   document_type: str = None,
-                                   document_id: str = None) -> Dict[str, Any]:
-        """Generate a secure access link for a client"""
+    TOKEN_VALIDITY_DAYS = 7
+    
+    def __init__(self, db: AsyncSession):
+        self.db = db
+    
+    async def generate_portal_token(
+        self, 
+        client_id: str, 
+        user_id: str,
+        validity_days: int = None
+    ) -> Optional[str]:
+        """Generate a secure access token for client portal"""
         # Verify client belongs to user
-        if is_mongodb():
-            client = await db.clients.find_one(
-                {"id": client_id, "user_id": user_id},
-                {"_id": 0}
-            )
-            if not client:
-                raise ValueError("Client non trouvé")
+        result = await self.db.execute(
+            select(Client).where(and_(
+                Client.id == client_id,
+                Client.user_id == user_id
+            ))
+        )
+        client = result.scalar_one_or_none()
         
-        # Generate access token
-        token = secrets.token_urlsafe(32)
-        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        if not client:
+            return None
+        
+        # Generate secure token
+        token = secrets.token_urlsafe(48)
+        validity = validity_days or self.TOKEN_VALIDITY_DAYS
+        expires_at = datetime.now(timezone.utc) + timedelta(days=validity)
         
         # Store token
-        if is_mongodb():
-            await db.clients.update_one(
-                {"id": client_id},
-                {
-                    "$set": {
-                        "access_token": token,
-                        "token_expires_at": expires_at.isoformat()
-                    }
-                }
-            )
+        client.access_token = token
+        client.token_expires_at = expires_at
+        client.updated_at = datetime.now(timezone.utc)
         
-        # Build URL
-        portal_url = f"{settings.FRONTEND_URL}/portal/{token}"
+        await self.db.flush()
         
-        if document_type and document_id:
-            portal_url += f"?type={document_type}&id={document_id}"
+        return token
+    
+    async def validate_token(self, token: str) -> Optional[Client]:
+        """Validate portal token and return client if valid"""
+        result = await self.db.execute(
+            select(Client).where(and_(
+                Client.access_token == token,
+                Client.token_expires_at > datetime.now(timezone.utc)
+            ))
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_client_portal_data(self, token: str) -> Optional[Dict[str, Any]]:
+        """Get all portal data for a client"""
+        client = await self.validate_token(token)
+        if not client:
+            return None
+        
+        # Get quotes for this client
+        quotes = await self._get_client_quotes(client.id)
+        
+        # Get invoices for this client
+        invoices = await self._get_client_invoices(client.id)
         
         return {
-            "access_url": portal_url,
-            "token": token,
-            "expires_at": expires_at.isoformat(),
-            "client_name": client.get("name") if client else None
-        }
-    
-    @staticmethod
-    async def validate_portal_access(token: str) -> Optional[Dict[str, Any]]:
-        """Validate portal access token and return client data"""
-        if is_mongodb():
-            client = await db.clients.find_one(
-                {"access_token": token},
-                {"_id": 0}
-            )
-            
-            if not client:
-                return None
-            
-            # Check expiration
-            expires_at_str = client.get("token_expires_at")
-            if expires_at_str:
-                try:
-                    expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
-                    if expires_at < datetime.now(timezone.utc):
-                        return None
-                except:
-                    pass
-            
-            return {
-                "client_id": client["id"],
-                "client_name": client.get("name"),
-                "client_email": client.get("email"),
-                "user_id": client.get("user_id")
-            }
-        
-        return None
-    
-    @staticmethod
-    async def get_client_quotes(client_id: str) -> List[Dict[str, Any]]:
-        """Get all quotes for a client (portal view)"""
-        if is_mongodb():
-            cursor = db.quotes.find(
-                {
-                    "client_id": client_id,
-                    "status": {"$in": ["sent", "signed", "accepted"]}
-                },
-                {
-                    "_id": 0,
-                    "id": 1,
-                    "quote_number": 1,
-                    "title": 1,
-                    "quote_date": 1,
-                    "validity_date": 1,
-                    "total_ttc": 1,
-                    "status": 1
-                }
-            ).sort("quote_date", -1)
-            
-            quotes = await cursor.to_list(length=100)
-            
-            # Add signature status
-            for quote in quotes:
-                signature = await db.quote_signatures.find_one(
-                    {"quote_id": quote["id"]},
-                    {"_id": 0, "signed_at": 1, "signer_name": 1}
-                )
-                quote["signature"] = signature
-                quote["can_sign"] = quote.get("status") in ["sent"] and not signature
-            
-            return quotes
-        return []
-    
-    @staticmethod
-    async def get_client_invoices(client_id: str) -> List[Dict[str, Any]]:
-        """Get all invoices for a client (portal view)"""
-        if is_mongodb():
-            cursor = db.invoices.find(
-                {
-                    "client_id": client_id,
-                    "status": {"$in": ["sent", "paid", "partial", "overdue"]}
-                },
-                {
-                    "_id": 0,
-                    "id": 1,
-                    "invoice_number": 1,
-                    "title": 1,
-                    "invoice_date": 1,
-                    "due_date": 1,
-                    "total_ttc": 1,
-                    "amount_paid": 1,
-                    "status": 1
-                }
-            ).sort("invoice_date", -1)
-            
-            invoices = await cursor.to_list(length=100)
-            
-            # Add computed fields
-            for inv in invoices:
-                inv["amount_due"] = inv.get("total_ttc", 0) - inv.get("amount_paid", 0)
-                inv["can_pay"] = inv.get("status") in ["sent", "partial", "overdue"] and inv["amount_due"] > 0
-            
-            return invoices
-        return []
-    
-    @staticmethod
-    async def get_client_payments(client_id: str) -> List[Dict[str, Any]]:
-        """Get payment history for a client"""
-        if is_mongodb():
-            # First get client's invoices
-            invoice_cursor = db.invoices.find(
-                {"client_id": client_id},
-                {"_id": 0, "id": 1, "invoice_number": 1}
-            )
-            invoices = await invoice_cursor.to_list(length=1000)
-            invoice_ids = [inv["id"] for inv in invoices]
-            invoice_map = {inv["id"]: inv["invoice_number"] for inv in invoices}
-            
-            if not invoice_ids:
-                return []
-            
-            # Get payments
-            payments_cursor = db.payments.find(
-                {"invoice_id": {"$in": invoice_ids}},
-                {"_id": 0}
-            ).sort("payment_date", -1)
-            
-            payments = await payments_cursor.to_list(length=500)
-            
-            # Add invoice number
-            for payment in payments:
-                payment["invoice_number"] = invoice_map.get(payment.get("invoice_id"))
-            
-            return payments
-        return []
-    
-    @staticmethod
-    async def get_quote_for_signing(quote_id: str, client_id: str) -> Optional[Dict[str, Any]]:
-        """Get quote details for signature page"""
-        if is_mongodb():
-            quote = await db.quotes.find_one(
-                {
-                    "id": quote_id,
-                    "client_id": client_id,
-                    "status": {"$in": ["sent", "draft"]}
-                },
-                {"_id": 0}
-            )
-            
-            if not quote:
-                return None
-            
-            # Check if already signed
-            signature = await db.quote_signatures.find_one(
-                {"quote_id": quote_id},
-                {"_id": 0}
-            )
-            
-            if signature:
-                return None  # Already signed
-            
-            # Get company info
-            user_settings = await db.user_settings.find_one(
-                {"user_id": quote["user_id"]},
-                {"_id": 0}
-            )
-            
-            # Get client
-            client = await db.clients.find_one(
-                {"id": client_id},
-                {"_id": 0}
-            )
-            
-            return {
-                "quote": quote,
-                "company": user_settings,
-                "client": client,
-                "can_sign": True
-            }
-        
-        return None
-    
-    @staticmethod
-    async def get_invoice_for_payment(invoice_id: str, client_id: str) -> Optional[Dict[str, Any]]:
-        """Get invoice details for payment page"""
-        if is_mongodb():
-            invoice = await db.invoices.find_one(
-                {
-                    "id": invoice_id,
-                    "client_id": client_id,
-                    "status": {"$in": ["sent", "partial", "overdue"]}
-                },
-                {"_id": 0}
-            )
-            
-            if not invoice:
-                return None
-            
-            amount_due = invoice.get("total_ttc", 0) - invoice.get("amount_paid", 0)
-            
-            if amount_due <= 0:
-                return None
-            
-            # Get company info
-            user_settings = await db.user_settings.find_one(
-                {"user_id": invoice["user_id"]},
-                {"_id": 0}
-            )
-            
-            # Get client
-            client = await db.clients.find_one(
-                {"id": client_id},
-                {"_id": 0}
-            )
-            
-            # Get payment history
-            payments_cursor = db.payments.find(
-                {"invoice_id": invoice_id},
-                {"_id": 0}
-            ).sort("payment_date", -1)
-            payments = await payments_cursor.to_list(length=100)
-            
-            return {
-                "invoice": invoice,
-                "company": user_settings,
-                "client": client,
-                "amount_due": amount_due,
-                "payments": payments,
-                "can_pay": True
-            }
-        
-        return None
-    
-    @staticmethod
-    async def get_portal_dashboard(client_id: str) -> Dict[str, Any]:
-        """Get complete portal dashboard for a client"""
-        quotes = await ClientPortalService.get_client_quotes(client_id)
-        invoices = await ClientPortalService.get_client_invoices(client_id)
-        payments = await ClientPortalService.get_client_payments(client_id)
-        
-        # Calculate summary
-        total_quotes = len(quotes)
-        pending_signatures = len([q for q in quotes if q.get("can_sign")])
-        
-        total_invoiced = sum(inv.get("total_ttc", 0) for inv in invoices)
-        total_paid = sum(inv.get("amount_paid", 0) for inv in invoices)
-        total_due = total_invoiced - total_paid
-        
-        pending_invoices = len([inv for inv in invoices if inv.get("can_pay")])
-        
-        return {
+            "client": {
+                "id": client.id,
+                "name": client.name,
+                "email": client.email,
+                "company_name": client.company_name
+            },
             "quotes": quotes,
             "invoices": invoices,
-            "payments": payments[:10],  # Last 10 payments
-            "summary": {
-                "total_quotes": total_quotes,
-                "pending_signatures": pending_signatures,
-                "total_invoiced": total_invoiced,
-                "total_paid": total_paid,
-                "total_due": total_due,
-                "pending_invoices": pending_invoices
-            }
+            "pending_signatures": [q for q in quotes if q.get("status") in ["draft", "sent"]],
+            "unpaid_invoices": [i for i in invoices if i.get("status") not in ["paid"]]
+        }
+    
+    async def get_quote_for_signature(self, token: str, quote_id: str) -> Optional[Dict]:
+        """Get quote details for signing"""
+        client = await self.validate_token(token)
+        if not client:
+            return None
+        
+        result = await self.db.execute(
+            select(Quote)
+            .options(selectinload(Quote.signature))
+            .where(and_(
+                Quote.id == quote_id,
+                Quote.client_id == client.id
+            ))
+        )
+        quote = result.scalar_one_or_none()
+        
+        if not quote:
+            return None
+        
+        return self._format_quote(quote)
+    
+    async def sign_quote_from_portal(
+        self,
+        token: str,
+        quote_id: str,
+        signer_name: str,
+        signer_email: str,
+        signature_data: str,
+        signer_title: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None
+    ) -> Optional[Dict]:
+        """Sign a quote from the client portal"""
+        client = await self.validate_token(token)
+        if not client:
+            return None
+        
+        # Get the quote
+        result = await self.db.execute(
+            select(Quote).where(and_(
+                Quote.id == quote_id,
+                Quote.client_id == client.id
+            ))
+        )
+        quote = result.scalar_one_or_none()
+        
+        if not quote:
+            return None
+        
+        if quote.status not in ["draft", "sent"]:
+            return {"error": "Ce devis ne peut plus être signé"}
+        
+        # Create signature
+        signature = QuoteSignature(
+            id=generate_uuid(),
+            quote_id=quote_id,
+            signer_name=signer_name,
+            signer_email=signer_email,
+            signer_title=signer_title,
+            signature_data=signature_data,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            signed_at=datetime.now(timezone.utc),
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        self.db.add(signature)
+        
+        # Update quote status
+        quote.status = "signed"
+        quote.updated_at = datetime.now(timezone.utc)
+        
+        await self.db.flush()
+        
+        return {
+            "success": True,
+            "quote_id": quote_id,
+            "signed_at": signature.signed_at.isoformat(),
+            "message": "Devis signé avec succès"
+        }
+    
+    async def get_invoice_for_payment(self, token: str, invoice_id: str) -> Optional[Dict]:
+        """Get invoice details for payment"""
+        client = await self.validate_token(token)
+        if not client:
+            return None
+        
+        result = await self.db.execute(
+            select(Invoice)
+            .options(selectinload(Invoice.payments))
+            .where(and_(
+                Invoice.id == invoice_id,
+                Invoice.client_id == client.id
+            ))
+        )
+        invoice = result.scalar_one_or_none()
+        
+        if not invoice:
+            return None
+        
+        return self._format_invoice(invoice)
+    
+    async def _get_client_quotes(self, client_id: str) -> List[Dict]:
+        """Get all quotes for a client"""
+        result = await self.db.execute(
+            select(Quote)
+            .options(selectinload(Quote.signature))
+            .where(Quote.client_id == client_id)
+            .order_by(Quote.created_at.desc())
+        )
+        quotes = list(result.scalars().all())
+        
+        return [self._format_quote(q) for q in quotes]
+    
+    async def _get_client_invoices(self, client_id: str) -> List[Dict]:
+        """Get all invoices for a client"""
+        result = await self.db.execute(
+            select(Invoice)
+            .options(selectinload(Invoice.payments))
+            .where(Invoice.client_id == client_id)
+            .order_by(Invoice.created_at.desc())
+        )
+        invoices = list(result.scalars().all())
+        
+        return [self._format_invoice(i) for i in invoices]
+    
+    def _format_quote(self, quote: Quote) -> Dict:
+        """Format quote for portal response"""
+        return {
+            "id": quote.id,
+            "quote_number": quote.quote_number,
+            "title": quote.title,
+            "description": quote.description,
+            "status": quote.status,
+            "quote_date": quote.quote_date.isoformat() if quote.quote_date else None,
+            "validity_date": quote.validity_date.isoformat() if quote.validity_date else None,
+            "items": quote.items or [],
+            "subtotal_ht": float(quote.subtotal_ht or 0),
+            "total_vat": float(quote.total_vat or 0),
+            "total_ttc": float(quote.total_ttc or 0),
+            "discount_amount": float(quote.discount_amount or 0),
+            "retention_amount": float(quote.retention_amount or 0),
+            "notes": quote.notes,
+            "terms": quote.terms,
+            "is_signed": quote.signature is not None,
+            "signature": {
+                "signer_name": quote.signature.signer_name,
+                "signed_at": quote.signature.signed_at.isoformat()
+            } if quote.signature else None
+        }
+    
+    def _format_invoice(self, invoice: Invoice) -> Dict:
+        """Format invoice for portal response"""
+        return {
+            "id": invoice.id,
+            "invoice_number": invoice.invoice_number,
+            "title": invoice.title,
+            "status": invoice.status,
+            "invoice_date": invoice.invoice_date.isoformat() if invoice.invoice_date else None,
+            "due_date": invoice.due_date.isoformat() if invoice.due_date else None,
+            "items": invoice.items or [],
+            "subtotal_ht": float(invoice.subtotal_ht or 0),
+            "total_vat": float(invoice.total_vat or 0),
+            "total_ttc": float(invoice.total_ttc or 0),
+            "amount_paid": float(invoice.amount_paid or 0),
+            "amount_due": float(invoice.amount_due or 0),
+            "invoice_type": invoice.invoice_type,
+            "situation_number": invoice.situation_number,
+            "progress_percentage": invoice.progress_percentage,
+            "retention_amount": float(invoice.retention_amount or 0),
+            "notes": invoice.notes,
+            "is_overdue": invoice.due_date and invoice.due_date < datetime.now(timezone.utc) and invoice.status != "paid",
+            "payments": [
+                {
+                    "amount": float(p.amount),
+                    "date": p.payment_date.isoformat() if p.payment_date else None,
+                    "method": p.payment_method
+                }
+                for p in (invoice.payments or [])
+            ]
         }
 
 
-# Create singleton instance
-client_portal_service = ClientPortalService()
+def get_client_portal_service(db: AsyncSession) -> ClientPortalService:
+    """Factory function"""
+    return ClientPortalService(db)
