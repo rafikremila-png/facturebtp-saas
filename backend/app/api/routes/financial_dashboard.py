@@ -214,8 +214,8 @@ async def export_financial_csv(
             round(inv.total_ht or 0, 2),
             round(inv.total_vat or 0, 2),
             round(inv.total_ttc or 0, 2),
-            round(inv.paid_amount or 0, 2),
-            round((inv.total_ttc or 0) - (inv.paid_amount or 0), 2),
+            round(inv.amount_paid or 0, 2),
+            round((inv.total_ttc or 0) - (inv.amount_paid or 0), 2),
             inv.status or "",
             inv.due_date.strftime("%Y-%m-%d") if inv.due_date else ""
         ])
