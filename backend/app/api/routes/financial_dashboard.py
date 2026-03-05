@@ -196,8 +196,9 @@ async def export_financial_csv(
     result = await db.execute(query)
     invoices = result.scalars().all()
     
-    # Create CSV
-    output = BytesIO()
+    # Create CSV using StringIO for text-based CSV writing
+    from io import StringIO
+    output = StringIO()
     writer = csv.writer(output)
     
     # Header
@@ -220,10 +221,10 @@ async def export_financial_csv(
             inv.due_date.strftime("%Y-%m-%d") if inv.due_date else ""
         ])
     
-    output.seek(0)
+    csv_content = output.getvalue()
     
     return Response(
-        content=output.getvalue().decode('utf-8'),
+        content=csv_content,
         media_type="text/csv",
         headers={
             "Content-Disposition": f"attachment; filename=factures_{period}_{now.strftime('%Y%m%d')}.csv"
