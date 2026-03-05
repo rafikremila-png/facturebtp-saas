@@ -104,7 +104,7 @@ async def get_financial_dashboard(
         result = await db.execute(month_query)
         month_total = float(result.scalar() or 0)
         
-        month_paid_query = select(func.coalesce(func.sum(Invoice.paid_amount), 0)).where(
+        month_paid_query = select(func.coalesce(func.sum(Invoice.amount_paid), 0)).where(
             and_(
                 Invoice.user_id == user_id,
                 Invoice.created_at >= month_start,
