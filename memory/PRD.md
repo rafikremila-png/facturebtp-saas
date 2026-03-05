@@ -1,12 +1,12 @@
 # BTP Facture - Product Requirements Document
 
 ## Original Problem Statement
-Build a production-ready MVP web application for a French construction company (BTP) to manage quotes (devis) and invoices (factures). The application must be simple, fast, and legally compliant in France.
+Build a production-ready SaaS web application for French construction companies (BTP) to manage quotes (devis) and invoices (factures). The application must be simple, fast, and legally compliant in France, with AI-powered features for automatic quote generation.
 
 ## User Persona
 - **Primary User**: French construction company owner/administrator (artisans, auto-entrepreneurs, PME)
 - **Technical Level**: Non-technical users who need simple, efficient quote and invoice management
-- **Use Case**: Create professional quotes, convert to invoices, track payments
+- **Use Case**: Create professional quotes, convert to invoices, track payments, use AI for estimations
 
 ## User Choices
 - **Authentication**: JWT custom auth with OTP email verification
@@ -15,6 +15,8 @@ Build a production-ready MVP web application for a French construction company (
 - **Language**: French interface
 - **Logo**: Placeholder with optional upload
 - **Multi-tenant**: Mono-tenant with multi-user RBAC (single company, multiple users)
+- **Subscription**: 3-tier SaaS with Stripe (Essentiel, Pro, Business)
+- **AI Features**: Local BTP pricing database + optional OpenAI for Business plan
 
 ## Core Requirements (Static)
 
@@ -47,6 +49,9 @@ Build a production-ready MVP web application for a French construction company (
 16. **Impersonation** - Super admin can connect as any user for support
 17. **Website Request** - Business CTA for users without website
 18. **User Profile** - Personal profile page with editable info
+19. **AI Quote Assistant** - AI-powered quote generation with local BTP pricing database
+20. **AI Project Estimation** - Labor and materials cost estimation with regional pricing
+21. **AI Description Analysis** - Detect work types from text description
 
 ## Security Features
 
