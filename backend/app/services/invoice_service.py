@@ -1,396 +1,514 @@
 """
-Invoice Service
-Handles invoices including BTP progress invoicing (factures de situation)
+Invoice Service - CRUD operations for invoices (factures)
+PostgreSQL/Supabase implementation with BTP-specific features:
+- Progress invoicing (factures de situation)
+- Retenue de garantie
+- Multiple VAT rates
 """
-import uuid
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone, timedelta
 import logging
+from datetime import datetime, timezone, timedelta
+from typing import Optional, List
 
-from app.core.database import db, is_mongodb
-from app.services.vat_service import vat_service
+from sqlalchemy import select, update, delete, func, and_, or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.models import Invoice, Payment, Client, Project, Quote, InvoiceStatus
+from app.schemas.schemas import (
+    InvoiceCreate, InvoiceUpdate, InvoiceResponse, InvoiceItem,
+    PaymentCreate, PaymentResponse
+)
+from app.core.security import generate_uuid
 
 logger = logging.getLogger(__name__)
 
+
 class InvoiceService:
-    """Service for managing invoices"""
+    """Service for invoice (facture) database operations"""
     
-    @staticmethod
-    async def generate_invoice_number(user_id: str) -> str:
-        """Generate unique invoice number"""
-        year = datetime.now().year
-        
-        # Get user prefix
-        prefix = "FAC"
-        if is_mongodb():
-            settings = await db.user_settings.find_one({"user_id": user_id}, {"invoice_prefix": 1})
-            if settings and settings.get("invoice_prefix"):
-                prefix = settings["invoice_prefix"]
-            
-            count = await db.invoices.count_documents({
-                "user_id": user_id,
-                "created_at": {"$regex": f"^{year}"}
-            })
-        else:
-            count = 0
-        
-        return f"{prefix}-{year}-{(count + 1):05d}"
+    def __init__(self, db: AsyncSession):
+        self.db = db
     
-    @staticmethod
-    async def create(user_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_invoice(self, user_id: str, invoice_data: InvoiceCreate) -> Invoice:
         """Create a new invoice"""
-        invoice_number = await InvoiceService.generate_invoice_number(user_id)
-        
-        # Get user settings for defaults
-        user_settings = None
-        if is_mongodb():
-            user_settings = await db.user_settings.find_one({"user_id": user_id}, {"_id": 0})
-        
-        # Calculate due date
-        payment_days = data.get("payment_days")
-        if not payment_days and user_settings:
-            payment_days = user_settings.get("default_payment_days", 30)
-        else:
-            payment_days = payment_days or 30
-        
-        invoice_date = datetime.now(timezone.utc)
-        due_date = data.get("due_date") or (invoice_date + timedelta(days=payment_days))
+        # Generate invoice number
+        count = await self.count_invoices(user_id)
+        invoice_number = f"FAC-{datetime.now(timezone.utc).strftime('%Y%m')}-{count + 1:04d}"
         
         # Calculate totals
-        items = data.get("items", [])
-        invoice_type = data.get("invoice_type", "standard")
+        items = [item.model_dump() for item in invoice_data.items]
+        subtotal_ht = sum(item.get('quantity', 0) * item.get('unit_price', 0) for item in items)
         
-        if invoice_type == "situation":
-            # Progress invoice calculation
-            progress_percentage = data.get("progress_percentage", 100)
-            previous_invoiced = data.get("previous_invoiced", 0)
-            
-            totals = vat_service.calculate_situation_invoice(
-                items,
-                progress_percentage,
-                previous_invoiced,
-                data.get("discount_type"),
-                data.get("discount_value", 0),
-                data.get("retention_rate", 0)
-            )
-            
-            subtotal_ht = totals["current_amount_ht"]
-            total_vat = totals["current_vat"]
-            total_ttc = totals["current_ttc"]
-            retention_amount = totals["retention_amount"]
-        else:
-            # Standard invoice calculation
-            totals = vat_service.calculate_document_totals(
-                items,
-                data.get("discount_type"),
-                data.get("discount_value", 0),
-                data.get("retention_rate", 0)
-            )
-            
-            subtotal_ht = totals["subtotal_after_discount"]
-            total_vat = totals["total_vat"]
-            total_ttc = totals["total_ttc"]
-            retention_amount = totals["retention_amount"]
-            progress_percentage = 100
-            previous_invoiced = 0
+        # Calculate VAT per rate
+        total_vat = 0
+        for item in items:
+            item_total = item.get('quantity', 0) * item.get('unit_price', 0)
+            item['total_ht'] = item_total
+            vat_rate = item.get('vat_rate', 20.0)
+            item_vat = item_total * (vat_rate / 100)
+            item['vat_amount'] = item_vat
+            total_vat += item_vat
         
-        invoice = {
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "client_id": data.get("client_id"),
-            "project_id": data.get("project_id"),
-            "quote_id": data.get("quote_id"),
-            "invoice_number": invoice_number,
-            "title": data.get("title", ""),
-            "description": data.get("description", ""),
-            "status": "draft",
-            "invoice_date": invoice_date.isoformat(),
-            "due_date": due_date.isoformat() if isinstance(due_date, datetime) else due_date,
-            "paid_date": None,
-            "items": items,
-            "subtotal_ht": subtotal_ht,
-            "total_vat": total_vat,
-            "total_ttc": total_ttc,
-            "discount_type": data.get("discount_type"),
-            "discount_value": data.get("discount_value", 0),
-            "discount_amount": totals.get("discount_amount", 0),
-            "invoice_type": invoice_type,
-            "situation_number": data.get("situation_number"),
-            "progress_percentage": progress_percentage,
-            "previous_invoiced": previous_invoiced,
-            "current_amount": subtotal_ht,
-            "retention_rate": data.get("retention_rate", 0),
-            "retention_amount": retention_amount,
-            "retention_released": False,
-            "amount_paid": 0,
-            "amount_due": total_ttc - retention_amount,
-            "stripe_payment_id": None,
-            "stripe_checkout_session_id": None,
-            "notes": data.get("notes", ""),
-            "payment_terms": data.get("payment_terms", ""),
-            "pdf_url": None,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }
+        # Apply discount
+        discount_amount = 0
+        if invoice_data.discount_type == 'percentage' and invoice_data.discount_value:
+            discount_amount = subtotal_ht * (invoice_data.discount_value / 100)
+        elif invoice_data.discount_type == 'fixed' and invoice_data.discount_value:
+            discount_amount = invoice_data.discount_value
         
-        if is_mongodb():
-            await db.invoices.insert_one(invoice.copy())
-            
-            # Update project totals if linked
-            if invoice.get("project_id"):
-                from app.services.project_service import project_service
-                await project_service.update_financials(invoice["project_id"], user_id)
+        subtotal_after_discount = subtotal_ht - discount_amount
+        total_vat_adjusted = (subtotal_after_discount / subtotal_ht * total_vat) if subtotal_ht > 0 else 0
+        
+        # Handle progress invoicing
+        previous_invoiced = 0
+        current_amount = subtotal_after_discount + total_vat_adjusted
+        
+        if invoice_data.invoice_type == 'situation' and invoice_data.progress_percentage:
+            # Calculate current amount based on progress
+            current_amount = (subtotal_after_discount + total_vat_adjusted) * (invoice_data.progress_percentage / 100)
+            previous_invoiced = invoice_data.progress_percentage  # Will be updated with actual previous amount
+        
+        # Calculate retention (retenue de garantie)
+        retention_amount = 0
+        if invoice_data.retention_rate and invoice_data.retention_rate > 0:
+            retention_amount = current_amount * (invoice_data.retention_rate / 100)
+        
+        total_ttc = current_amount - retention_amount
+        
+        # Default due date
+        due_date = invoice_data.due_date
+        if not due_date:
+            due_date = datetime.now(timezone.utc) + timedelta(days=30)
+        
+        invoice = Invoice(
+            id=generate_uuid(),
+            user_id=user_id,
+            client_id=invoice_data.client_id,
+            project_id=invoice_data.project_id,
+            quote_id=invoice_data.quote_id,
+            invoice_number=invoice_number,
+            title=invoice_data.title,
+            description=invoice_data.description,
+            status=InvoiceStatus.DRAFT,
+            invoice_date=datetime.now(timezone.utc),
+            due_date=due_date,
+            items=items,
+            subtotal_ht=round(subtotal_ht, 2),
+            total_vat=round(total_vat_adjusted, 2),
+            total_ttc=round(total_ttc, 2),
+            discount_type=invoice_data.discount_type,
+            discount_value=invoice_data.discount_value or 0,
+            discount_amount=round(discount_amount, 2),
+            invoice_type=invoice_data.invoice_type or 'standard',
+            situation_number=invoice_data.situation_number,
+            progress_percentage=invoice_data.progress_percentage or 100,
+            previous_invoiced=round(previous_invoiced, 2),
+            current_amount=round(current_amount, 2),
+            retention_rate=invoice_data.retention_rate or 0,
+            retention_amount=round(retention_amount, 2),
+            retention_released=False,
+            amount_paid=0,
+            amount_due=round(total_ttc, 2),
+            notes=invoice_data.notes,
+            payment_terms=invoice_data.payment_terms,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        
+        self.db.add(invoice)
+        await self.db.flush()
+        
+        # Update project financials if linked
+        if invoice_data.project_id:
+            await self._update_project_financials(invoice_data.project_id)
         
         return invoice
     
-    @staticmethod
-    async def get_by_id(invoice_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    async def create_situation_invoice(
+        self, 
+        user_id: str, 
+        quote_id: str, 
+        progress_percentage: float,
+        retention_rate: float = 0,
+        notes: Optional[str] = None
+    ) -> Invoice:
+        """Create a progress invoice (facture de situation) from a quote"""
+        # Get the quote
+        quote_result = await self.db.execute(
+            select(Quote).where(and_(Quote.id == quote_id, Quote.user_id == user_id))
+        )
+        quote = quote_result.scalar_one_or_none()
+        if not quote:
+            raise ValueError("Quote not found")
+        
+        # Get previous situations for this quote
+        prev_result = await self.db.execute(
+            select(Invoice)
+            .where(and_(
+                Invoice.quote_id == quote_id,
+                Invoice.invoice_type == 'situation'
+            ))
+            .order_by(Invoice.situation_number.desc())
+        )
+        previous_situations = list(prev_result.scalars().all())
+        
+        # Calculate previous percentage
+        previous_percentage = sum(s.progress_percentage - (prev_result.scalar().progress_percentage if i > 0 else 0) 
+                                   for i, s in enumerate(previous_situations)) if previous_situations else 0
+        
+        if progress_percentage <= previous_percentage:
+            raise ValueError(f"Progress must be greater than previous ({previous_percentage}%)")
+        
+        situation_number = len(previous_situations) + 1
+        current_percentage = progress_percentage - previous_percentage
+        
+        # Calculate amounts
+        base_amount = quote.total_ttc
+        current_amount = base_amount * (current_percentage / 100)
+        
+        # Apply retention
+        retention_amount = 0
+        if retention_rate > 0:
+            retention_amount = current_amount * (retention_rate / 100)
+        
+        total_ttc = current_amount - retention_amount
+        
+        # Generate invoice number
+        count = await self.count_invoices(user_id)
+        invoice_number = f"SIT-{datetime.now(timezone.utc).strftime('%Y%m')}-{count + 1:04d}"
+        
+        invoice = Invoice(
+            id=generate_uuid(),
+            user_id=user_id,
+            client_id=quote.client_id,
+            project_id=quote.project_id,
+            quote_id=quote_id,
+            invoice_number=invoice_number,
+            title=f"Situation n°{situation_number} - {quote.title or quote.quote_number}",
+            status=InvoiceStatus.DRAFT,
+            invoice_date=datetime.now(timezone.utc),
+            due_date=datetime.now(timezone.utc) + timedelta(days=30),
+            items=quote.items,
+            subtotal_ht=quote.subtotal_ht,
+            total_vat=quote.total_vat,
+            total_ttc=round(total_ttc, 2),
+            invoice_type='situation',
+            situation_number=situation_number,
+            progress_percentage=progress_percentage,
+            previous_invoiced=round(base_amount * (previous_percentage / 100), 2),
+            current_amount=round(current_amount, 2),
+            retention_rate=retention_rate,
+            retention_amount=round(retention_amount, 2),
+            amount_paid=0,
+            amount_due=round(total_ttc, 2),
+            notes=notes,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        
+        self.db.add(invoice)
+        await self.db.flush()
+        
+        return invoice
+    
+    async def get_invoice_by_id(
+        self, 
+        invoice_id: str, 
+        user_id: Optional[str] = None,
+        include_client: bool = False,
+        include_project: bool = False,
+        include_payments: bool = False
+    ) -> Optional[Invoice]:
         """Get invoice by ID"""
-        if is_mongodb():
-            invoice = await db.invoices.find_one(
-                {"id": invoice_id, "user_id": user_id},
-                {"_id": 0}
-            )
-            if invoice:
-                # Get client
-                if invoice.get("client_id"):
-                    client = await db.clients.find_one({"id": invoice["client_id"]}, {"_id": 0})
-                    invoice["client"] = client
-                # Get project
-                if invoice.get("project_id"):
-                    project = await db.projects.find_one({"id": invoice["project_id"]}, {"_id": 0})
-                    invoice["project"] = project
-            return invoice
-        return None
-    
-    @staticmethod
-    async def get_all(user_id: str, status: Optional[str] = None,
-                      client_id: Optional[str] = None,
-                      project_id: Optional[str] = None,
-                      skip: int = 0, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get all invoices for a user"""
-        query = {"user_id": user_id}
+        query = select(Invoice).where(Invoice.id == invoice_id)
         
-        if status:
-            query["status"] = status
-        if client_id:
-            query["client_id"] = client_id
-        if project_id:
-            query["project_id"] = project_id
+        if user_id:
+            query = query.where(Invoice.user_id == user_id)
         
-        if is_mongodb():
-            cursor = db.invoices.find(query, {"_id": 0}).sort("invoice_date", -1).skip(skip).limit(limit)
-            invoices = await cursor.to_list(length=limit)
-            
-            # Get clients
-            client_ids = list(set(i.get("client_id") for i in invoices if i.get("client_id")))
-            if client_ids:
-                clients_cursor = db.clients.find({"id": {"$in": client_ids}}, {"_id": 0})
-                clients = {c["id"]: c for c in await clients_cursor.to_list(length=100)}
-                for invoice in invoices:
-                    if invoice.get("client_id"):
-                        invoice["client"] = clients.get(invoice["client_id"])
-            
-            return invoices
-        return []
+        if include_client:
+            query = query.options(selectinload(Invoice.client))
+        
+        if include_project:
+            query = query.options(selectinload(Invoice.project))
+        
+        if include_payments:
+            query = query.options(selectinload(Invoice.payments))
+        
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
     
-    @staticmethod
-    async def update(invoice_id: str, user_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Update an invoice"""
-        # Get existing invoice
-        invoice = await InvoiceService.get_by_id(invoice_id, user_id)
+    async def update_invoice(
+        self, 
+        invoice_id: str, 
+        user_id: str, 
+        invoice_data: InvoiceUpdate
+    ) -> Optional[Invoice]:
+        """Update invoice information"""
+        invoice = await self.get_invoice_by_id(invoice_id, user_id)
         if not invoice:
             return None
         
-        # Don't allow updating paid invoices
-        if invoice.get("status") == "paid" and "status" not in data:
-            pass  # Allow status changes
+        # Cannot update paid invoices
+        if invoice.status == InvoiceStatus.PAID:
+            raise ValueError("Cannot modify paid invoice")
         
-        update_data = {k: v for k, v in data.items() if v is not None}
+        update_data = invoice_data.model_dump(exclude_unset=True)
+        update_data['updated_at'] = datetime.now(timezone.utc)
         
-        # Recalculate if items changed
-        if "items" in update_data:
-            invoice_type = update_data.get("invoice_type", invoice.get("invoice_type", "standard"))
-            
-            if invoice_type == "situation":
-                totals = vat_service.calculate_situation_invoice(
-                    update_data["items"],
-                    update_data.get("progress_percentage", invoice.get("progress_percentage", 100)),
-                    update_data.get("previous_invoiced", invoice.get("previous_invoiced", 0)),
-                    update_data.get("discount_type", invoice.get("discount_type")),
-                    update_data.get("discount_value", invoice.get("discount_value", 0)),
-                    update_data.get("retention_rate", invoice.get("retention_rate", 0))
-                )
-                update_data.update({
-                    "subtotal_ht": totals["current_amount_ht"],
-                    "total_vat": totals["current_vat"],
-                    "total_ttc": totals["current_ttc"],
-                    "retention_amount": totals["retention_amount"],
-                    "amount_due": totals["net_to_pay"] - invoice.get("amount_paid", 0)
-                })
-            else:
-                totals = vat_service.calculate_document_totals(
-                    update_data["items"],
-                    update_data.get("discount_type", invoice.get("discount_type")),
-                    update_data.get("discount_value", invoice.get("discount_value", 0)),
-                    update_data.get("retention_rate", invoice.get("retention_rate", 0))
-                )
-                update_data.update({
-                    "subtotal_ht": totals["subtotal_after_discount"],
-                    "total_vat": totals["total_vat"],
-                    "total_ttc": totals["total_ttc"],
-                    "discount_amount": totals["discount_amount"],
-                    "retention_amount": totals["retention_amount"],
-                    "amount_due": totals["net_to_pay"] - invoice.get("amount_paid", 0)
-                })
+        for key, value in update_data.items():
+            setattr(invoice, key, value)
         
-        update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-        
-        if is_mongodb():
-            result = await db.invoices.update_one(
-                {"id": invoice_id, "user_id": user_id},
-                {"$set": update_data}
-            )
-            if result.modified_count > 0:
-                return await InvoiceService.get_by_id(invoice_id, user_id)
-        
-        return None
+        await self.db.flush()
+        return invoice
     
-    @staticmethod
-    async def delete(invoice_id: str, user_id: str) -> bool:
+    async def delete_invoice(self, invoice_id: str, user_id: str) -> bool:
         """Delete an invoice"""
-        if is_mongodb():
-            # Get invoice first for project update
-            invoice = await db.invoices.find_one({"id": invoice_id, "user_id": user_id})
-            project_id = invoice.get("project_id") if invoice else None
-            
-            result = await db.invoices.delete_one(
-                {"id": invoice_id, "user_id": user_id}
-            )
-            
-            if result.deleted_count > 0 and project_id:
-                from app.services.project_service import project_service
-                await project_service.update_financials(project_id, user_id)
-            
-            return result.deleted_count > 0
-        return False
-    
-    @staticmethod
-    async def mark_as_sent(invoice_id: str, user_id: str) -> Optional[Dict[str, Any]]:
-        """Mark invoice as sent"""
-        return await InvoiceService.update(invoice_id, user_id, {"status": "sent"})
-    
-    @staticmethod
-    async def record_payment(invoice_id: str, user_id: str, amount: float, 
-                             payment_method: str = "bank_transfer",
-                             reference: str = None,
-                             stripe_payment_id: str = None) -> Dict[str, Any]:
-        """Record a payment for an invoice"""
-        invoice = await InvoiceService.get_by_id(invoice_id, user_id)
+        invoice = await self.get_invoice_by_id(invoice_id, user_id)
         if not invoice:
-            raise ValueError("Facture non trouvée")
+            return False
         
-        # Create payment record
-        payment = {
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "invoice_id": invoice_id,
-            "amount": amount,
-            "payment_date": datetime.now(timezone.utc).isoformat(),
-            "payment_method": payment_method,
-            "reference": reference,
-            "transaction_id": stripe_payment_id,
-            "stripe_payment_intent_id": stripe_payment_id,
-            "notes": "",
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
+        # Cannot delete paid invoices
+        if invoice.status == InvoiceStatus.PAID:
+            raise ValueError("Cannot delete paid invoice")
         
-        if is_mongodb():
-            await db.payments.insert_one(payment.copy())
-        
-        # Update invoice
-        new_amount_paid = invoice.get("amount_paid", 0) + amount
-        net_amount = invoice.get("total_ttc", 0) - invoice.get("retention_amount", 0)
-        new_amount_due = net_amount - new_amount_paid
-        
-        new_status = invoice.get("status")
-        if new_amount_due <= 0:
-            new_status = "paid"
-        elif new_amount_paid > 0:
-            new_status = "partial"
-        
-        update_data = {
-            "amount_paid": new_amount_paid,
-            "amount_due": max(0, new_amount_due),
-            "status": new_status
-        }
-        
-        if new_status == "paid":
-            update_data["paid_date"] = datetime.now(timezone.utc).isoformat()
-        
-        if stripe_payment_id:
-            update_data["stripe_payment_id"] = stripe_payment_id
-        
-        await InvoiceService.update(invoice_id, user_id, update_data)
+        project_id = invoice.project_id
+        await self.db.delete(invoice)
         
         # Update project financials
-        if invoice.get("project_id"):
-            from app.services.project_service import project_service
-            await project_service.update_financials(invoice["project_id"], user_id)
+        if project_id:
+            await self._update_project_financials(project_id)
         
-        # Cancel reminders if fully paid
-        if new_status == "paid":
-            from app.services.invoice_reminder_service import invoice_reminder_service
-            await invoice_reminder_service.cancel_reminders_for_invoice(invoice_id)
+        return True
+    
+    async def list_invoices(
+        self, 
+        user_id: str,
+        skip: int = 0, 
+        limit: int = 50,
+        status: Optional[str] = None,
+        client_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        quote_id: Optional[str] = None,
+        include_client: bool = False,
+        overdue_only: bool = False
+    ) -> List[Invoice]:
+        """List invoices for a user"""
+        query = select(Invoice).where(Invoice.user_id == user_id)
+        
+        if status:
+            query = query.where(Invoice.status == status)
+        
+        if client_id:
+            query = query.where(Invoice.client_id == client_id)
+        
+        if project_id:
+            query = query.where(Invoice.project_id == project_id)
+        
+        if quote_id:
+            query = query.where(Invoice.quote_id == quote_id)
+        
+        if include_client:
+            query = query.options(selectinload(Invoice.client))
+        
+        if overdue_only:
+            query = query.where(and_(
+                Invoice.due_date < datetime.now(timezone.utc),
+                Invoice.status != InvoiceStatus.PAID
+            ))
+        
+        query = query.order_by(Invoice.created_at.desc()).offset(skip).limit(limit)
+        
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+    
+    async def count_invoices(
+        self, 
+        user_id: str,
+        status: Optional[str] = None
+    ) -> int:
+        """Count invoices for a user"""
+        query = select(func.count(Invoice.id)).where(Invoice.user_id == user_id)
+        
+        if status:
+            query = query.where(Invoice.status == status)
+        
+        result = await self.db.execute(query)
+        return result.scalar() or 0
+    
+    # ============== PAYMENTS ==============
+    
+    async def add_payment(self, user_id: str, payment_data: PaymentCreate) -> Payment:
+        """Add a payment to an invoice"""
+        invoice = await self.get_invoice_by_id(payment_data.invoice_id, user_id)
+        if not invoice:
+            raise ValueError("Invoice not found")
+        
+        payment = Payment(
+            id=generate_uuid(),
+            user_id=user_id,
+            invoice_id=payment_data.invoice_id,
+            amount=payment_data.amount,
+            payment_date=payment_data.payment_date or datetime.now(timezone.utc),
+            payment_method=payment_data.payment_method or 'bank_transfer',
+            reference=payment_data.reference,
+            notes=payment_data.notes,
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        self.db.add(payment)
+        
+        # Update invoice amounts
+        invoice.amount_paid = (invoice.amount_paid or 0) + payment_data.amount
+        invoice.amount_due = invoice.total_ttc - invoice.amount_paid
+        
+        # Update status
+        if invoice.amount_paid >= invoice.total_ttc:
+            invoice.status = InvoiceStatus.PAID
+            invoice.paid_date = datetime.now(timezone.utc)
+        elif invoice.amount_paid > 0:
+            invoice.status = InvoiceStatus.PARTIAL
+        
+        invoice.updated_at = datetime.now(timezone.utc)
+        
+        await self.db.flush()
+        
+        # Update project financials
+        if invoice.project_id:
+            await self._update_project_financials(invoice.project_id)
+        
+        return payment
+    
+    async def list_payments(self, invoice_id: str) -> List[Payment]:
+        """List payments for an invoice"""
+        result = await self.db.execute(
+            select(Payment)
+            .where(Payment.invoice_id == invoice_id)
+            .order_by(Payment.payment_date.desc())
+        )
+        return list(result.scalars().all())
+    
+    # ============== RETENTION (RETENUE DE GARANTIE) ==============
+    
+    async def release_retention(self, invoice_id: str, user_id: str) -> Optional[Invoice]:
+        """Release retention amount"""
+        invoice = await self.get_invoice_by_id(invoice_id, user_id)
+        if not invoice:
+            return None
+        
+        if invoice.retention_released:
+            raise ValueError("Retention already released")
+        
+        if not invoice.retention_amount or invoice.retention_amount <= 0:
+            raise ValueError("No retention to release")
+        
+        invoice.retention_released = True
+        invoice.amount_due = (invoice.amount_due or 0) + invoice.retention_amount
+        invoice.total_ttc = (invoice.total_ttc or 0) + invoice.retention_amount
+        invoice.updated_at = datetime.now(timezone.utc)
+        
+        # Update status if was paid
+        if invoice.status == InvoiceStatus.PAID:
+            invoice.status = InvoiceStatus.PARTIAL
+        
+        await self.db.flush()
+        return invoice
+    
+    async def get_retention_summary(self, user_id: str) -> dict:
+        """Get summary of all retentions"""
+        result = await self.db.execute(
+            select(
+                func.coalesce(func.sum(Invoice.retention_amount), 0).label('total_retained'),
+                func.sum(
+                    func.case(
+                        (Invoice.retention_released == True, Invoice.retention_amount),
+                        else_=0
+                    )
+                ).label('total_released')
+            )
+            .where(and_(
+                Invoice.user_id == user_id,
+                Invoice.retention_amount > 0
+            ))
+        )
+        stats = result.one()
+        
+        total_retained = float(stats.total_retained or 0)
+        total_released = float(stats.total_released or 0)
         
         return {
-            "payment": payment,
-            "invoice_status": new_status,
-            "amount_paid": new_amount_paid,
-            "amount_due": max(0, new_amount_due)
+            'total_retained': total_retained,
+            'total_released': total_released,
+            'pending_release': total_retained - total_released
         }
     
-    @staticmethod
-    async def create_situation_invoice(user_id: str, project_id: str,
-                                        progress_percentage: float,
-                                        items: List[Dict[str, Any]],
-                                        retention_rate: float = 5.0) -> Dict[str, Any]:
-        """Create a progress invoice (facture de situation)"""
-        # Get previous situation invoices
-        if is_mongodb():
-            previous = await db.invoices.find({
-                "user_id": user_id,
-                "project_id": project_id,
-                "invoice_type": "situation",
-                "status": {"$ne": "cancelled"}
-            }, {"_id": 0, "situation_number": 1, "progress_percentage": 1, "subtotal_ht": 1}).to_list(length=100)
-        else:
-            previous = []
+    # ============== STATISTICS ==============
+    
+    async def get_invoice_stats(self, user_id: str) -> dict:
+        """Get invoice statistics"""
+        # Status breakdown
+        status_result = await self.db.execute(
+            select(Invoice.status, func.count(Invoice.id))
+            .where(Invoice.user_id == user_id)
+            .group_by(Invoice.status)
+        )
+        status_breakdown = {row[0]: row[1] for row in status_result.all()}
         
-        # Calculate previous invoiced amount
-        previous_invoiced = sum(inv.get("subtotal_ht", 0) for inv in previous)
-        situation_number = len(previous) + 1
+        # Financial totals
+        finance_result = await self.db.execute(
+            select(
+                func.coalesce(func.sum(Invoice.total_ttc), 0).label('total'),
+                func.coalesce(func.sum(Invoice.amount_paid), 0).label('paid'),
+                func.coalesce(func.sum(Invoice.amount_due), 0).label('due')
+            ).where(Invoice.user_id == user_id)
+        )
+        finances = finance_result.one()
         
-        # Get project
-        project = None
-        client_id = None
-        if is_mongodb():
-            project = await db.projects.find_one({"id": project_id, "user_id": user_id})
-            if project:
-                client_id = project.get("client_id")
+        # Overdue
+        overdue_result = await self.db.execute(
+            select(
+                func.count(Invoice.id).label('count'),
+                func.coalesce(func.sum(Invoice.amount_due), 0).label('amount')
+            ).where(and_(
+                Invoice.user_id == user_id,
+                Invoice.due_date < datetime.now(timezone.utc),
+                Invoice.status != InvoiceStatus.PAID
+            ))
+        )
+        overdue = overdue_result.one()
         
-        return await InvoiceService.create(user_id, {
-            "project_id": project_id,
-            "client_id": client_id,
-            "title": f"Situation n°{situation_number}" + (f" - {project['project_name']}" if project else ""),
-            "items": items,
-            "invoice_type": "situation",
-            "situation_number": situation_number,
-            "progress_percentage": progress_percentage,
-            "previous_invoiced": previous_invoiced,
-            "retention_rate": retention_rate
-        })
+        return {
+            'total_invoices': sum(status_breakdown.values()),
+            'total_amount': float(finances.total),
+            'total_paid': float(finances.paid),
+            'total_due': float(finances.due),
+            'overdue_count': overdue.count,
+            'overdue_amount': float(overdue.amount),
+            'status_breakdown': status_breakdown
+        }
+    
+    async def _update_project_financials(self, project_id: str):
+        """Update project financial totals"""
+        from app.models.models import Project
+        
+        result = await self.db.execute(
+            select(
+                func.coalesce(func.sum(Invoice.total_ttc), 0).label('total_invoiced'),
+                func.coalesce(func.sum(Invoice.amount_paid), 0).label('total_paid')
+            ).where(Invoice.project_id == project_id)
+        )
+        stats = result.one()
+        
+        await self.db.execute(
+            update(Project)
+            .where(Project.id == project_id)
+            .values(
+                total_invoiced=float(stats.total_invoiced),
+                total_paid=float(stats.total_paid),
+                updated_at=datetime.now(timezone.utc)
+            )
+        )
 
 
-# Create singleton instance
-invoice_service = InvoiceService()
+def get_invoice_service(db: AsyncSession) -> InvoiceService:
+    """Factory function for dependency injection"""
+    return InvoiceService(db)
