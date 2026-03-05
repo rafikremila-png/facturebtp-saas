@@ -3,15 +3,21 @@ Signature Routes
 API endpoints for electronic signatures
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 
-from app.schemas.schemas import QuoteSignatureCreate, QuoteSignatureResponse
+from app.api.deps import get_current_user
 from app.services.signature_service import signature_service
 
 router = APIRouter(prefix="/signatures", tags=["Signatures"])
 
-# Dependency placeholder
-async def get_current_user():
-    pass
+
+class SignatureCreate(BaseModel):
+    signer_name: str
+    signer_email: EmailStr
+    signer_title: Optional[str] = None
+    signature_data: str  # Base64 encoded signature
+
 
 @router.post("/quotes/{quote_id}/generate-link")
 async def generate_signature_link(
@@ -30,6 +36,7 @@ async def generate_signature_link(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/validate/{token}")
 async def validate_signature_token(token: str):
     """Validate a signature token and get quote details"""
@@ -38,15 +45,15 @@ async def validate_signature_token(token: str):
         raise HTTPException(status_code=400, detail="Lien de signature invalide ou expiré")
     return result
 
+
 @router.post("/sign/{token}")
 async def sign_quote(
     token: str, 
-    data: QuoteSignatureCreate,
+    data: SignatureCreate,
     request: Request
 ):
     """Sign a quote with electronic signature"""
     try:
-        # Get client info
         ip_address = request.client.host if request.client else "unknown"
         user_agent = request.headers.get("user-agent", "unknown")
         
@@ -60,7 +67,8 @@ async def sign_quote(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/quotes/{quote_id}", response_model=QuoteSignatureResponse)
+
+@router.get("/quotes/{quote_id}")
 async def get_signature(quote_id: str, user: dict = Depends(get_current_user)):
     """Get signature for a quote"""
     signature = await signature_service.get_signature(quote_id)
@@ -68,8 +76,8 @@ async def get_signature(quote_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Signature non trouvée")
     return signature
 
+
 @router.get("/quotes/{quote_id}/verify")
 async def verify_signature(quote_id: str):
     """Verify the authenticity of a signature"""
-    result = await signature_service.verify_signature(quote_id)
-    return result
+    return await signature_service.verify_signature(quote_id)
