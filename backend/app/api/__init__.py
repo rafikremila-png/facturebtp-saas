@@ -1,29 +1,26 @@
 """
 API Routes Module
-All API route handlers
+All API route handlers for BTP Facture
 """
+# New modular routes - these are the active ones
 from app.api.routes import (
-    project_routes,
-    work_item_routes,
-    financial_routes,
-    signature_routes,
-    portal_routes,
-    ai_routes,
-    accounting_routes,
-    recurring_routes,
-    reminder_routes,
-    notification_routes
+    auth,
+    clients,
+    projects,
+    quotes,
+    invoices,
+    admin,
+    work_items,
+    financial
 )
 
 __all__ = [
-    "project_routes",
-    "work_item_routes",
-    "financial_routes",
-    "signature_routes",
-    "portal_routes",
-    "ai_routes",
-    "accounting_routes",
-    "recurring_routes",
-    "reminder_routes",
-    "notification_routes"
+    "auth",
+    "clients",
+    "projects", 
+    "quotes",
+    "invoices",
+    "admin",
+    "work_items",
+    "financial"
 ]
