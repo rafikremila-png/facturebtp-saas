@@ -6054,19 +6054,41 @@ async def get_mrr_history(
 
 # ============== HEALTH CHECK ==============
 
+@app.get("/health")
+async def root_health_check():
+    """Root health check endpoint for Render monitoring"""
+    try:
+        await client.admin.command('ping')
+        return {
+            "status": "ok",
+            "service": "facturebtp-api",
+            "database": "connected"
+        }
+    except Exception:
+        return {
+            "status": "ok",
+            "service": "facturebtp-api",
+            "database": "disconnected"
+        }
+
 @api_router.get("/health")
 async def health_check():
+    """API health check with detailed status"""
     try:
         await client.admin.command('ping')
         return {
             "status": "healthy",
+            "service": "facturebtp-api",
             "database": "connected",
-            "environment": ENVIRONMENT
+            "environment": ENVIRONMENT,
+            "version": "2.0.0"
         }
     except Exception as e:
         return {
             "status": "unhealthy",
+            "service": "facturebtp-api",
             "database": "disconnected",
+            "environment": ENVIRONMENT,
             "error": str(e)
         }
 
