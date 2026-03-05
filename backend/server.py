@@ -99,6 +99,7 @@ try:
     from app.api.routes import portal as pg_portal_routes
     from app.api.routes import payments as pg_payments_routes
     from app.api.routes import service_requests as pg_service_requests_routes
+    from app.api.routes import financial_dashboard as pg_financial_dashboard_routes
     PG_ROUTES_AVAILABLE = True
 except ImportError as e:
     PG_ROUTES_AVAILABLE = False
