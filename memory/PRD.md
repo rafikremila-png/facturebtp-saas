@@ -657,3 +657,44 @@ STRIPE_PRICE_BUSINESS_YEARLY=price_1T5c4AGs4YZg7ViPincxYzMs
 - Stockage du cycle de facturation (`subscription_cycle`)
 - Webhook sécurisé pour activation automatique
 - Limites par plan : Essentiel (30/mois, 1 user), Pro (illimité, 3 users), Business (illimité, 5 users)
+
+## Fonctionnalités Avancées (Décembre 2025)
+
+### Signature Électronique
+- **`POST /api/signatures/request`** : Créer une demande de signature
+- **`GET /api/signatures/status/{token}`** : Vérifier le statut
+- **`POST /api/signatures/sign/{token}`** : Signer électroniquement
+- **Page publique** : `/signer/:token` avec canvas de signature
+
+### Paiement en Ligne des Factures
+- **`POST /api/invoices/{id}/payment-link`** : Créer un lien Stripe
+- **`POST /api/webhook/invoice-payment`** : Webhook de confirmation
+- Redirection automatique après paiement
+
+### Analyse PDF de Plans
+- **`POST /api/ai/analyze-plan-pdf`** : Analyser un plan de construction
+- Détection des pièces (cuisine, salle de bain, chambre, etc.)
+- Extraction des surfaces
+- Suggestions de travaux automatiques
+
+### Analyse Photo de Chantier
+- **`POST /api/ai/analyze-site-photo`** : Analyser une photo
+- Analyse basique des dimensions et format
+- Suggestions vers l'Assistant IA
+
+### Marketing Automation
+- **`GET /api/marketing/notifications`** : Notifications personnalisées
+- **`GET /api/marketing/website-status`** : Détection site web manquant
+- **`POST /api/marketing/request-website`** : Demande de création de site
+- Upsell automatique si pas de site web
+
+### Export Devis IA
+- **`POST /api/ai/export-to-quote`** : Créer un devis depuis l'IA
+- Conversion automatique des items générés
+- Métadonnées AI conservées
+
+### Nouveaux Fichiers
+- `backend/app/services/advanced_features_service.py` : Services avancés
+- `frontend/src/pages/AIAssistantPage.jsx` : Page complète avec 5 onglets
+- `frontend/src/pages/SignaturePage.jsx` : Page de signature publique
+
