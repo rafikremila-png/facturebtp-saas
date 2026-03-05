@@ -3,9 +3,12 @@ import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { 
   Clock,
@@ -16,49 +19,107 @@ import {
   Phone,
   Mail,
   Building,
-  FileText,
+  Globe,
+  Search,
+  TrendingUp,
+  Zap,
+  Users,
+  Palette,
   Filter,
   RefreshCw,
   MessageSquare,
   Calendar,
-  Image,
-  Zap
+  ChevronRight,
+  Plus,
+  Send
 } from 'lucide-react';
+import { useAuth, ROLE_ADMIN, ROLE_SUPER_ADMIN } from "@/context/AuthContext";
 
+// Status configuration with colors
 const STATUS_CONFIG = {
-  new: { label: 'Nouveau', color: 'bg-blue-100 text-blue-800', icon: AlertCircle },
-  contacted: { label: 'Contacté', color: 'bg-yellow-100 text-yellow-800', icon: Phone },
-  in_progress: { label: 'En cours', color: 'bg-purple-100 text-purple-800', icon: Clock },
-  completed: { label: 'Terminé', color: 'bg-green-100 text-green-800', icon: CheckCircle },
-  cancelled: { label: 'Annulé', color: 'bg-red-100 text-red-800', icon: XCircle },
+  pending: { label: 'En attente', color: 'bg-orange-500 text-white', icon: Clock },
+  in_progress: { label: 'En cours', color: 'bg-blue-500 text-white', icon: Loader2 },
+  completed: { label: 'Terminé', color: 'bg-green-500 text-white', icon: CheckCircle },
+  cancelled: { label: 'Annulé', color: 'bg-red-500 text-white', icon: XCircle },
+};
+
+// Icon mapping for categories
+const CATEGORY_ICONS = {
+  'Globe': Globe,
+  'Search': Search,
+  'TrendingUp': TrendingUp,
+  'Zap': Zap,
+  'Users': Users,
+  'Palette': Palette,
 };
 
 export default function ServiceRequestsPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === ROLE_ADMIN || user?.role === ROLE_SUPER_ADMIN;
+  
+  // Data states
+  const [categories, setCategories] = useState([]);
   const [requests, setRequests] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // Filter states
   const [statusFilter, setStatusFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  
+  // Modal states
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showNewRequestModal, setShowNewRequestModal] = useState(false);
   const [updating, setUpdating] = useState(false);
+  
+  // Admin update states
   const [newStatus, setNewStatus] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
+  
+  // New request form states
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedService, setSelectedService] = useState(null);
+  const [requestForm, setRequestForm] = useState({
+    company_name: '',
+    contact_email: '',
+    phone: '',
+    message: '',
+    quantity: 1,
+    urgency: 'standard'
+  });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     loadData();
-  }, [statusFilter]);
+  }, [statusFilter, categoryFilter]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [requestsRes, statsRes] = await Promise.all([
-        api.get('/services/requests', {
-          params: statusFilter !== 'all' ? { status: statusFilter } : {}
-        }),
-        api.get('/services/stats'),
-      ]);
+      
+      // Load categories
+      const categoriesRes = await api.get('/service-categories');
+      setCategories(categoriesRes.data);
+      
+      // Load requests based on user role
+      const params = {};
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (categoryFilter !== 'all') params.category_id = categoryFilter;
+      
+      const endpoint = isAdmin ? '/service-requests' : '/service-requests/me';
+      const requestsRes = await api.get(endpoint, { params });
       setRequests(requestsRes.data);
-      setStats(statsRes.data);
+      
+      // Load stats for admin
+      if (isAdmin) {
+        try {
+          const statsRes = await api.get('/service-requests/stats');
+          setStats(statsRes.data);
+        } catch (e) {
+          // Stats endpoint might fail, ignore
+        }
+      }
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Erreur lors du chargement des données');
@@ -67,29 +128,22 @@ export default function ServiceRequestsPage() {
     }
   };
 
-  const handleViewDetails = async (request) => {
-    try {
-      const res = await api.get(`/services/requests/${request.id}`);
-      setSelectedRequest(res.data);
-      setNewStatus(res.data.status);
-      setAdminNotes(res.data.admin_notes || '');
-      setShowDetailModal(true);
-    } catch (error) {
-      console.error('Error loading request details:', error);
-      toast.error('Erreur lors du chargement des détails');
-    }
+  const handleViewDetails = (request) => {
+    setSelectedRequest(request);
+    setNewStatus(request.status);
+    setAdminNotes(request.admin_notes || '');
+    setShowDetailModal(true);
   };
 
   const handleUpdateStatus = async () => {
     if (!selectedRequest || !newStatus) return;
     
+    setUpdating(true);
     try {
-      setUpdating(true);
-      await api.put(`/services/requests/${selectedRequest.id}/status`, {
+      await api.put(`/service-requests/${selectedRequest.id}/status`, {
         status: newStatus,
-        admin_notes: adminNotes || null,
+        admin_notes: adminNotes
       });
-      
       toast.success('Statut mis à jour');
       setShowDetailModal(false);
       loadData();
@@ -101,49 +155,82 @@ export default function ServiceRequestsPage() {
     }
   };
 
-  const renderStatsCards = () => {
-    if (!stats) return null;
-    
-    return (
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <div className="text-sm text-muted-foreground">Total</div>
-          </CardContent>
-        </Card>
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-blue-700">{stats.new}</div>
-            <div className="text-sm text-blue-600">Nouveaux</div>
-          </CardContent>
-        </Card>
-        <Card className="border-yellow-200 bg-yellow-50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-yellow-700">{stats.contacted}</div>
-            <div className="text-sm text-yellow-600">Contactés</div>
-          </CardContent>
-        </Card>
-        <Card className="border-purple-200 bg-purple-50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-purple-700">{stats.in_progress}</div>
-            <div className="text-sm text-purple-600">En cours</div>
-          </CardContent>
-        </Card>
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-green-700">{stats.completed}</div>
-            <div className="text-sm text-green-600">Terminés</div>
-          </CardContent>
-        </Card>
-      </div>
-    );
+  const handleSelectCategory = (category) => {
+    setSelectedCategory(category);
+    setSelectedService(null);
   };
+
+  const handleSelectService = (service) => {
+    setSelectedService(service);
+  };
+
+  const handleSubmitRequest = async () => {
+    if (!selectedCategory || !selectedService) {
+      toast.error('Veuillez sélectionner une catégorie et un service');
+      return;
+    }
+    
+    if (!requestForm.company_name || !requestForm.contact_email || !requestForm.phone) {
+      toast.error('Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      await api.post('/service-requests', {
+        category_id: selectedCategory.id,
+        service_id: selectedService.id,
+        ...requestForm
+      });
+      
+      toast.success('Demande envoyée avec succès');
+      setShowNewRequestModal(false);
+      resetNewRequestForm();
+      loadData();
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      toast.error(error.response?.data?.detail || 'Erreur lors de l\'envoi de la demande');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resetNewRequestForm = () => {
+    setSelectedCategory(null);
+    setSelectedService(null);
+    setRequestForm({
+      company_name: '',
+      contact_email: '',
+      phone: '',
+      message: '',
+      quantity: 1,
+      urgency: 'standard'
+    });
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getCategoryIcon = (iconName) => {
+    const IconComponent = CATEGORY_ICONS[iconName] || Globe;
+    return IconComponent;
+  };
+
+  // Filtered requests
+  const filteredRequests = requests;
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
       </div>
     );
   }
@@ -151,121 +238,202 @@ export default function ServiceRequestsPage() {
   return (
     <div className="space-y-6" data-testid="service-requests-page">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Demandes de Services</h1>
-          <p className="text-muted-foreground mt-1">
-            Gérez les demandes de services professionnels
+          <h1 className="text-3xl font-bold text-slate-900 font-['Barlow_Condensed'] flex items-center gap-3">
+            <MessageSquare className="w-8 h-8 text-orange-600" />
+            {isAdmin ? 'Gestion des demandes' : 'Mes demandes de service'}
+          </h1>
+          <p className="text-slate-500 mt-1">
+            {isAdmin 
+              ? `${requests.length} demande(s) - Gérez les demandes de services`
+              : 'Demandez des services professionnels pour votre entreprise'
+            }
           </p>
         </div>
-        <Button variant="outline" onClick={loadData}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Actualiser
+        <Button 
+          onClick={() => setShowNewRequestModal(true)}
+          className="bg-orange-600 hover:bg-orange-700"
+          data-testid="new-request-btn"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Nouvelle demande
         </Button>
       </div>
 
-      {/* Stats */}
-      {renderStatsCards()}
+      {/* Admin Stats */}
+      {isAdmin && stats && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
+                <p className="text-sm text-slate-500">Total</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-orange-200 bg-orange-50">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-orange-600">{stats.pending}</p>
+                <p className="text-sm text-orange-700">En attente</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-blue-200 bg-blue-50">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-600">{stats.in_progress}</p>
+                <p className="text-sm text-blue-700">En cours</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-green-200 bg-green-50">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
+                <p className="text-sm text-green-700">Terminées</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-red-600">{stats.cancelled}</p>
+                <p className="text-sm text-red-700">Annulées</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-      {/* Filter */}
-      <div className="flex items-center gap-4">
-        <Filter className="h-4 w-4 text-muted-foreground" />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filtrer par statut" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="new">Nouveaux</SelectItem>
-            <SelectItem value="contacted">Contactés</SelectItem>
-            <SelectItem value="in_progress">En cours</SelectItem>
-            <SelectItem value="completed">Terminés</SelectItem>
-            <SelectItem value="cancelled">Annulés</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Filters */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <Label className="text-xs text-slate-500 mb-2 block">Filtrer par statut</Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger data-testid="filter-status">
+                  <Filter className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Tous les statuts" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les statuts</SelectItem>
+                  <SelectItem value="pending">En attente</SelectItem>
+                  <SelectItem value="in_progress">En cours</SelectItem>
+                  <SelectItem value="completed">Terminé</SelectItem>
+                  <SelectItem value="cancelled">Annulé</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1">
+              <Label className="text-xs text-slate-500 mb-2 block">Filtrer par catégorie</Label>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger data-testid="filter-category">
+                  <SelectValue placeholder="Toutes les catégories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les catégories</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button variant="outline" onClick={loadData}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Actualiser
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Requests List */}
-      {requests.length === 0 ? (
+      {filteredRequests.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Aucune demande</h3>
-            <p className="text-muted-foreground">
-              {statusFilter !== 'all' 
-                ? 'Aucune demande avec ce statut' 
-                : 'Aucune demande de service pour le moment'}
-            </p>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">
+                Aucune demande
+              </h3>
+              <p className="text-slate-500 mb-4">
+                {statusFilter !== 'all' || categoryFilter !== 'all'
+                  ? 'Aucune demande ne correspond aux filtres'
+                  : 'Commencez par créer une nouvelle demande de service'
+                }
+              </p>
+              <Button 
+                onClick={() => setShowNewRequestModal(true)}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Nouvelle demande
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {requests.map(request => {
-            const statusConfig = STATUS_CONFIG[request.status] || STATUS_CONFIG.new;
-            const StatusIcon = statusConfig.icon;
+        <div className="grid gap-4">
+          {filteredRequests.map((request) => {
+            const statusInfo = STATUS_CONFIG[request.status] || STATUS_CONFIG.pending;
+            const StatusIcon = statusInfo.icon;
             
             return (
-              <Card key={request.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-3">
-                        <h3 className="font-semibold text-lg">{request.service_type}</h3>
-                        <Badge className={statusConfig.color}>
-                          <StatusIcon className="h-3 w-3 mr-1" />
-                          {statusConfig.label}
+              <Card 
+                key={request.id} 
+                className="hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => handleViewDetails(request)}
+                data-testid={`request-${request.id}`}
+              >
+                <CardContent className="pt-6">
+                  <div className="flex flex-col md:flex-row md:items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <h3 className="font-semibold text-slate-900">
+                          {request.service_name || 'Service'}
+                        </h3>
+                        <Badge className={statusInfo.color} data-testid={`status-badge-${request.id}`}>
+                          <StatusIcon className="w-3 h-3 mr-1" />
+                          {statusInfo.label}
                         </Badge>
                         {request.urgency === 'express' && (
-                          <Badge variant="destructive" className="flex items-center gap-1">
-                            <Zap className="h-3 w-3" />
-                            Express
-                          </Badge>
+                          <Badge className="bg-purple-500 text-white">Express</Badge>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">{request.service_category}</p>
                       
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Building className="h-4 w-4 text-muted-foreground" />
-                          <span>{request.company_name}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
-                          <span>{request.contact_email}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span>{request.phone}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>{new Date(request.created_at).toLocaleDateString('fr-FR')}</span>
-                        </div>
+                      <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Building className="w-3 h-3" />
+                          {request.company_name}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Mail className="w-3 h-3" />
+                          {request.contact_email}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {formatDate(request.created_at)}
+                        </span>
                       </div>
                       
                       {request.message && (
-                        <div className="flex items-start gap-2 mt-2 p-2 bg-gray-50 rounded">
-                          <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5" />
-                          <p className="text-sm text-gray-600">"{request.message}"</p>
-                        </div>
+                        <p className="text-sm text-slate-600 mt-2 line-clamp-2">
+                          {request.message}
+                        </p>
                       )}
                     </div>
                     
-                    <div className="flex flex-col items-end gap-2 ml-4">
-                      {request.has_logo && (
-                        <Badge variant="outline" className="flex items-center gap-1">
-                          <Image className="h-3 w-3" />
-                          Logo
-                        </Badge>
+                    <div className="flex items-center gap-2">
+                      {request.service_price && (
+                        <span className="text-lg font-bold text-orange-600">
+                          {request.service_price}€
+                        </span>
                       )}
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleViewDetails(request)}
-                        data-testid={`view-request-${request.id}`}
-                      >
-                        Gérer
-                      </Button>
+                      <ChevronRight className="w-5 h-5 text-slate-400" />
                     </div>
                   </div>
                 </CardContent>
@@ -275,126 +443,309 @@ export default function ServiceRequestsPage() {
         </div>
       )}
 
-      {/* Detail Modal */}
+      {/* Detail Modal (Admin) */}
       <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Détails de la demande</DialogTitle>
-            <DialogDescription>
-              {selectedRequest?.service_type} - {selectedRequest?.service_category}
-            </DialogDescription>
+            <DialogTitle className="font-['Barlow_Condensed'] text-xl">
+              Détails de la demande
+            </DialogTitle>
           </DialogHeader>
           
           {selectedRequest && (
             <div className="space-y-4 py-4">
-              {/* Contact Info */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Informations de contact</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="text-muted-foreground">Entreprise</div>
-                    <div className="font-medium">{selectedRequest.company_name}</div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-slate-500">Service</Label>
+                  <p className="font-medium">{selectedRequest.service_name || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Statut actuel</Label>
+                  <Badge className={STATUS_CONFIG[selectedRequest.status]?.color || 'bg-gray-500 text-white'}>
+                    {STATUS_CONFIG[selectedRequest.status]?.label || selectedRequest.status}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div>
+                <Label className="text-xs text-slate-500">Entreprise</Label>
+                <p className="font-medium">{selectedRequest.company_name}</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-slate-500">Email</Label>
+                  <p>{selectedRequest.contact_email}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-slate-500">Téléphone</Label>
+                  <p>{selectedRequest.phone}</p>
+                </div>
+              </div>
+              
+              {selectedRequest.message && (
+                <div>
+                  <Label className="text-xs text-slate-500">Message</Label>
+                  <p className="text-sm">{selectedRequest.message}</p>
+                </div>
+              )}
+              
+              {isAdmin && (
+                <>
+                  <div className="border-t pt-4">
+                    <Label htmlFor="newStatus">Changer le statut</Label>
+                    <Select value={newStatus} onValueChange={setNewStatus}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">En attente</SelectItem>
+                        <SelectItem value="in_progress">En cours</SelectItem>
+                        <SelectItem value="completed">Terminé</SelectItem>
+                        <SelectItem value="cancelled">Annulé</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div>
-                    <div className="text-muted-foreground">Email</div>
-                    <div className="font-medium">{selectedRequest.contact_email}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Téléphone</div>
-                    <div className="font-medium">{selectedRequest.phone}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Date</div>
-                    <div className="font-medium">
-                      {new Date(selectedRequest.created_at).toLocaleString('fr-FR')}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Request Details */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Détails de la demande</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Urgence</span>
-                    <Badge variant={selectedRequest.urgency === 'express' ? 'destructive' : 'secondary'}>
-                      {selectedRequest.urgency === 'express' ? 'Express' : 'Standard'}
-                    </Badge>
-                  </div>
-                  {selectedRequest.quantity && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Quantité</span>
-                      <span className="font-medium">{selectedRequest.quantity}</span>
-                    </div>
-                  )}
-                  {selectedRequest.message && (
-                    <div>
-                      <div className="text-muted-foreground mb-1">Message</div>
-                      <div className="p-2 bg-gray-50 rounded text-gray-700">
-                        {selectedRequest.message}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Status Update */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Mettre à jour le statut</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Select value={newStatus} onValueChange={setNewStatus}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="new">Nouveau</SelectItem>
-                      <SelectItem value="contacted">Contacté</SelectItem>
-                      <SelectItem value="in_progress">En cours</SelectItem>
-                      <SelectItem value="completed">Terminé</SelectItem>
-                      <SelectItem value="cancelled">Annulé</SelectItem>
-                    </SelectContent>
-                  </Select>
                   
                   <div>
-                    <label className="text-sm text-muted-foreground">Notes admin (optionnel)</label>
-                    <Textarea 
+                    <Label htmlFor="adminNotes">Notes admin</Label>
+                    <Textarea
+                      id="adminNotes"
                       value={adminNotes}
                       onChange={(e) => setAdminNotes(e.target.value)}
                       placeholder="Notes internes..."
-                      rows={2}
+                      rows={3}
                     />
                   </div>
-                </CardContent>
-              </Card>
+                </>
+              )}
             </div>
           )}
-
+          
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDetailModal(false)}>
               Fermer
             </Button>
-            <Button 
-              onClick={handleUpdateStatus} 
-              disabled={updating}
-              className="bg-orange-500 hover:bg-orange-600"
-              data-testid="update-status"
-            >
-              {updating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Mise à jour...
-                </>
-              ) : (
-                'Mettre à jour'
-              )}
+            {isAdmin && (
+              <Button 
+                onClick={handleUpdateStatus}
+                disabled={updating}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                {updating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Mettre à jour
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Request Modal */}
+      <Dialog open={showNewRequestModal} onOpenChange={setShowNewRequestModal}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-['Barlow_Condensed'] text-xl flex items-center gap-2">
+              <Plus className="w-5 h-5 text-orange-600" />
+              Nouvelle demande de service
+            </DialogTitle>
+            <DialogDescription>
+              Sélectionnez une catégorie, puis un service
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            {/* Step indicator */}
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <div className={`flex items-center gap-2 ${!selectedCategory ? 'text-orange-600' : 'text-slate-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${!selectedCategory ? 'bg-orange-600 text-white' : 'bg-slate-200'}`}>1</div>
+                <span className="text-sm font-medium">Catégorie</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-300" />
+              <div className={`flex items-center gap-2 ${selectedCategory && !selectedService ? 'text-orange-600' : 'text-slate-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedCategory && !selectedService ? 'bg-orange-600 text-white' : 'bg-slate-200'}`}>2</div>
+                <span className="text-sm font-medium">Service</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-300" />
+              <div className={`flex items-center gap-2 ${selectedService ? 'text-orange-600' : 'text-slate-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedService ? 'bg-orange-600 text-white' : 'bg-slate-200'}`}>3</div>
+                <span className="text-sm font-medium">Détails</span>
+              </div>
+            </div>
+
+            {/* Step 1: Category Selection */}
+            {!selectedCategory && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {categories.map((category) => {
+                  const IconComponent = getCategoryIcon(category.icon);
+                  return (
+                    <Card 
+                      key={category.id}
+                      className="cursor-pointer hover:border-orange-500 hover:shadow-md transition-all"
+                      onClick={() => handleSelectCategory(category)}
+                    >
+                      <CardContent className="pt-6 text-center">
+                        <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                          <IconComponent className="w-6 h-6 text-orange-600" />
+                        </div>
+                        <h3 className="font-medium text-slate-900">{category.name}</h3>
+                        <p className="text-xs text-slate-500 mt-1">{category.services?.length || 0} services</p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Step 2: Service Selection */}
+            {selectedCategory && !selectedService && (
+              <div>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setSelectedCategory(null)}
+                  className="mb-4"
+                >
+                  ← Retour aux catégories
+                </Button>
+                
+                <h3 className="font-medium text-lg mb-4">{selectedCategory.name}</h3>
+                
+                <div className="space-y-3">
+                  {selectedCategory.services?.map((service) => (
+                    <Card 
+                      key={service.id}
+                      className={`cursor-pointer hover:border-orange-500 transition-all ${service.is_recommended ? 'border-orange-300 bg-orange-50' : ''}`}
+                      onClick={() => handleSelectService(service)}
+                    >
+                      <CardContent className="pt-4 pb-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium">{service.name}</h4>
+                              {service.is_recommended && (
+                                <Badge className="bg-orange-500 text-white text-xs">Recommandé</Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-500 mt-1">{service.description}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-orange-600">{service.price_label}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Request Details */}
+            {selectedService && (
+              <div>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setSelectedService(null)}
+                  className="mb-4"
+                >
+                  ← Retour aux services
+                </Button>
+                
+                <Card className="mb-6 bg-orange-50 border-orange-200">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-slate-500">{selectedCategory.name}</p>
+                        <h4 className="font-medium">{selectedService.name}</h4>
+                      </div>
+                      <p className="font-bold text-orange-600">{selectedService.price_label}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="company_name">Nom de l'entreprise *</Label>
+                    <Input
+                      id="company_name"
+                      value={requestForm.company_name}
+                      onChange={(e) => setRequestForm({...requestForm, company_name: e.target.value})}
+                      placeholder="Votre entreprise"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="contact_email">Email *</Label>
+                      <Input
+                        id="contact_email"
+                        type="email"
+                        value={requestForm.contact_email}
+                        onChange={(e) => setRequestForm({...requestForm, contact_email: e.target.value})}
+                        placeholder="email@exemple.fr"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">Téléphone *</Label>
+                      <Input
+                        id="phone"
+                        value={requestForm.phone}
+                        onChange={(e) => setRequestForm({...requestForm, phone: e.target.value})}
+                        placeholder="06 XX XX XX XX"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="message">Message (optionnel)</Label>
+                    <Textarea
+                      id="message"
+                      value={requestForm.message}
+                      onChange={(e) => setRequestForm({...requestForm, message: e.target.value})}
+                      placeholder="Décrivez votre besoin..."
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>Urgence</Label>
+                    <Select 
+                      value={requestForm.urgency} 
+                      onValueChange={(v) => setRequestForm({...requestForm, urgency: v})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Standard</SelectItem>
+                        <SelectItem value="express">Express (+30%)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowNewRequestModal(false);
+              resetNewRequestForm();
+            }}>
+              Annuler
             </Button>
+            {selectedService && (
+              <Button 
+                onClick={handleSubmitRequest}
+                disabled={submitting}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                {submitting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4 mr-2" />
+                )}
+                Envoyer la demande
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
