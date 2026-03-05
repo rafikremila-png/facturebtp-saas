@@ -138,6 +138,7 @@ function AppRoutes() {
                 <Route path="parametres" element={<SettingsPage />} />
                 <Route path="services" element={<ServicesPage />} />
                 <Route path="facturation" element={<BillingPage />} />
+                <Route path="finances" element={<FinancialDashboardPage />} />
                 <Route path="ai-assistant" element={<AIAssistantPage />} />
                 <Route path="bibliotheque" element={<WorkLibraryPage />} />
                 <Route path="chantiers" element={<ProjectsPage />} />
