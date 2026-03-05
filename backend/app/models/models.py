@@ -644,6 +644,120 @@ class OTP(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=utc_now)
 
+
+# ============== SERVICE CATEGORY MODEL ==============
+
+class ServiceCategory(Base):
+    __tablename__ = "service_categories"
+    
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    
+    # Category Information
+    name = Column(String(255), nullable=False, unique=True)
+    icon = Column(String(50))
+    description = Column(Text)
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=utc_now)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    
+    # Relationships
+    services = relationship("Service", back_populates="category", cascade="all, delete-orphan")
+
+
+# ============== SERVICE MODEL ==============
+
+class Service(Base):
+    __tablename__ = "services"
+    
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    category_id = Column(String(36), ForeignKey("service_categories.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Service Information
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    price = Column(Float)
+    price_label = Column(String(100))
+    is_active = Column(Boolean, default=True)
+    is_recommended = Column(Boolean, default=False)
+    sort_order = Column(Integer, default=0)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=utc_now)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    
+    # Relationships
+    category = relationship("ServiceCategory", back_populates="services")
+    requests = relationship("ServiceRequest", back_populates="service")
+
+
+# ============== SERVICE REQUEST MODEL ==============
+
+class ServiceRequest(Base):
+    __tablename__ = "service_requests"
+    
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    category_id = Column(String(36), ForeignKey("service_categories.id", ondelete="SET NULL"), index=True)
+    service_id = Column(String(36), ForeignKey("services.id", ondelete="SET NULL"), index=True)
+    
+    # Request Information
+    company_name = Column(String(255), nullable=False)
+    contact_email = Column(String(255), nullable=False)
+    phone = Column(String(50), nullable=False)
+    message = Column(Text)
+    
+    # Additional Options
+    quantity = Column(Integer, default=1)
+    urgency = Column(String(20), default="standard")  # standard, express
+    
+    # Status
+    status = Column(String(20), default="pending", index=True)  # pending, in_progress, completed, cancelled
+    admin_notes = Column(Text)
+    
+    # Logo (optional)
+    logo_base64 = Column(Text)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=utc_now, index=True)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    
+    # Relationships
+    service = relationship("Service", back_populates="requests")
+
+
+# ============== AI ANALYSIS MODEL ==============
+
+class AIAnalysis(Base):
+    __tablename__ = "ai_analyses"
+    
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # File Information
+    filename = Column(String(255), nullable=False)
+    file_type = Column(String(50))
+    file_size = Column(Integer)
+    
+    # Analysis Results
+    analysis_type = Column(String(50), default="plan")  # plan, invoice, other
+    status = Column(String(20), default="pending")  # pending, processing, completed, failed
+    
+    # Results
+    raw_response = Column(JSON)
+    extracted_data = Column(JSON)
+    estimated_surfaces = Column(JSON)
+    estimated_costs = Column(JSON)
+    
+    # Error Handling
+    error_message = Column(Text)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=utc_now)
+    completed_at = Column(DateTime(timezone=True))
+
 # ============== INDEXES ==============
 
 # Composite indexes for common queries
