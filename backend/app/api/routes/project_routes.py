@@ -4,7 +4,6 @@ API endpoints for project management (Chantiers)
 """
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from app.core.security import ROLE_USER, ROLE_ADMIN
 from app.schemas.schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMarginResponse,
     ProjectTaskCreate, ProjectTaskUpdate, ProjectTaskResponse
@@ -13,13 +12,13 @@ from app.services.project_service import project_service, project_task_service
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
-# Dependency placeholder - will be injected from main app
-async def get_current_user():
-    pass
 
-@router.post("", response_model=ProjectResponse)
-async def create_project(data: ProjectCreate, user: dict = Depends(get_current_user)):
+@router.post("")
+async def create_project(data: ProjectCreate, current_user: dict = Depends()):
     """Create a new project"""
+    # Note: current_user will be injected by the main server
+    from server import get_current_user
+    user = await get_current_user(current_user)
     project = await project_service.create(user["id"], data.model_dump())
     return project
 
