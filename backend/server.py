@@ -89,6 +89,17 @@ def get_category_service_simple(database):
     return CategoryServiceSimple(database)
 from app.init import init_app_services, create_user_indexes
 
+# Import PostgreSQL routes for new features
+try:
+    from app.api.routes import admin as pg_admin_routes
+    from app.api.routes import work_items as pg_work_items_routes
+    from app.api.routes import financial as pg_financial_routes
+    from app.api.routes import projects as pg_projects_routes
+    PG_ROUTES_AVAILABLE = True
+except ImportError as e:
+    PG_ROUTES_AVAILABLE = False
+    logging.warning(f"Could not load some modular routes: {e}")
+
 # ReportLab imports for PDF
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
