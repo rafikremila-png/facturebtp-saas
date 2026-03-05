@@ -34,7 +34,25 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return {"id": payload.get("sub"), **payload}
+        user_id = payload.get("sub")
+        
+        # Get role from MongoDB (current active DB)
+        # This is a temporary bridge during the migration
+        from motor.motor_asyncio import AsyncIOMotorClient
+        import os
+        
+        MONGO_URL = os.environ.get('MONGO_URL')
+        DB_NAME = os.environ.get('DB_NAME', 'btp_invoice')
+        
+        client = AsyncIOMotorClient(MONGO_URL)
+        db = client[DB_NAME]
+        
+        user = await db.users.find_one({"id": user_id})
+        role = user.get("role", "user") if user else "user"
+        
+        client.close()
+        
+        return {"id": user_id, "role": role, **payload}
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
