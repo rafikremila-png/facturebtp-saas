@@ -1,12 +1,16 @@
 """
-Database Configuration
-Supports both Supabase/PostgreSQL and legacy MongoDB
+Database Configuration for PostgreSQL/Supabase
+Async SQLAlchemy with connection pooling optimized for Supabase Transaction Pooler
 """
 import os
-from pathlib import Path
-from typing import Optional, AsyncGenerator
-from dotenv import load_dotenv
 import logging
+from pathlib import Path
+from typing import AsyncGenerator
+from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.pool import NullPool
 
 logger = logging.getLogger(__name__)
 
@@ -14,113 +18,100 @@ logger = logging.getLogger(__name__)
 load_dotenv(Path(__file__).parent.parent.parent / '.env')
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-MONGO_URL = os.getenv("MONGO_URL")
 
-# ============== SUPABASE/POSTGRESQL ==============
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL must be set in environment")
 
-if DATABASE_URL:
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.orm import declarative_base
-    from sqlalchemy.pool import NullPool
+# Convert to async URL for asyncpg
+ASYNC_DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://')
+
+# Create async engine optimized for Supabase Transaction Pooler
+# NullPool is required for transaction pooler (no persistent connections)
+engine = create_async_engine(
+    ASYNC_DATABASE_URL,
+    poolclass=NullPool,  # Required for Supabase Transaction Pooler
+    echo=False,
+    connect_args={
+        "statement_cache_size": 0,  # Required for transaction pooler
+        "prepared_statement_cache_size": 0,
+    }
+)
+
+# Session factory
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Dependency injection for database sessions.
+    Use with FastAPI's Depends():
     
-    # Convert to async URL
-    ASYNC_DATABASE_URL = DATABASE_URL.replace('postgresql://', 'postgresql+asyncpg://')
+    @app.get("/items")
+    async def get_items(db: AsyncSession = Depends(get_db)):
+        ...
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+@asynccontextmanager
+async def get_db_context():
+    """
+    Context manager for database sessions.
+    Use in non-FastAPI contexts:
     
-    engine = create_async_engine(
-        ASYNC_DATABASE_URL,
-        pool_size=10,
-        max_overflow=5,
-        pool_timeout=30,
-        pool_recycle=1800,
-        pool_pre_ping=False,
-        echo=False,
-        connect_args={
-            "statement_cache_size": 0,  # Required for transaction pooler
-            "command_timeout": 30,
-        }
-    )
-    
-    AsyncSessionLocal = async_sessionmaker(
-        bind=engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False
-    )
-    
-    Base = declarative_base()
-    
-    async def get_db() -> AsyncGenerator[AsyncSession, None]:
-        """Get database session for dependency injection"""
+    async with get_db_context() as db:
+        ...
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+async def init_db():
+    """Initialize database - create tables if needed"""
+    from app.models.models import Base
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables initialized")
+
+
+async def check_db_connection() -> bool:
+    """Check if database connection is working"""
+    try:
         async with AsyncSessionLocal() as session:
-            try:
-                yield session
-            finally:
-                await session.close()
-    
-    async def init_db():
-        """Initialize database tables"""
-        async with engine.begin() as conn:
-            # Import models to register them
-            from app.models import models
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("PostgreSQL database initialized")
-    
-    DB_TYPE = "postgresql"
-    logger.info("Using Supabase/PostgreSQL database")
+            await session.execute("SELECT 1")
+            return True
+    except Exception as e:
+        logger.error(f"Database connection check failed: {e}")
+        return False
 
-else:
-    # Fallback to MongoDB
-    Base = None
-    AsyncSessionLocal = None
-    engine = None
-    
-    async def get_db():
-        """Get MongoDB database"""
-        return db
-    
-    async def init_db():
-        """Initialize MongoDB"""
-        logger.info("MongoDB database ready")
-    
-    DB_TYPE = "mongodb"
-    logger.info("Using MongoDB database")
 
-# ============== MONGODB (Legacy/Fallback) ==============
-
-from motor.motor_asyncio import AsyncIOMotorClient
-
-mongo_client: Optional[AsyncIOMotorClient] = None
-db = None
-
-async def init_mongodb():
-    """Initialize MongoDB connection"""
-    global mongo_client, db
-    if MONGO_URL:
-        mongo_client = AsyncIOMotorClient(MONGO_URL)
-        db_name = os.getenv("DB_NAME", "btp_facture")
-        db = mongo_client[db_name]
-        logger.info(f"MongoDB connected to database: {db_name}")
-        return db
-    return None
-
-async def close_mongodb():
-    """Close MongoDB connection"""
-    global mongo_client
-    if mongo_client:
-        mongo_client.close()
-        logger.info("MongoDB connection closed")
-
-# ============== DATABASE HELPERS ==============
-
-def get_db_type() -> str:
-    """Get current database type"""
-    return DB_TYPE
-
-def is_postgresql() -> bool:
-    """Check if using PostgreSQL"""
-    return DB_TYPE == "postgresql"
-
-def is_mongodb() -> bool:
-    """Check if using MongoDB"""
-    return DB_TYPE == "mongodb"
+# Export for convenience
+__all__ = [
+    "engine",
+    "AsyncSessionLocal", 
+    "get_db",
+    "get_db_context",
+    "init_db",
+    "check_db_connection"
+]
