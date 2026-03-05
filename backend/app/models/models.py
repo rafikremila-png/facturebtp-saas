@@ -302,6 +302,10 @@ class WorkItem(Base):
     labor_cost = Column(Float, default=0)
     material_cost = Column(Float, default=0)
     
+    # Template & Components
+    is_template = Column(Boolean, default=False)
+    components = Column(JSON, default=None)
+    
     # Reference
     reference = Column(String(100))
     
