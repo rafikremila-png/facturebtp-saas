@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,14 +9,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Sparkles, Calculator, FileText, MapPin, Hammer, Euro, Clock, TrendingUp } from 'lucide-react';
+import { Loader2, Sparkles, Calculator, FileText, MapPin, Hammer, Euro, Clock, TrendingUp, Upload, FileUp, Download, ExternalLink, Image, PenTool } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 
 const AIAssistantPage = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('generate');
+    const fileInputRef = useRef(null);
+    const imageInputRef = useRef(null);
     
     // Generate Quote State
     const [quoteForm, setQuoteForm] = useState({
@@ -39,6 +43,14 @@ const AIAssistantPage = () => {
     // Analyze State
     const [analyzeForm, setAnalyzeForm] = useState({ description: '' });
     const [analysis, setAnalysis] = useState(null);
+    
+    // PDF Analysis State
+    const [pdfAnalysis, setPdfAnalysis] = useState(null);
+    const [pdfLoading, setPdfLoading] = useState(false);
+    
+    // Image Analysis State
+    const [imageAnalysis, setImageAnalysis] = useState(null);
+    const [imageLoading, setImageLoading] = useState(false);
 
     const projectTypes = [
         { value: 'renovation_salle_de_bain', label: 'Rénovation salle de bain' },
@@ -76,6 +88,21 @@ const AIAssistantPage = () => {
             toast.success('Devis généré avec succès !');
         } catch (error) {
             toast.error('Erreur lors de la génération du devis');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleExportQuote = async () => {
+        if (!generatedQuote) return;
+        
+        setLoading(true);
+        try {
+            const response = await api.post('/ai/export-to-quote', generatedQuote);
+            toast.success(response.data.message);
+            navigate(`/devis/${response.data.quote_id}`);
+        } catch (error) {
+            toast.error('Erreur lors de l\'export du devis');
         } finally {
             setLoading(false);
         }
@@ -122,6 +149,58 @@ const AIAssistantPage = () => {
         }
     };
 
+    const handlePdfUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        if (file.type !== 'application/pdf') {
+            toast.error('Veuillez sélectionner un fichier PDF');
+            return;
+        }
+        
+        setPdfLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await api.post('/ai/analyze-plan-pdf', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            setPdfAnalysis(response.data);
+            toast.success('Plan PDF analysé !');
+        } catch (error) {
+            toast.error('Erreur lors de l\'analyse du PDF');
+        } finally {
+            setPdfLoading(false);
+        }
+    };
+
+    const handleImageUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        if (!file.type.startsWith('image/')) {
+            toast.error('Veuillez sélectionner une image');
+            return;
+        }
+        
+        setImageLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await api.post('/ai/analyze-site-photo', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            setImageAnalysis(response.data);
+            toast.success('Photo analysée !');
+        } catch (error) {
+            toast.error('Erreur lors de l\'analyse de l\'image');
+        } finally {
+            setImageLoading(false);
+        }
+    };
+
     const formatPrice = (price) => {
         return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(price);
     };
@@ -139,18 +218,26 @@ const AIAssistantPage = () => {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-5">
                     <TabsTrigger value="generate" className="flex items-center gap-2">
                         <FileText className="h-4 w-4" />
-                        Générer un devis
+                        <span className="hidden sm:inline">Générer</span>
                     </TabsTrigger>
                     <TabsTrigger value="estimate" className="flex items-center gap-2">
                         <Calculator className="h-4 w-4" />
-                        Estimer un projet
+                        <span className="hidden sm:inline">Estimer</span>
                     </TabsTrigger>
                     <TabsTrigger value="analyze" className="flex items-center gap-2">
                         <Hammer className="h-4 w-4" />
-                        Analyser un chantier
+                        <span className="hidden sm:inline">Analyser</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="pdf" className="flex items-center gap-2">
+                        <FileUp className="h-4 w-4" />
+                        <span className="hidden sm:inline">Plan PDF</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="photo" className="flex items-center gap-2">
+                        <Image className="h-4 w-4" />
+                        <span className="hidden sm:inline">Photo</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -299,6 +386,19 @@ const AIAssistantPage = () => {
                                                 <span className="text-blue-600">{formatPrice(generatedQuote.total_ttc)}</span>
                                             </div>
                                         </div>
+
+                                        <Button 
+                                            onClick={handleExportQuote} 
+                                            className="w-full"
+                                            disabled={loading}
+                                            data-testid="export-quote-btn"
+                                        >
+                                            {loading ? (
+                                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Export...</>
+                                            ) : (
+                                                <><Download className="mr-2 h-4 w-4" /> Créer le devis dans le système</>
+                                            )}
+                                        </Button>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -505,6 +605,170 @@ const AIAssistantPage = () => {
                                                 </div>
                                             ))}
                                         </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                </TabsContent>
+
+                {/* PDF Analysis Tab */}
+                <TabsContent value="pdf">
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <FileUp className="h-5 w-5" />
+                                    Analyse de plan PDF
+                                </CardTitle>
+                                <CardDescription>
+                                    Uploadez un plan de construction pour une analyse automatique des pièces et surfaces
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <input
+                                    type="file"
+                                    accept="application/pdf"
+                                    ref={fileInputRef}
+                                    onChange={handlePdfUpload}
+                                    className="hidden"
+                                />
+                                
+                                <div 
+                                    className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    {pdfLoading ? (
+                                        <div className="flex flex-col items-center">
+                                            <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
+                                            <p className="text-gray-600">Analyse en cours...</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center">
+                                            <Upload className="h-12 w-12 text-gray-400 mb-4" />
+                                            <p className="text-gray-600 font-medium">Cliquez pour uploader un plan PDF</p>
+                                            <p className="text-sm text-gray-400 mt-2">Maximum 20 MB</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {pdfAnalysis && pdfAnalysis.success && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Résultat de l'analyse PDF</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4 text-center">
+                                        <div className="bg-blue-50 rounded-lg p-3">
+                                            <div className="text-2xl font-bold text-blue-600">{pdfAnalysis.pages}</div>
+                                            <div className="text-sm text-gray-600">Pages</div>
+                                        </div>
+                                        <div className="bg-green-50 rounded-lg p-3">
+                                            <div className="text-2xl font-bold text-green-600">{pdfAnalysis.total_surface_estimated || 0}m²</div>
+                                            <div className="text-sm text-gray-600">Surface estimée</div>
+                                        </div>
+                                    </div>
+
+                                    {pdfAnalysis.rooms_detected?.length > 0 && (
+                                        <div>
+                                            <h4 className="font-medium mb-2">Pièces détectées</h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {pdfAnalysis.rooms_detected.map((room, idx) => (
+                                                    <Badge key={idx} variant="secondary">
+                                                        {room.name} {room.surface ? `(${room.surface}m²)` : ''}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {pdfAnalysis.suggested_works?.length > 0 && (
+                                        <div>
+                                            <h4 className="font-medium mb-2">Travaux suggérés</h4>
+                                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                                                {pdfAnalysis.suggested_works.map((work, idx) => (
+                                                    <div key={idx} className="p-2 bg-gray-50 rounded text-sm">
+                                                        <div className="font-medium">{work.description}</div>
+                                                        <div className="text-xs text-gray-500">{work.room} - {work.price_range}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                </TabsContent>
+
+                {/* Photo Analysis Tab */}
+                <TabsContent value="photo">
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Image className="h-5 w-5" />
+                                    Analyse photo de chantier
+                                </CardTitle>
+                                <CardDescription>
+                                    Uploadez une photo de votre chantier pour une analyse visuelle
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    ref={imageInputRef}
+                                    onChange={handleImageUpload}
+                                    className="hidden"
+                                />
+                                
+                                <div 
+                                    className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+                                    onClick={() => imageInputRef.current?.click()}
+                                >
+                                    {imageLoading ? (
+                                        <div className="flex flex-col items-center">
+                                            <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
+                                            <p className="text-gray-600">Analyse en cours...</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center">
+                                            <Upload className="h-12 w-12 text-gray-400 mb-4" />
+                                            <p className="text-gray-600 font-medium">Cliquez pour uploader une photo</p>
+                                            <p className="text-sm text-gray-400 mt-2">JPG, PNG - Maximum 10 MB</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {imageAnalysis && imageAnalysis.success && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Résultat de l'analyse photo</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4 text-center">
+                                        <div className="bg-blue-50 rounded-lg p-3">
+                                            <div className="text-lg font-bold text-blue-600">{imageAnalysis.dimensions?.width}x{imageAnalysis.dimensions?.height}</div>
+                                            <div className="text-sm text-gray-600">Dimensions</div>
+                                        </div>
+                                        <div className="bg-green-50 rounded-lg p-3">
+                                            <div className="text-lg font-bold text-green-600">{imageAnalysis.format}</div>
+                                            <div className="text-sm text-gray-600">Format</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-yellow-50 rounded-lg p-4">
+                                        <h4 className="font-medium mb-2">Suggestions</h4>
+                                        <ul className="text-sm text-gray-600 space-y-1">
+                                            {imageAnalysis.suggestions?.map((suggestion, idx) => (
+                                                <li key={idx}>• {suggestion}</li>
+                                            ))}
+                                        </ul>
                                     </div>
                                 </CardContent>
                             </Card>
