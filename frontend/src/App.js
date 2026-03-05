@@ -29,6 +29,8 @@ import AdminMetricsPage from "@/pages/AdminMetricsPage";
 import AdminAnalyticsPage from "@/pages/AdminAnalyticsPage";
 import AIAssistantPage from "@/pages/AIAssistantPage";
 import SignaturePage from "@/pages/SignaturePage";
+import WorkLibraryPage from "@/pages/WorkLibraryPage";
+import ProjectsPage from "@/pages/ProjectsPage";
 import Layout from "@/components/Layout";
 
 const ProtectedRoute = ({ children }) => {
