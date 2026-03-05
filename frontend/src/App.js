@@ -138,6 +138,8 @@ function AppRoutes() {
                 <Route path="services" element={<ServicesPage />} />
                 <Route path="facturation" element={<BillingPage />} />
                 <Route path="ai-assistant" element={<AIAssistantPage />} />
+                <Route path="bibliotheque" element={<WorkLibraryPage />} />
+                <Route path="chantiers" element={<ProjectsPage />} />
                 <Route path="utilisateurs" element={<UsersPage />} />
                 <Route path="demandes-services" element={
                     <AdminRoute>
