@@ -98,7 +98,7 @@ export default function ProjectsPage() {
         try {
             const payload = {
                 ...formData,
-                client_id: formData.client_id || null,
+                client_id: formData.client_id === "none" || !formData.client_id ? null : formData.client_id,
                 budget: parseFloat(formData.budget) || 0,
                 estimated_cost: parseFloat(formData.estimated_cost) || 0,
                 start_date: formData.start_date || null,
