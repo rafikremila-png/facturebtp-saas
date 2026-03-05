@@ -4194,30 +4194,57 @@ async def reset_kits(user: dict = Depends(get_current_user)):
 @api_router.get("/settings", response_model=CompanySettings)
 async def get_settings(user: dict = Depends(get_current_user)):
     """Get company settings - All authenticated users can view"""
+    # First try to get user-specific settings
+    user_settings = await db.user_settings.find_one({"user_id": user["id"]}, {"_id": 0})
+    
+    if user_settings:
+        # Merge with company defaults
+        company_settings = await db.settings.find_one({"type": "company"}, {"_id": 0})
+        if company_settings:
+            # User settings override company defaults
+            merged = {**company_settings, **user_settings}
+            merged.pop("type", None)
+            merged.pop("user_id", None)
+            return CompanySettings(**{k: v for k, v in merged.items() if k in CompanySettings.__fields__})
+        return CompanySettings(**{k: v for k, v in user_settings.items() if k in CompanySettings.__fields__ and k != "user_id"})
+    
+    # Fall back to company settings
     settings = await db.settings.find_one({"type": "company"}, {"_id": 0})
     if not settings:
         return CompanySettings()
     return CompanySettings(**{k: v for k, v in settings.items() if k != "type"})
 
 @api_router.put("/settings", response_model=CompanySettings)
-async def update_settings(settings_data: CompanySettings, admin: dict = Depends(require_admin)):
-    """Update company settings - Admin only"""
+async def update_settings(settings_data: CompanySettings, user: dict = Depends(get_current_user)):
+    """Update settings - Each user saves their own settings"""
     settings_doc = settings_data.dict()
-    settings_doc["type"] = "company"
+    settings_doc["user_id"] = user["id"]
+    settings_doc["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await db.settings.update_one(
-        {"type": "company"},
+    # Save to user_settings collection
+    await db.user_settings.update_one(
+        {"user_id": user["id"]},
         {"$set": settings_doc},
         upsert=True
     )
     
-    logger.info(f"Settings updated by admin {admin['id']}")
+    # If user is admin, also update company-wide settings
+    if user.get("role") in ["admin", "super_admin"]:
+        company_doc = settings_data.dict()
+        company_doc["type"] = "company"
+        await db.settings.update_one(
+            {"type": "company"},
+            {"$set": company_doc},
+            upsert=True
+        )
+    
+    logger.info(f"Settings updated by user {user['id']}")
     
     return settings_data
 
 @api_router.post("/settings/logo")
-async def upload_logo(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
-    """Upload company logo - Admin only"""
+async def upload_logo(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    """Upload company logo - Any authenticated user can upload their logo"""
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Le fichier doit être une image")
     
@@ -4228,13 +4255,22 @@ async def upload_logo(file: UploadFile = File(...), admin: dict = Depends(requir
     logo_base64 = base64.b64encode(contents).decode('utf-8')
     logo_data = f"data:{file.content_type};base64,{logo_base64}"
     
-    await db.settings.update_one(
-        {"type": "company"},
-        {"$set": {"logo_base64": logo_data}},
+    # Save to user settings
+    await db.user_settings.update_one(
+        {"user_id": user["id"]},
+        {"$set": {"logo_base64": logo_data, "updated_at": datetime.now(timezone.utc).isoformat()}},
         upsert=True
     )
     
-    logger.info(f"Logo updated by admin {admin['id']}")
+    # If admin, also update company settings
+    if user.get("role") in ["admin", "super_admin"]:
+        await db.settings.update_one(
+            {"type": "company"},
+            {"$set": {"logo_base64": logo_data}},
+            upsert=True
+        )
+    
+    logger.info(f"Logo updated by user {user['id']}")
     
     return {"message": "Logo téléchargé avec succès", "logo": logo_data}
 
