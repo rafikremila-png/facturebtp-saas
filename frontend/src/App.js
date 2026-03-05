@@ -147,6 +147,11 @@ function AppRoutes() {
                         <AdminMetricsPage />
                     </AdminRoute>
                 } />
+                <Route path="admin/analytics" element={
+                    <AdminRoute>
+                        <AdminAnalyticsPage />
+                    </AdminRoute>
+                } />
                 <Route path="profil" element={<ProfilePage />} />
             </Route>
         </Routes>
