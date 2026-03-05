@@ -100,7 +100,7 @@ Tracked for each user:
 
 ## Key Credentials
 - **Admin**: admin@btpfacture.com / Admin123!
-- **Preview URL**: https://batiment-facture-1.preview.emergentagent.com
+- **Preview URL**: https://construction-saas-3.preview.emergentagent.com
 
 ## Pending Frontend Work
 - [ ] Work Item Library UI
