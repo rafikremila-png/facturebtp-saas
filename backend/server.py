@@ -6698,6 +6698,46 @@ async def export_ai_quote_to_system(
 
 app.include_router(api_router)
 
+# ============== NEW MODULAR ROUTES (Phase 2-5) ==============
+# Import and include new modular API routers
+try:
+    from app.api.routes.project_routes import router as project_router
+    from app.api.routes.work_item_routes import router as work_item_router
+    from app.api.routes.financial_routes import router as financial_router
+    from app.api.routes.signature_routes import router as signature_router
+    from app.api.routes.portal_routes import router as portal_router
+    from app.api.routes.ai_routes import router as ai_router
+    from app.api.routes.accounting_routes import router as accounting_router
+    from app.api.routes.recurring_routes import router as recurring_router
+    from app.api.routes.reminder_routes import router as reminder_router
+    from app.api.routes.notification_routes import router as notification_router
+    
+    # Inject dependency for authentication
+    def inject_get_current_user(router):
+        """Inject the get_current_user dependency into router endpoints"""
+        for route in router.routes:
+            if hasattr(route, 'dependant'):
+                for dep in route.dependant.dependencies:
+                    if hasattr(dep, 'call') and dep.call.__name__ == 'get_current_user':
+                        dep.call = get_current_user
+        return router
+    
+    # Add routers with /api prefix
+    app.include_router(project_router, prefix="/api")
+    app.include_router(work_item_router, prefix="/api")
+    app.include_router(financial_router, prefix="/api")
+    app.include_router(signature_router, prefix="/api")
+    app.include_router(portal_router, prefix="/api")
+    app.include_router(ai_router, prefix="/api")
+    app.include_router(accounting_router, prefix="/api")
+    app.include_router(recurring_router, prefix="/api")
+    app.include_router(reminder_router, prefix="/api")
+    app.include_router(notification_router, prefix="/api")
+    
+    logger.info("New modular routes loaded successfully")
+except Exception as e:
+    logger.warning(f"Could not load some modular routes: {e}")
+
 cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
 cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
 
