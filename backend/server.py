@@ -1998,8 +1998,8 @@ async def deactivate_user(user_id: str, admin: dict = Depends(require_admin)):
     return {"message": "Compte désactivé", "user_id": user_id}
 
 @api_router.delete("/users/{user_id}")
-async def delete_user(user_id: str, data: UserDeleteRequest, request: Request, admin: dict = Depends(require_super_admin)):
-    """Delete a user - Super Admin only. Requires OTP verification."""
+async def delete_user(user_id: str, data: UserDeleteRequest, request: Request, admin: dict = Depends(require_admin)):
+    """Delete a user - Admin or Super Admin. Requires OTP verification."""
     if not validate_uuid(user_id):
         raise HTTPException(status_code=400, detail="ID utilisateur invalide")
     
@@ -2020,6 +2020,10 @@ async def delete_user(user_id: str, data: UserDeleteRequest, request: Request, a
     if target_user.get("role") == ROLE_SUPER_ADMIN:
         raise HTTPException(status_code=403, detail="Impossible de supprimer le compte super administrateur")
     
+    # Admin cannot delete another admin (only super_admin can)
+    if target_user.get("role") == ROLE_ADMIN and not is_super_admin(admin):
+        raise HTTPException(status_code=403, detail="Seul un super administrateur peut supprimer un administrateur")
+    
     # Prevent self-deletion
     if admin["id"] == user_id:
         raise HTTPException(status_code=400, detail="Impossible de supprimer votre propre compte")
@@ -2038,7 +2042,7 @@ async def delete_user(user_id: str, data: UserDeleteRequest, request: Request, a
         ip_address=client_ip
     )
     
-    logger.info(f"Super admin {admin['id']} deleted user {user_id}")
+    logger.info(f"Admin {admin['id']} deleted user {user_id}")
     return {"message": "Utilisateur supprimé", "user_id": user_id}
 
 @api_router.post("/users/{user_id}/reset-password")
