@@ -105,6 +105,9 @@ function AppRoutes() {
             {/* Public client view - no auth required */}
             <Route path="/client/:type/:token" element={<ClientViewPage />} />
             
+            {/* Public signature page - no auth required */}
+            <Route path="/signer/:token" element={<SignaturePage />} />
+            
             <Route path="/login" element={
                 <PublicRoute>
                     <LoginPage />
