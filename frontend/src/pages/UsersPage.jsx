@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Users, Shield, ShieldCheck, User, UserX, UserCheck, Trash2, Crown, Eye, Key, UserCog, Mail, Phone, Building, MapPin, Calendar, Clock, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Users, Shield, ShieldCheck, User, UserX, UserCheck, Trash2, Crown, Eye, Key, UserCog, Mail, Phone, Building, MapPin, Calendar, Clock, CheckCircle, XCircle, ArrowLeft, Check, X, Image, Globe, CreditCard, FileText } from "lucide-react";
 import { toast } from "sonner";
 import OTPInput from "@/components/OTPInput";
 
