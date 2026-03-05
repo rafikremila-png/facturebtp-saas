@@ -196,8 +196,16 @@ async def migrate_invoices(mongo_db, pg_session):
     
     mongo_invoices = await mongo_db.invoices.find({}).to_list(length=50000)
     count = 0
+    skipped = 0
     
     for mi in mongo_invoices:
+        user_id = mi.get('user_id')
+        
+        # Skip invoices without user_id
+        if not user_id:
+            skipped += 1
+            continue
+        
         # Map old status to new status
         status_map = {
             'impaye': 'sent',
@@ -207,7 +215,7 @@ async def migrate_invoices(mongo_db, pg_session):
         
         invoice = Invoice(
             id=mi.get('id', generate_uuid()),
-            user_id=mi.get('user_id'),
+            user_id=user_id,
             client_id=mi.get('client_id'),
             quote_id=mi.get('quote_id'),
             invoice_number=mi.get('invoice_number', f"FAC-{count:04d}"),
@@ -235,7 +243,7 @@ async def migrate_invoices(mongo_db, pg_session):
         count += 1
     
     await pg_session.flush()
-    logger.info(f"  Migrated {count} invoices")
+    logger.info(f"  Migrated {count} invoices (skipped {skipped} orphans)")
     return count
 
 
