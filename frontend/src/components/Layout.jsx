@@ -17,7 +17,8 @@ import {
     Briefcase,
     ClipboardList,
     CreditCard,
-    BarChart3
+    BarChart3,
+    Sparkles
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ const navItems = [
     { to: "/clients", icon: Users, label: "Clients" },
     { to: "/devis", icon: FileText, label: "Devis" },
     { to: "/factures", icon: Receipt, label: "Factures" },
+    { to: "/ai-assistant", icon: Sparkles, label: "Assistant IA" },
     { to: "/services", icon: Briefcase, label: "Services Pro" },
     { to: "/facturation", icon: CreditCard, label: "Facturation" },
     { to: "/parametres", icon: Settings, label: "Paramètres" },
