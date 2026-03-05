@@ -855,7 +855,7 @@ class CompanySettings(BaseModel):
     company_name: str = Field(default="", max_length=200)
     address: str = Field(default="", max_length=500)
     phone: str = Field(default="", max_length=50)
-    email: EmailStr = ""
+    email: Optional[str] = Field(default="", max_length=100)
     siret: str = Field(default="", max_length=14)
     vat_number: str = Field(default="", max_length=20)
     default_vat_rates: List[float] = [20.0, 10.0, 5.5, 2.1]
@@ -870,7 +870,7 @@ class CompanySettings(BaseModel):
     default_payment_delay_days: int = Field(30, ge=0, le=365)
     late_payment_rate: float = Field(3.0, ge=0, le=100)
     default_retenue_garantie_enabled: bool = False
-    default_retenue_garantie_rate: float = Field(5.0, ge=0, le=5)
+    default_retenue_garantie_rate: float = Field(5.0, ge=0, le=10)
     default_retenue_garantie_duration_months: int = Field(12, ge=1, le=60)
     website: Optional[str] = Field(default="", max_length=200)
     document_theme_color: str = Field(default="blue", max_length=20)
