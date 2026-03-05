@@ -4,25 +4,36 @@ API endpoints for construction work items library
 """
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from pydantic import BaseModel
 import csv
 import io
 
-from app.schemas.schemas import WorkItemCreate, WorkItemUpdate, WorkItemResponse
+from app.api.deps import get_current_user
 from app.services.work_item_service import work_item_service
 
 router = APIRouter(prefix="/work-items", tags=["Work Items"])
 
-# Dependency placeholder
-async def get_current_user():
-    pass
 
-@router.post("", response_model=WorkItemResponse)
+class WorkItemCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    unit: Optional[str] = "u"
+    unit_price: float
+    vat_rate: Optional[float] = 20.0
+    labor_cost: Optional[float] = 0
+    material_cost: Optional[float] = 0
+    reference: Optional[str] = None
+
+
+@router.post("")
 async def create_work_item(data: WorkItemCreate, user: dict = Depends(get_current_user)):
     """Create a new work item"""
     item = await work_item_service.create(user["id"], data.model_dump())
     return item
 
-@router.get("", response_model=List[WorkItemResponse])
+
+@router.get("")
 async def list_work_items(
     category: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
@@ -39,18 +50,21 @@ async def list_work_items(
         limit=limit
     )
 
+
 @router.get("/categories")
 async def list_categories(user: dict = Depends(get_current_user)):
     """Get all work item categories"""
     categories = await work_item_service.get_categories(user["id"])
     return {"categories": categories}
 
+
 @router.get("/units")
 async def list_units():
     """Get all available units"""
     return {"units": work_item_service.get_units()}
 
-@router.get("/{item_id}", response_model=WorkItemResponse)
+
+@router.get("/{item_id}")
 async def get_work_item(item_id: str, user: dict = Depends(get_current_user)):
     """Get a work item by ID"""
     item = await work_item_service.get_by_id(item_id, user["id"])
@@ -58,13 +72,38 @@ async def get_work_item(item_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Article non trouvé")
     return item
 
-@router.put("/{item_id}", response_model=WorkItemResponse)
-async def update_work_item(item_id: str, data: WorkItemUpdate, user: dict = Depends(get_current_user)):
+
+@router.put("/{item_id}")
+async def update_work_item(
+    item_id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    category: Optional[str] = None,
+    unit: Optional[str] = None,
+    unit_price: Optional[float] = None,
+    vat_rate: Optional[float] = None,
+    user: dict = Depends(get_current_user)
+):
     """Update a work item"""
-    item = await work_item_service.update(item_id, user["id"], data.model_dump(exclude_unset=True))
+    data = {}
+    if name is not None:
+        data["name"] = name
+    if description is not None:
+        data["description"] = description
+    if category is not None:
+        data["category"] = category
+    if unit is not None:
+        data["unit"] = unit
+    if unit_price is not None:
+        data["unit_price"] = unit_price
+    if vat_rate is not None:
+        data["vat_rate"] = vat_rate
+    
+    item = await work_item_service.update(item_id, user["id"], data)
     if not item:
         raise HTTPException(status_code=404, detail="Article non trouvé")
     return item
+
 
 @router.delete("/{item_id}")
 async def delete_work_item(item_id: str, user: dict = Depends(get_current_user)):
@@ -73,6 +112,7 @@ async def delete_work_item(item_id: str, user: dict = Depends(get_current_user))
     if not success:
         raise HTTPException(status_code=404, detail="Article non trouvé")
     return {"message": "Article supprimé"}
+
 
 @router.post("/import")
 async def import_work_items(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
@@ -91,6 +131,7 @@ async def import_work_items(file: UploadFile = File(...), user: dict = Depends(g
     
     result = await work_item_service.import_from_csv(user["id"], rows)
     return result
+
 
 @router.post("/bulk")
 async def bulk_create_work_items(items: List[WorkItemCreate], user: dict = Depends(get_current_user)):
