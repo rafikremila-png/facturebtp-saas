@@ -95,6 +95,9 @@ try:
     from app.api.routes import work_items as pg_work_items_routes
     from app.api.routes import financial as pg_financial_routes
     from app.api.routes import projects as pg_projects_routes
+    from app.api.routes import ai as pg_ai_routes
+    from app.api.routes import portal as pg_portal_routes
+    from app.api.routes import payments as pg_payments_routes
     PG_ROUTES_AVAILABLE = True
 except ImportError as e:
     PG_ROUTES_AVAILABLE = False
