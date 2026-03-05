@@ -1881,6 +1881,132 @@ async def get_user(user_id: str, admin: dict = Depends(require_admin)):
         email_verified=user.get("email_verified", False)
     )
 
+@api_router.get("/users/{user_id}/profile-completion")
+async def get_user_profile_completion(user_id: str, admin: dict = Depends(require_admin)):
+    """Get user profile completion status - Admin only. Shows non-sensitive configuration status."""
+    if not validate_uuid(user_id):
+        raise HTTPException(status_code=400, detail="ID utilisateur invalide")
+    
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    
+    # Get user settings
+    user_settings = await db.user_settings.find_one({"user_id": user_id}, {"_id": 0})
+    
+    # Define profile completion checklist
+    completion_items = []
+    
+    # User basic info checks
+    completion_items.append({
+        "key": "name",
+        "label": "Nom complet",
+        "completed": bool(user.get("name") and len(user.get("name", "")) > 2),
+        "category": "profil"
+    })
+    completion_items.append({
+        "key": "phone",
+        "label": "Téléphone",
+        "completed": bool(user.get("phone")),
+        "category": "profil"
+    })
+    completion_items.append({
+        "key": "email_verified",
+        "label": "Email vérifié",
+        "completed": user.get("email_verified", False),
+        "category": "profil"
+    })
+    
+    # Company info checks (from user_settings)
+    if user_settings:
+        completion_items.append({
+            "key": "company_name",
+            "label": "Nom entreprise",
+            "completed": bool(user_settings.get("company_name")),
+            "category": "entreprise"
+        })
+        completion_items.append({
+            "key": "address",
+            "label": "Adresse",
+            "completed": bool(user_settings.get("address")),
+            "category": "entreprise"
+        })
+        completion_items.append({
+            "key": "siret",
+            "label": "SIRET",
+            "completed": bool(user_settings.get("siret") and len(user_settings.get("siret", "")) == 14),
+            "category": "legal"
+        })
+        completion_items.append({
+            "key": "vat_number",
+            "label": "N° TVA",
+            "completed": bool(user_settings.get("vat_number")),
+            "category": "legal"
+        })
+        completion_items.append({
+            "key": "iban",
+            "label": "IBAN",
+            "completed": bool(user_settings.get("iban") and len(user_settings.get("iban", "")) >= 15),
+            "category": "bancaire"
+        })
+        completion_items.append({
+            "key": "bic",
+            "label": "BIC",
+            "completed": bool(user_settings.get("bic")),
+            "category": "bancaire"
+        })
+        completion_items.append({
+            "key": "logo",
+            "label": "Logo",
+            "completed": bool(user_settings.get("logo_base64")),
+            "category": "entreprise"
+        })
+        completion_items.append({
+            "key": "website",
+            "label": "Site web",
+            "completed": bool(user_settings.get("website")),
+            "category": "entreprise"
+        })
+    else:
+        # No settings yet - all company items are incomplete
+        for item in [
+            {"key": "company_name", "label": "Nom entreprise", "category": "entreprise"},
+            {"key": "address", "label": "Adresse", "category": "entreprise"},
+            {"key": "siret", "label": "SIRET", "category": "legal"},
+            {"key": "vat_number", "label": "N° TVA", "category": "legal"},
+            {"key": "iban", "label": "IBAN", "category": "bancaire"},
+            {"key": "bic", "label": "BIC", "category": "bancaire"},
+            {"key": "logo", "label": "Logo", "category": "entreprise"},
+            {"key": "website", "label": "Site web", "category": "entreprise"},
+        ]:
+            item["completed"] = False
+            completion_items.append(item)
+    
+    # Calculate completion percentage
+    completed_count = sum(1 for item in completion_items if item["completed"])
+    total_count = len(completion_items)
+    completion_percentage = int((completed_count / total_count) * 100) if total_count > 0 else 0
+    
+    return {
+        "user_id": user_id,
+        "user_name": user.get("name"),
+        "user_email": user.get("email"),
+        "completion_percentage": completion_percentage,
+        "completed_count": completed_count,
+        "total_count": total_count,
+        "items": completion_items,
+        "summary": {
+            "profil": sum(1 for item in completion_items if item["category"] == "profil" and item["completed"]),
+            "profil_total": sum(1 for item in completion_items if item["category"] == "profil"),
+            "entreprise": sum(1 for item in completion_items if item["category"] == "entreprise" and item["completed"]),
+            "entreprise_total": sum(1 for item in completion_items if item["category"] == "entreprise"),
+            "legal": sum(1 for item in completion_items if item["category"] == "legal" and item["completed"]),
+            "legal_total": sum(1 for item in completion_items if item["category"] == "legal"),
+            "bancaire": sum(1 for item in completion_items if item["category"] == "bancaire" and item["completed"]),
+            "bancaire_total": sum(1 for item in completion_items if item["category"] == "bancaire"),
+        }
+    }
+
 @api_router.post("/users/{user_id}/request-otp")
 async def request_admin_otp(user_id: str, otp_type: str, admin: dict = Depends(require_admin)):
     """Request OTP for admin action on a user"""
