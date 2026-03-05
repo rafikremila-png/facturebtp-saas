@@ -1,141 +1,133 @@
-# BTP Facture - Product Requirements Document
+# FactureBTP - SaaS Platform for Construction Companies
 
-## Project Overview
-BTP Facture is a complete SaaS platform for construction companies (BTP) to manage quotes, invoices, projects, and clients.
+## Original Problem Statement
+Transform the FactureBTP project into a complete, production-ready SaaS platform for construction companies with multi-tenant architecture using FastAPI/PostgreSQL (Supabase).
 
-## Status: Phases 1-5 BACKEND COMPLETE ✅ | Frontend Integration IN PROGRESS
+## Current Architecture
+- **Backend**: Hybrid FastAPI (MongoDB + PostgreSQL/Supabase)
+- **Frontend**: React with Shadcn/UI, Tailwind CSS
+- **Database**: MongoDB (legacy auth) + PostgreSQL via Supabase (new features)
+- **Authentication**: JWT-based, MongoDB users synced to PostgreSQL
 
-### Completed Features
+---
 
-#### Phase 1 - Database Migration ✅
-- **Supabase PostgreSQL 17.6** connected
-- **16 tables created** with Alembic migrations
-- **Row Level Security (RLS)** enabled
-- **53 users migrated** from MongoDB
-- **Multi-tenant architecture** with user_id filtering
+## Implemented Features
 
-#### Phase 2 - BTP Core Features ✅
-- **Projects Service** - Chantiers with tasks, timeline, margins
-- **Work Item Library** - 13 BTP categories, 10 units
-- **Quote Service** - VAT calculations, signatures
-- **Invoice Service** - Progress invoicing, retentions
+### Phase 1: Architecture & Migration ✅ (Completed)
+- [x] PostgreSQL database schema (16 tables) via Supabase
+- [x] Row Level Security (RLS) enabled on all tables
+- [x] User data migration from MongoDB (53 users)
+- [x] Hybrid server architecture (server.py + modular app/)
 
-#### Phase 3 - Financial Tools ✅
-- **Recurring Invoices** - Weekly/monthly/quarterly/yearly
-- **Invoice Reminders** - Automatic scheduling
-- **Accounting Export** - CSV exports (invoices, payments, VAT)
-- **Admin Dashboard** - User stats, profile completion metrics
+### Phase 2-5: Backend Services ✅ (Completed)
+- [x] 84+ API routes created for all features
+- [x] Services: Users, Clients, Projects, Quotes, Invoices
+- [x] Admin Dashboard, Work Library, Financials
+- [x] AI PDF Analysis, Client Portal, Stripe Payments
 
-#### Phase 4 - Advanced Features ✅
-- **AI PDF Analysis** (Gemini 3 Flash) - Extract quote items from plans
-- **Electronic Signatures** - Legal compliance with audit trail
-- **Client Portal** - Token-based access (no client account needed)
-- **Stripe Payments** - Invoice payment via Checkout
+### P0 Frontend Features ✅ (Completed - Dec 2025)
+- [x] **Profile Completion Indicator** - Dashboard widget showing 63% completion
+  - Tracks: Profile (2/3), Entreprise (3/4), Légal (2/2), Bancaire (0/2)
+  - Shows missing items: Email vérifié, IBAN, BIC, Mentions factures
+  - API: `/api/profile/completion`
+  
+- [x] **Bibliothèque d'ouvrages** (Work Library)
+  - Full CRUD interface for reusable services/materials
+  - Categories: Gros œuvre, Carrelage, Plomberie, Électricité, etc.
+  - Pricing: Unit price, VAT rate, labor/material costs
+  - Page: `/bibliotheque`
+  
+- [x] **Gestion Chantiers** (Projects Management)
+  - Project tracking with budget and timeline
+  - Status workflow: Planning → En cours → Terminé
+  - Invoice progress tracking
+  - Stats dashboard: Total projects, Budget, Invoiced
+  - Page: `/chantiers`
 
-#### Phase 5 - Admin & Marketing ✅
-- **Admin Analytics Dashboard** - LIVE with PostgreSQL data
-  - User statistics
-  - Profile completion rates (4 categories, 11 fields)
-  - Distribution charts
-  - Missing info alerts
-- Marketing automation - BACKEND READY (routes created)
+---
 
-### Frontend Pages Created
-- `/admin/analytics` - Admin Analytics Dashboard ✅ WORKING
+## API Endpoints
 
-### API Routes Summary
+### Authentication (MongoDB)
+- `POST /api/auth/login` - User login
+- `GET /api/auth/me` - Current user
+- `GET /api/profile/completion` - Profile completion status
 
-| Route | Description | Status |
-|-------|-------------|--------|
-| `/api/admin/dashboard` | Admin analytics | ✅ Live |
-| `/api/admin/users/statistics` | User stats | ✅ Live |
-| `/api/admin/profile-completion` | Completion rates | ✅ Live |
-| `/api/work-items/*` | Work item library | ✅ Live |
-| `/api/financial/recurring` | Recurring invoices | ✅ Live |
-| `/api/financial/reminders` | Payment reminders | ✅ Live |
-| `/api/financial/export/*` | CSV exports | ✅ Live |
-| `/api/ai/analyze-pdf` | PDF analysis | ✅ Live |
-| `/api/ai/extract-quote-items` | Quote extraction | ✅ Live |
-| `/api/portal/*` | Client portal | ✅ Live |
-| `/api/payments/*` | Stripe payments | ✅ Live |
+### Work Library (PostgreSQL)
+- `GET /api/work-items` - List work items
+- `POST /api/work-items` - Create work item
+- `PUT /api/work-items/{id}` - Update work item
+- `DELETE /api/work-items/{id}` - Delete work item
+- `GET /api/work-items/categories` - Get categories
+- `GET /api/work-items/units` - Get units
 
-### Profile Completion Fields (11 total)
-Tracked for each user:
-1. Logo uploaded
-2. Company name
-3. Company address
-4. Company email
-5. Company phone
-6. SIRET
-7. Legal form
-8. VAT number
-9. IBAN
-10. BIC
-11. Invoice footer (legal mentions)
+### Projects (PostgreSQL)
+- `GET /api/projects` - List projects
+- `POST /api/projects` - Create project
+- `PUT /api/projects/{id}` - Update project
+- `DELETE /api/projects/{id}` - Delete project
 
-### Key Stats from PostgreSQL
-- **53 Total Users**
-- **23 Active Users** (19 email verified)
-- **42.4% Average Completion**
-- **0 Complete Profiles** (opportunities for improvement!)
+### Admin Dashboard (PostgreSQL)
+- `GET /api/admin/dashboard` - Admin analytics
 
-## Technical Stack
+---
 
-### Backend
-- FastAPI (Hybrid MongoDB + PostgreSQL)
-- SQLAlchemy + Alembic
-- Motor (MongoDB)
-- Stripe SDK
-- Emergent Integrations (Gemini 3 Flash)
+## Upcoming Tasks (P1)
 
-### Frontend
-- React 18
-- Tailwind CSS
-- Shadcn/UI
-- React Router v6
+### Financial Tools
+- [ ] Financial Dashboard (revenue, payments)
+- [ ] Recurring Invoices
+- [ ] Accounting Export (CSV/Excel)
 
-### Database
-- MongoDB (legacy, still active)
-- PostgreSQL via Supabase (new features)
+### Advanced Features
+- [ ] AI PDF Analysis interface (Gemini)
+- [ ] Client Portal (token-based access)
+- [ ] Stripe Payment integration
+- [ ] Electronic Signatures for quotes
 
-## Key Credentials
-- **Admin**: admin@btpfacture.com / Admin123!
-- **Preview URL**: https://construction-saas-3.preview.emergentagent.com
+### Improvements
+- [ ] Email verification flow
+- [ ] Remove legacy MongoDB code after full migration
 
-## Pending Frontend Work
-- [ ] Work Item Library UI
-- [ ] Project Timeline view
-- [ ] Recurring Invoices management
-- [ ] Client Portal pages
-- [ ] Stripe payment flow UI
-- [ ] PDF Upload for AI analysis
+---
 
-## Files Structure
+## Technical Notes
+
+### User Sync (MongoDB → PostgreSQL)
+Users authenticated via MongoDB are automatically synced to PostgreSQL on first API access to new features. See `/app/backend/app/services/user_sync_service.py`.
+
+### Database Schema
+Key tables in PostgreSQL:
+- `users` - User accounts (synced from MongoDB)
+- `user_settings` - Company, legal, banking info
+- `work_items` - Reusable work library
+- `projects` - Construction projects
+- `quotes`, `invoices`, `payments` - Financial documents
+
+### File Structure
 ```
 /app/backend/
-├── server.py                    # Main hybrid server
+├── server.py           # Hybrid entry point
 ├── app/
-│   ├── services/
-│   │   ├── admin_dashboard_service.py     ✅
-│   │   ├── work_item_library_service.py   ✅
-│   │   ├── recurring_reminder_service.py  ✅
-│   │   ├── accounting_export_service.py   ✅
-│   │   ├── pdf_analysis_service.py        ✅
-│   │   ├── client_portal_service.py       ✅
-│   │   └── stripe_payment_service.py      ✅
-│   └── api/routes/
-│       ├── admin.py       ✅
-│       ├── work_items.py  ✅
-│       ├── financial.py   ✅
-│       ├── ai.py          ✅
-│       ├── portal.py      ✅
-│       └── payments.py    ✅
+│   ├── api/routes/     # PostgreSQL API routes
+│   ├── services/       # Business logic
+│   ├── models/         # SQLAlchemy models
+│   └── core/           # Database config
 
-/app/frontend/src/pages/
-├── AdminAnalyticsPage.jsx  ✅ NEW
-└── ... (existing pages)
+/app/frontend/src/
+├── pages/
+│   ├── WorkLibraryPage.jsx
+│   ├── ProjectsPage.jsx
+│   └── DashboardPage.jsx
+├── components/
+│   └── ProfileCompletionCard.jsx
 ```
 
 ---
-Last Updated: December 2025
-Status: Phases 1-5 Backend Complete, Frontend Integration In Progress
+
+## Test Credentials
+- **Admin**: admin@btpfacture.com / Admin123!
+- **User**: rafik.remila@gmail.com / Zeralda@0676
+
+## Preview URL
+https://construction-saas-3.preview.emergentagent.com
