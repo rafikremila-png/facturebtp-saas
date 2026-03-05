@@ -209,11 +209,34 @@ export default function UsersPage() {
         const RoleIcon = roleInfo.icon;
         const isCurrentUser = userDetail.id === currentUser?.id;
         const canModify = !isCurrentUser && userDetail.role !== ROLE_SUPER_ADMIN;
+        // Admin can delete users, but only super_admin can delete other admins
+        const canDelete = canModify && (isSuperAdmin() || userDetail.role === ROLE_USER);
+
+        // Helper to get completion color
+        const getCompletionColor = (percentage) => {
+            if (percentage >= 80) return "text-green-600";
+            if (percentage >= 50) return "text-amber-600";
+            return "text-red-600";
+        };
+
+        const getProgressColor = (percentage) => {
+            if (percentage >= 80) return "bg-green-500";
+            if (percentage >= 50) return "bg-amber-500";
+            return "bg-red-500";
+        };
+
+        // Category icons
+        const categoryIcons = {
+            profil: User,
+            entreprise: Building,
+            legal: FileText,
+            bancaire: CreditCard,
+        };
 
         return (
             <div className="space-y-6" data-testid="user-detail-page">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" onClick={() => { setSelectedUser(null); setUserDetail(null); }}>
+                    <Button variant="ghost" onClick={() => { setSelectedUser(null); setUserDetail(null); setProfileCompletion(null); }}>
                         <ArrowLeft className="w-4 h-4 mr-2" />
                         Retour
                     </Button>
@@ -366,8 +389,8 @@ export default function UsersPage() {
                                         </Button>
                                     )}
 
-                                    {/* Delete (Super Admin only) */}
-                                    {isSuperAdmin() && (
+                                    {/* Delete - Admin can delete users, Super Admin can delete anyone except super_admin */}
+                                    {canDelete && (
                                         <Button
                                             variant="outline"
                                             className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -388,6 +411,99 @@ export default function UsersPage() {
                             )}
                         </CardContent>
                     </Card>
+
+                    {/* Profile Completion Card */}
+                    {profileCompletion && (
+                        <Card className="lg:col-span-3">
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle className="font-['Barlow_Condensed'] flex items-center gap-2">
+                                            <CheckCircle className="w-5 h-5 text-orange-600" />
+                                            Progression du profil
+                                        </CardTitle>
+                                        <CardDescription>
+                                            {profileCompletion.completed_count}/{profileCompletion.total_count} éléments complétés
+                                        </CardDescription>
+                                    </div>
+                                    <div className={`text-3xl font-bold ${getCompletionColor(profileCompletion.completion_percentage)}`}>
+                                        {profileCompletion.completion_percentage}%
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {/* Progress Bar */}
+                                <div className="space-y-2">
+                                    <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                                        <div 
+                                            className={`h-full transition-all duration-500 ${getProgressColor(profileCompletion.completion_percentage)}`}
+                                            style={{ width: `${profileCompletion.completion_percentage}%` }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Categories Summary */}
+                                <div className="grid md:grid-cols-4 gap-4">
+                                    {Object.entries(profileCompletion.summary || {}).filter(([key]) => !key.includes('_total')).map(([category, completed]) => {
+                                        const total = profileCompletion.summary[`${category}_total`] || 0;
+                                        const CategoryIcon = categoryIcons[category] || User;
+                                        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+                                        const categoryLabels = {
+                                            profil: "Profil",
+                                            entreprise: "Entreprise",
+                                            legal: "Légal",
+                                            bancaire: "Bancaire"
+                                        };
+                                        
+                                        return (
+                                            <div key={category} className="p-4 bg-slate-50 rounded-lg">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <CategoryIcon className="w-4 h-4 text-slate-500" />
+                                                    <span className="font-medium text-sm">{categoryLabels[category]}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className={`text-lg font-bold ${getCompletionColor(percentage)}`}>
+                                                        {completed}/{total}
+                                                    </span>
+                                                    <span className={`text-sm ${getCompletionColor(percentage)}`}>
+                                                        {percentage}%
+                                                    </span>
+                                                </div>
+                                                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className={`h-full ${getProgressColor(percentage)}`}
+                                                        style={{ width: `${percentage}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Detailed Items */}
+                                <div className="space-y-2">
+                                    <p className="text-sm font-medium text-slate-700">Détail des éléments</p>
+                                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                        {profileCompletion.items?.map((item) => (
+                                            <div 
+                                                key={item.key}
+                                                className={`flex items-center gap-2 p-2 rounded-lg text-sm ${
+                                                    item.completed ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+                                                }`}
+                                            >
+                                                {item.completed ? (
+                                                    <Check className="w-4 h-4 text-green-600" />
+                                                ) : (
+                                                    <X className="w-4 h-4 text-red-500" />
+                                                )}
+                                                <span>{item.label}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
         );
