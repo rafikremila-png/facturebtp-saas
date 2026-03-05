@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import UsageCounter from "@/components/UsageCounter";
+import ProfileCompletionCard from "@/components/ProfileCompletionCard";
 
 export default function DashboardPage() {
     const { user } = useAuth();
