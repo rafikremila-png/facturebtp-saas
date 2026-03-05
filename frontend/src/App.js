@@ -26,6 +26,7 @@ import ServicesPage from "@/pages/ServicesPage";
 import ServiceRequestsPage from "@/pages/ServiceRequestsPage";
 import BillingPage from "@/pages/BillingPage";
 import AdminMetricsPage from "@/pages/AdminMetricsPage";
+import AdminAnalyticsPage from "@/pages/AdminAnalyticsPage";
 import AIAssistantPage from "@/pages/AIAssistantPage";
 import SignaturePage from "@/pages/SignaturePage";
 import Layout from "@/components/Layout";
