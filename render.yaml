@@ -16,12 +16,10 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: CORS_ORIGINS
-        value: "https://facturebtp-app.onrender.com,http://localhost:3000"
-      - key: FRONTEND_URL
-        value: "https://facturebtp-app.onrender.com"
-      # Add these environment variables in Render dashboard:
+        value: "*"
+      # Set these in Render Dashboard:
       # - MONGO_URL
-      # - JWT_SECRET
+      # - JWT_SECRET  
       # - STRIPE_API_KEY
       # - STRIPE_PRICE_* (all price IDs)
       # - SMTP_* (email configuration)
