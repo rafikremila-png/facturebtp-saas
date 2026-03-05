@@ -24,6 +24,7 @@ from app.services.user_service import get_user_service
 
 # Import API routes
 from app.api.routes import auth, clients, projects, quotes, invoices
+from app.api.routes import admin, work_items, financial
 
 # Configure logging
 logging.basicConfig(
