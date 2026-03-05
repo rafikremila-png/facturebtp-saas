@@ -2,21 +2,20 @@
 Client Portal Routes
 API endpoints for client portal access
 """
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.deps import get_current_user
 from app.services.client_portal_service import client_portal_service
 
 router = APIRouter(prefix="/portal", tags=["Client Portal"])
 
-# Dependency placeholder
-async def get_current_user():
-    pass
 
 @router.post("/generate-link")
 async def generate_portal_link(
     client_id: str,
-    document_type: str = None,
-    document_id: str = None,
+    document_type: Optional[str] = None,
+    document_id: Optional[str] = None,
     user: dict = Depends(get_current_user)
 ):
     """Generate a portal access link for a client"""
@@ -31,6 +30,7 @@ async def generate_portal_link(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/access/{token}")
 async def validate_portal_access(token: str):
     """Validate portal access and get client info"""
@@ -39,6 +39,7 @@ async def validate_portal_access(token: str):
         raise HTTPException(status_code=401, detail="Accès non autorisé ou expiré")
     return result
 
+
 @router.get("/{token}/dashboard")
 async def get_portal_dashboard(token: str):
     """Get complete portal dashboard for a client"""
@@ -46,8 +47,8 @@ async def get_portal_dashboard(token: str):
     if not access:
         raise HTTPException(status_code=401, detail="Accès non autorisé ou expiré")
     
-    dashboard = await client_portal_service.get_portal_dashboard(access["client_id"])
-    return dashboard
+    return await client_portal_service.get_portal_dashboard(access["client_id"])
+
 
 @router.get("/{token}/quotes")
 async def get_portal_quotes(token: str):
@@ -59,6 +60,7 @@ async def get_portal_quotes(token: str):
     quotes = await client_portal_service.get_client_quotes(access["client_id"])
     return {"quotes": quotes}
 
+
 @router.get("/{token}/invoices")
 async def get_portal_invoices(token: str):
     """Get client's invoices"""
@@ -69,6 +71,7 @@ async def get_portal_invoices(token: str):
     invoices = await client_portal_service.get_client_invoices(access["client_id"])
     return {"invoices": invoices}
 
+
 @router.get("/{token}/payments")
 async def get_portal_payments(token: str):
     """Get client's payment history"""
@@ -78,6 +81,7 @@ async def get_portal_payments(token: str):
     
     payments = await client_portal_service.get_client_payments(access["client_id"])
     return {"payments": payments}
+
 
 @router.get("/{token}/quotes/{quote_id}/sign")
 async def get_quote_for_signing(token: str, quote_id: str):
@@ -91,6 +95,7 @@ async def get_quote_for_signing(token: str, quote_id: str):
         raise HTTPException(status_code=404, detail="Devis non trouvé ou déjà signé")
     
     return quote_data
+
 
 @router.get("/{token}/invoices/{invoice_id}/pay")
 async def get_invoice_for_payment(token: str, invoice_id: str):
