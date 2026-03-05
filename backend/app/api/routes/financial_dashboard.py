@@ -124,11 +124,11 @@ async def get_financial_dashboard(
     
     monthly_revenue.reverse()  # Oldest first
     
-    # Recent payments (from Invoice paid_amount changes)
+    # Recent payments (from Invoice amount_paid changes)
     recent_payments_query = select(Invoice).where(
         and_(
             Invoice.user_id == user_id,
-            Invoice.paid_amount > 0,
+            Invoice.amount_paid > 0,
             Invoice.status.in_(["payée", "partiellement_payée"])
         )
     ).order_by(Invoice.updated_at.desc()).limit(10)
@@ -141,7 +141,7 @@ async def get_financial_dashboard(
         recent_payments.append({
             "id": inv.id,
             "invoice_number": inv.invoice_number,
-            "amount": float(inv.paid_amount),
+            "amount": float(inv.amount_paid),
             "total": float(inv.total_ttc),
             "date": inv.updated_at.isoformat() if inv.updated_at else None,
             "status": inv.status
