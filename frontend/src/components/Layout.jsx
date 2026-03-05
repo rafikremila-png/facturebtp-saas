@@ -76,13 +76,13 @@ export const Layout = () => {
 
             {/* Sidebar */}
             <aside 
-                className={`fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+                className={`fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 transform transition-transform duration-300 ease-in-out lg:translate-x-0 flex flex-col ${
                     mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
                 }`}
                 data-testid="sidebar"
             >
                 {/* Logo */}
-                <div className="flex items-center gap-3 px-6 py-6 border-b border-slate-800">
+                <div className="flex items-center gap-3 px-6 py-6 border-b border-slate-800 flex-shrink-0">
                     <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center">
                         <Building2 className="w-6 h-6 text-white" />
                     </div>
@@ -92,8 +92,8 @@ export const Layout = () => {
                     </div>
                 </div>
 
-                {/* Navigation */}
-                <nav className="px-4 py-6 space-y-1">
+                {/* Navigation - scrollable area */}
+                <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
                     {navItems.map((item) => (
                         <NavLink
                             key={item.to}
@@ -136,10 +136,10 @@ export const Layout = () => {
                     )}
                 </nav>
 
-                {/* User section */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-800">
-                    <div className="flex items-center gap-3 px-2 mb-4">
-                        <div className={`w-9 h-9 ${userRoleBadge?.color || 'bg-slate-700'} rounded-full flex items-center justify-center`}>
+                {/* User section - fixed at bottom */}
+                <div className="flex-shrink-0 p-4 border-t border-slate-800 bg-slate-900">
+                    <div className="flex items-center gap-3 px-2 mb-3">
+                        <div className={`w-9 h-9 ${userRoleBadge?.color || 'bg-slate-700'} rounded-full flex items-center justify-center flex-shrink-0`}>
                             {userRoleBadge ? (
                                 <userRoleBadge.icon className="w-4 h-4 text-white" />
                             ) : (
@@ -151,12 +151,12 @@ export const Layout = () => {
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-white truncate">{user?.name}</p>
                             <p className="text-xs text-slate-400 truncate">{user?.email}</p>
-                            {userRoleBadge && (
-                                <Badge className={`${userRoleBadge.color} text-white text-[10px] mt-1`}>
-                                    {userRoleBadge.label}
-                                </Badge>
-                            )}
                         </div>
+                        {userRoleBadge && (
+                            <Badge className={`${userRoleBadge.color} text-white text-[10px] flex-shrink-0`}>
+                                {userRoleBadge.label}
+                            </Badge>
+                        )}
                     </div>
                     <NavLink
                         to="/profil"
