@@ -6092,6 +6092,95 @@ async def health_check():
             "error": str(e)
         }
 
+# ============== AI QUOTE GENERATION ==============
+
+from app.services.ai_service import get_ai_service, BTP_PRICING_DATABASE, REGIONAL_MULTIPLIERS
+
+class AIQuoteRequest(BaseModel):
+    project_type: str = Field(..., min_length=2, max_length=100)
+    surface: float = Field(..., gt=0, le=10000)
+    location: str = Field(default="default", max_length=100)
+    materials_quality: str = Field(default="standard", max_length=50)
+    description: Optional[str] = Field(default="", max_length=2000)
+
+class AIEstimateRequest(BaseModel):
+    project_type: str = Field(..., min_length=2, max_length=100)
+    surface: float = Field(..., gt=0, le=10000)
+    location: str = Field(default="default", max_length=100)
+    complexity: str = Field(default="standard", max_length=50)
+
+class AISiteAnalysisRequest(BaseModel):
+    description: str = Field(..., min_length=10, max_length=5000)
+
+@api_router.post("/ai/generate-quote")
+async def ai_generate_quote(request: AIQuoteRequest, user: dict = Depends(get_current_user)):
+    """Generate AI-powered quote items based on project parameters"""
+    ai_service = get_ai_service()
+    
+    result = ai_service.generate_quote_items(
+        project_type=request.project_type,
+        surface=request.surface,
+        location=request.location,
+        materials_quality=request.materials_quality,
+        description=request.description
+    )
+    
+    logger.info(f"AI quote generated for user {user['id']}: {request.project_type}, {request.surface}m²")
+    
+    return result
+
+@api_router.post("/ai/estimate-project")
+async def ai_estimate_project(request: AIEstimateRequest, user: dict = Depends(get_current_user)):
+    """Estimate project cost with labor and materials breakdown"""
+    ai_service = get_ai_service()
+    
+    result = ai_service.estimate_project_cost(
+        project_type=request.project_type,
+        surface=request.surface,
+        location=request.location,
+        complexity=request.complexity
+    )
+    
+    logger.info(f"AI project estimation for user {user['id']}: {request.project_type}, {request.surface}m²")
+    
+    return result
+
+@api_router.post("/ai/analyze-description")
+async def ai_analyze_description(request: AISiteAnalysisRequest, user: dict = Depends(get_current_user)):
+    """Analyze site description and suggest quote items"""
+    ai_service = get_ai_service()
+    
+    result = ai_service.analyze_site_description(request.description)
+    
+    logger.info(f"AI description analysis for user {user['id']}")
+    
+    return result
+
+@api_router.get("/ai/pricing-database")
+async def get_pricing_database(user: dict = Depends(get_current_user)):
+    """Get the local BTP pricing database"""
+    return {
+        "categories": list(BTP_PRICING_DATABASE.keys()),
+        "pricing": BTP_PRICING_DATABASE,
+        "regional_multipliers": REGIONAL_MULTIPLIERS,
+    }
+
+@api_router.get("/ai/project-types")
+async def get_project_types(user: dict = Depends(get_current_user)):
+    """Get available project types for AI generation"""
+    from app.services.ai_service import PROJECT_TEMPLATES
+    
+    return {
+        "project_types": [
+            {
+                "id": key,
+                "name": value["description"],
+                "description": value["description"],
+            }
+            for key, value in PROJECT_TEMPLATES.items()
+        ]
+    }
+
 # ============== MAIN APP SETUP ==============
 
 app.include_router(api_router)
