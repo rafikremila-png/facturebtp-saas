@@ -6796,6 +6796,17 @@ async def startup_db_client():
         await initialize_default_items()
         await initialize_default_kits()
         
+        # Initialize PostgreSQL connection for new routes
+        try:
+            from app.core.database import check_db_connection
+            pg_ok = await check_db_connection()
+            if pg_ok:
+                logger.info("✅ PostgreSQL/Supabase connection successful")
+            else:
+                logger.warning("⚠️ PostgreSQL/Supabase connection failed - new routes may not work")
+        except Exception as pg_error:
+            logger.warning(f"⚠️ PostgreSQL initialization skipped: {pg_error}")
+        
     except Exception as e:
         logger.error(f"Database connection failed: {str(e)}")
         raise
