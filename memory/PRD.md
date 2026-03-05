@@ -4,62 +4,47 @@
 Transform the FactureBTP project into a complete, production-ready SaaS platform for construction companies with multi-tenant architecture using FastAPI/PostgreSQL (Supabase).
 
 ## Current Architecture
-- **Backend**: Hybrid FastAPI (MongoDB + PostgreSQL/Supabase)
+- **Backend**: FastAPI with PostgreSQL (Supabase) - Migration from MongoDB in progress
 - **Frontend**: React with Shadcn/UI, Tailwind CSS
-- **Database**: MongoDB (legacy auth) + PostgreSQL via Supabase (new features)
-- **Authentication**: JWT-based, MongoDB users synced to PostgreSQL
+- **Database**: PostgreSQL via Supabase (multi-tenant with user_id)
+- **Authentication**: JWT-based (hybrid MongoDB/PostgreSQL sync)
 
 ---
 
-## Implemented Features
+## Implemented Features (Dec 2025)
 
-### Phase 1: Architecture & Migration ✅ (Completed)
-- [x] PostgreSQL database schema (16 tables) via Supabase
+### Phase 1: Architecture & Migration ✅
+- [x] PostgreSQL database schema (20+ tables) via Supabase
 - [x] Row Level Security (RLS) enabled on all tables
 - [x] User data migration from MongoDB (53 users)
-- [x] Hybrid server architecture (server.py + modular app/)
+- [x] Auto-sync MongoDB users to PostgreSQL on authentication
 
-### Phase 2-5: Backend Services ✅ (Completed)
-- [x] 84+ API routes created for all features
+### Backend Services ✅
+- [x] 90+ API routes created for all features
 - [x] Services: Users, Clients, Projects, Quotes, Invoices
 - [x] Admin Dashboard, Work Library, Financials
-- [x] AI PDF Analysis, Client Portal, Stripe Payments
+- [x] Service Categories & Requests (PostgreSQL)
+- [x] Financial Dashboard with exports
 
-### P0 Frontend Features ✅ (Completed - Dec 2025)
-- [x] **Profile Completion Indicator** - Dashboard widget showing 63% completion
-  - Tracks: Profile (2/3), Entreprise (3/4), Légal (2/2), Bancaire (0/2)
-  - Shows missing items: Email vérifié, IBAN, BIC, Mentions factures
-  - API: `/api/profile/completion`
-  
-- [x] **Bibliothèque d'ouvrages** (Work Library)
-  - Full CRUD interface for reusable services/materials
-  - Categories: Gros œuvre, Carrelage, Plomberie, Électricité, etc.
-  - Pricing: Unit price, VAT rate, labor/material costs
-  - Page: `/bibliotheque`
-  
-- [x] **Gestion Chantiers** (Projects Management)
-  - Project tracking with budget and timeline
-  - Status workflow: Planning → En cours → Terminé
-  - Invoice progress tracking
-  - Stats dashboard: Total projects, Budget, Invoiced
-  - Page: `/chantiers`
+### Bug Fixes ✅ (Dec 2025)
+- [x] **Project Creation Bug** - Fixed SelectItem empty value issue
+- [x] **CSV Export Bug** - Fixed BytesIO vs StringIO for CSV writer
+
+### P0 Features ✅
+1. **Profile Completion Indicator** - 63% completion tracking
+2. **Work Library (Bibliothèque d'ouvrages)** - CRUD for reusable items
+3. **Projects (Chantiers)** - Full project management
+4. **Service Categories & Requests** - 6 pre-filled categories with services
+5. **Financial Dashboard** - Revenue tracking with exports
 
 ---
 
 ## API Endpoints
 
-### Authentication (MongoDB)
+### Authentication
 - `POST /api/auth/login` - User login
 - `GET /api/auth/me` - Current user
 - `GET /api/profile/completion` - Profile completion status
-
-### Work Library (PostgreSQL)
-- `GET /api/work-items` - List work items
-- `POST /api/work-items` - Create work item
-- `PUT /api/work-items/{id}` - Update work item
-- `DELETE /api/work-items/{id}` - Delete work item
-- `GET /api/work-items/categories` - Get categories
-- `GET /api/work-items/units` - Get units
 
 ### Projects (PostgreSQL)
 - `GET /api/projects` - List projects
@@ -67,60 +52,97 @@ Transform the FactureBTP project into a complete, production-ready SaaS platform
 - `PUT /api/projects/{id}` - Update project
 - `DELETE /api/projects/{id}` - Delete project
 
-### Admin Dashboard (PostgreSQL)
-- `GET /api/admin/dashboard` - Admin analytics
+### Service Categories & Requests (PostgreSQL)
+- `GET /api/service-categories` - List categories (6 pre-filled)
+- `GET /api/service-categories/{id}/services` - Services for category
+- `POST /api/service-requests` - Create request
+- `GET /api/service-requests/me` - User's requests
+- `GET /api/service-requests` - All requests (admin)
+- `PUT /api/service-requests/{id}/status` - Update status (admin)
+
+### Financial Dashboard (PostgreSQL)
+- `GET /api/reports/financial` - Dashboard stats
+- `GET /api/reports/financial/export/csv` - CSV export
+- `GET /api/reports/financial/export/excel` - Excel export
+
+---
+
+## Pre-filled Service Categories
+
+1. **Site Web** (Globe icon)
+   - Création de site web (490€)
+   - Refonte de site web (390€)
+   - Site e-commerce (990€)
+
+2. **SEO** (Search icon)
+   - Optimisation SEO (300€/mois)
+   - Audit SEO (150€)
+   - Google Business (100€)
+
+3. **Marketing Digital** (TrendingUp icon)
+   - Gestion Google Ads (250€/mois)
+   - Gestion Facebook Ads (200€/mois)
+   - Email Marketing (150€/mois)
+
+4. **Automatisation / IA** (Zap icon)
+   - Workflow automatisé (500€)
+   - Chatbot IA (800€)
+   - Analyse de données (400€)
+
+5. **CRM** (Users icon)
+   - Configuration CRM (300€)
+   - Formation CRM (200€)
+   - Migration données (150€)
+
+6. **Design** (Palette icon)
+   - Design landing page (250€)
+   - Charte graphique (500€)
+   - Cartes de visite (99€)
+
+---
+
+## Status Badge Colors
+
+- `pending` → Orange (bg-orange-500)
+- `in_progress` → Blue (bg-blue-500)
+- `completed` → Green (bg-green-500)
+- `cancelled` → Red (bg-red-500)
 
 ---
 
 ## Upcoming Tasks (P1)
 
-### Financial Tools
-- [ ] Financial Dashboard (revenue, payments)
-- [ ] Recurring Invoices
-- [ ] Accounting Export (CSV/Excel)
+### To Do
+- [ ] **Recurring Invoices** - Automatic invoice generation (monthly/quarterly/yearly)
+- [ ] **Client Portal** - Secure token-based access for quotes/invoices
+- [ ] **AI PDF Analysis** - Gemini Vision integration for construction plans
+- [ ] **Work Library in Quotes** - Quick add items from library to quotes
+- [ ] **Remove MongoDB legacy code** - Complete PostgreSQL migration
 
-### Advanced Features
-- [ ] AI PDF Analysis interface (Gemini)
-- [ ] Client Portal (token-based access)
-- [ ] Stripe Payment integration
+### Future (P2)
 - [ ] Electronic Signatures for quotes
-
-### Improvements
-- [ ] Email verification flow
-- [ ] Remove legacy MongoDB code after full migration
+- [ ] Stripe payment integration
+- [ ] Email verification flow fix
 
 ---
 
 ## Technical Notes
 
-### User Sync (MongoDB → PostgreSQL)
-Users authenticated via MongoDB are automatically synced to PostgreSQL on first API access to new features. See `/app/backend/app/services/user_sync_service.py`.
-
-### Database Schema
-Key tables in PostgreSQL:
-- `users` - User accounts (synced from MongoDB)
-- `user_settings` - Company, legal, banking info
-- `work_items` - Reusable work library
-- `projects` - Construction projects
-- `quotes`, `invoices`, `payments` - Financial documents
+### PostgreSQL Tables Created
+- `service_categories` - Pre-filled service categories
+- `services` - Services linked to categories
+- `service_requests` - User service requests with status
+- `ai_analyses` - AI analysis results storage
 
 ### File Structure
 ```
-/app/backend/
-├── server.py           # Hybrid entry point
-├── app/
-│   ├── api/routes/     # PostgreSQL API routes
-│   ├── services/       # Business logic
-│   ├── models/         # SQLAlchemy models
-│   └── core/           # Database config
-
-/app/frontend/src/
-├── pages/
-│   ├── WorkLibraryPage.jsx
-│   ├── ProjectsPage.jsx
-│   └── DashboardPage.jsx
-├── components/
-│   └── ProfileCompletionCard.jsx
+/app/backend/app/
+├── api/routes/
+│   ├── service_requests.py    # Service request routes
+│   └── financial_dashboard.py # Financial dashboard routes
+├── services/
+│   └── service_request_pg_service.py # PostgreSQL service
+└── models/models.py           # All PostgreSQL models
 ```
 
 ---
@@ -131,3 +153,6 @@ Key tables in PostgreSQL:
 
 ## Preview URL
 https://construction-saas-3.preview.emergentagent.com
+
+## Test Reports
+- `/app/test_reports/iteration_22.json` - Latest test results (100% pass rate)
