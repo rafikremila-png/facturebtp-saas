@@ -6810,6 +6810,7 @@ if PG_ROUTES_AVAILABLE:
         app.include_router(pg_portal_routes.router, prefix="/api")
         app.include_router(pg_payments_routes.router, prefix="/api")
         app.include_router(pg_service_requests_routes.router, prefix="/api")
+        app.include_router(pg_financial_dashboard_routes.router, prefix="/api")
         logger.info("✅ PostgreSQL routes loaded successfully")
     except Exception as e:
         logger.warning(f"Could not load PostgreSQL routes: {e}")
