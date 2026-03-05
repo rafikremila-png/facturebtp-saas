@@ -5,13 +5,12 @@ Central configuration management for BTP Facture SaaS
 import os
 from pathlib import Path
 from typing import List, Optional
-from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv(Path(__file__).parent.parent.parent / '.env')
 
-class Settings(BaseSettings):
+class Settings:
     """Application settings loaded from environment variables"""
     
     # Application
@@ -33,7 +32,7 @@ class Settings(BaseSettings):
     JWT_EXPIRATION_HOURS: int = 24
     
     # CORS
-    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "*").split(",")
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
     
     # Email (SMTP)
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")
@@ -76,14 +75,11 @@ class Settings(BaseSettings):
     DEFAULT_PAYMENT_DAYS: int = 30
     DEFAULT_RETENTION_RATE: float = 5.0
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    def __init__(self):
+        # Ensure storage directories exist
+        self.LOGOS_PATH.mkdir(parents=True, exist_ok=True)
+        self.PDFS_PATH.mkdir(parents=True, exist_ok=True)
+        self.SIGNATURES_PATH.mkdir(parents=True, exist_ok=True)
 
 # Create global settings instance
 settings = Settings()
-
-# Ensure storage directories exist
-settings.LOGOS_PATH.mkdir(parents=True, exist_ok=True)
-settings.PDFS_PATH.mkdir(parents=True, exist_ok=True)
-settings.SIGNATURES_PATH.mkdir(parents=True, exist_ok=True)
