@@ -6440,16 +6440,26 @@ async def request_website_creation(user: dict = Depends(get_current_user)):
 
 # ============== AI QUOTE EXPORT ==============
 
+class AIQuoteExportRequest(BaseModel):
+    items: List[Dict[str, Any]]
+    total_ht: float
+    total_vat: float
+    total_ttc: float
+    project_type: Optional[str] = None
+    surface: Optional[float] = None
+    location: Optional[str] = None
+    regional_multiplier: Optional[float] = None
+    client_id: Optional[str] = None
+
 @api_router.post("/ai/export-to-quote")
 async def export_ai_quote_to_system(
-    ai_quote: Dict[str, Any] = Body(...),
-    client_id: Optional[str] = Body(None),
+    request: AIQuoteExportRequest,
     user: dict = Depends(get_current_user)
 ):
     """Export AI-generated quote items to a new quote in the system"""
     
-    # Validate AI quote structure
-    if "items" not in ai_quote or not ai_quote["items"]:
+    # Validate items
+    if not request.items:
         raise HTTPException(status_code=400, detail="Aucun article à exporter")
     
     # Get next quote number
@@ -6471,7 +6481,7 @@ async def export_ai_quote_to_system(
     
     # Convert AI items to quote items format
     quote_items = []
-    for item in ai_quote["items"]:
+    for item in request.items:
         quote_items.append({
             "description": item.get("description", ""),
             "quantity": float(item.get("quantity", 1)),
@@ -6488,22 +6498,22 @@ async def export_ai_quote_to_system(
         "id": quote_id,
         "quote_number": quote_number,
         "owner_id": user["id"],
-        "client_id": client_id,
+        "client_id": request.client_id,
         "items": quote_items,
-        "total_ht": ai_quote.get("total_ht", 0),
-        "total_vat": ai_quote.get("total_vat", 0),
-        "total_ttc": ai_quote.get("total_ttc", 0),
+        "total_ht": request.total_ht,
+        "total_vat": request.total_vat,
+        "total_ttc": request.total_ttc,
         "status": "draft",
         "validity_days": 30,
-        "notes": f"Généré par Assistant IA - {ai_quote.get('project_type', 'Projet')} - {ai_quote.get('surface', '')}m²",
+        "notes": f"Généré par Assistant IA - {request.project_type or 'Projet'} - {request.surface or ''}m²",
         "created_at": now,
         "updated_at": now,
         "ai_generated": True,
         "ai_metadata": {
-            "project_type": ai_quote.get("project_type"),
-            "surface": ai_quote.get("surface"),
-            "location": ai_quote.get("location"),
-            "regional_multiplier": ai_quote.get("regional_multiplier"),
+            "project_type": request.project_type,
+            "surface": request.surface,
+            "location": request.location,
+            "regional_multiplier": request.regional_multiplier,
         }
     }
     
