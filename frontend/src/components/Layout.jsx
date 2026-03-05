@@ -20,7 +20,8 @@ import {
     BarChart3,
     Sparkles,
     Library,
-    FolderKanban
+    FolderKanban,
+    PieChart
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ const navItems = [
     { to: "/chantiers", icon: FolderKanban, label: "Chantiers" },
     { to: "/devis", icon: FileText, label: "Devis" },
     { to: "/factures", icon: Receipt, label: "Factures" },
+    { to: "/finances", icon: PieChart, label: "Finances" },
     { to: "/bibliotheque", icon: Library, label: "Bibliothèque" },
     { to: "/ai-assistant", icon: Sparkles, label: "Assistant IA" },
     { to: "/services", icon: Briefcase, label: "Services Pro" },
