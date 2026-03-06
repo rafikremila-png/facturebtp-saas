@@ -2621,6 +2621,189 @@ async def delete_client(client_id: str, user: dict = Depends(get_current_user)):
     
     return {"message": "Client supprimé"}
 
+# ============== CLIENT PORTAL (MongoDB) ==============
+
+@api_router.post("/clients/{client_id}/portal-token")
+async def generate_client_portal_token(client_id: str, user: dict = Depends(get_current_user)):
+    """Generate a secure portal access token for a client (MongoDB version)"""
+    if not validate_uuid(client_id):
+        raise HTTPException(status_code=400, detail="ID client invalide")
+    
+    # Find the client
+    client = await db.clients.find_one(
+        {"id": client_id, "owner_id": user["id"]},
+        {"_id": 0}
+    )
+    
+    if not client:
+        raise HTTPException(status_code=404, detail="Client non trouvé")
+    
+    # Generate a secure token
+    token = secrets.token_urlsafe(48)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    
+    # Store the token on the client document
+    await db.clients.update_one(
+        {"id": client_id},
+        {
+            "$set": {
+                "portal_token": token,
+                "portal_token_expires_at": expires_at.isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    logger.info(f"Portal token generated for client {client_id}")
+    
+    return {
+        "token": token,
+        "expires_in_days": 7,
+        "message": "Token de portail généré"
+    }
+
+@api_router.get("/portal/{token}")
+async def get_portal_data_mongo(token: str):
+    """Get portal data using a token (MongoDB version) - PUBLIC endpoint"""
+    # Find client by token
+    client = await db.clients.find_one(
+        {"portal_token": token},
+        {"_id": 0}
+    )
+    
+    if not client:
+        raise HTTPException(status_code=404, detail="Lien invalide ou expiré")
+    
+    # Check expiration
+    token_expires = client.get("portal_token_expires_at")
+    if token_expires:
+        expires_dt = datetime.fromisoformat(token_expires.replace("Z", "+00:00"))
+        if expires_dt < datetime.now(timezone.utc):
+            raise HTTPException(status_code=404, detail="Lien expiré")
+    
+    client_id = client["id"]
+    owner_id = client["owner_id"]
+    
+    # Get quotes for this client
+    quotes = await db.quotes.find(
+        {"client_id": client_id, "owner_id": owner_id},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Get invoices for this client
+    invoices = await db.invoices.find(
+        {"client_id": client_id, "owner_id": owner_id},
+        {"_id": 0}
+    ).to_list(100)
+    
+    return {
+        "client": {
+            "id": client["id"],
+            "name": client["name"],
+            "email": client.get("email"),
+            "company_name": client.get("company_name")
+        },
+        "quotes": [
+            {
+                "id": q["id"],
+                "quote_number": q.get("quote_number"),
+                "title": q.get("title") or q.get("description", ""),
+                "status": q.get("status", "draft"),
+                "quote_date": q.get("created_at"),
+                "validity_date": q.get("validity_date"),
+                "items": q.get("items", []),
+                "subtotal_ht": q.get("total_ht", 0),
+                "total_vat": q.get("total_vat", 0),
+                "total_ttc": q.get("total_ttc", 0),
+                "is_signed": q.get("is_signed", False),
+                "signature": q.get("signature")
+            }
+            for q in quotes
+        ],
+        "invoices": [
+            {
+                "id": i["id"],
+                "invoice_number": i.get("invoice_number"),
+                "title": i.get("title") or i.get("description", ""),
+                "status": i.get("status", "draft"),
+                "invoice_date": i.get("created_at"),
+                "due_date": i.get("due_date"),
+                "items": i.get("items", []),
+                "subtotal_ht": i.get("total_ht", 0),
+                "total_vat": i.get("total_vat", 0),
+                "total_ttc": i.get("total_ttc", 0),
+                "amount_paid": i.get("amount_paid", 0),
+                "amount_due": i.get("amount_due", i.get("total_ttc", 0))
+            }
+            for i in invoices
+        ],
+        "pending_signatures": [q for q in quotes if q.get("status") in ["draft", "sent"] and not q.get("is_signed")],
+        "unpaid_invoices": [i for i in invoices if i.get("status") not in ["paid"]]
+    }
+
+@api_router.post("/portal/{token}/quotes/{quote_id}/sign")
+async def sign_quote_from_portal_mongo(token: str, quote_id: str, signature: dict = Body(...)):
+    """Sign a quote from the client portal (MongoDB version) - PUBLIC endpoint"""
+    # Validate token
+    client = await db.clients.find_one(
+        {"portal_token": token},
+        {"_id": 0}
+    )
+    
+    if not client:
+        raise HTTPException(status_code=404, detail="Lien invalide ou expiré")
+    
+    # Check expiration
+    token_expires = client.get("portal_token_expires_at")
+    if token_expires:
+        expires_dt = datetime.fromisoformat(token_expires.replace("Z", "+00:00"))
+        if expires_dt < datetime.now(timezone.utc):
+            raise HTTPException(status_code=404, detail="Lien expiré")
+    
+    # Find the quote
+    quote = await db.quotes.find_one(
+        {"id": quote_id, "client_id": client["id"]},
+        {"_id": 0}
+    )
+    
+    if not quote:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    if quote.get("status") not in ["draft", "sent", "pending"]:
+        raise HTTPException(status_code=400, detail="Ce devis ne peut plus être signé")
+    
+    # Update quote with signature
+    signature_data = {
+        "signer_name": signature.get("signer_name"),
+        "signer_email": signature.get("signer_email"),
+        "signer_title": signature.get("signer_title"),
+        "signature_image": signature.get("signature_data"),
+        "signed_at": datetime.now(timezone.utc).isoformat(),
+        "ip_address": signature.get("ip_address"),
+        "user_agent": signature.get("user_agent")
+    }
+    
+    await db.quotes.update_one(
+        {"id": quote_id},
+        {
+            "$set": {
+                "status": "signed",
+                "is_signed": True,
+                "signature": signature_data,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    logger.info(f"Quote {quote_id} signed from portal by {signature.get('signer_name')}")
+    
+    return {
+        "success": True,
+        "quote_id": quote_id,
+        "signed_at": signature_data["signed_at"],
+        "message": "Devis signé avec succès"
+    }
+
 # ============== QUOTE HELPERS ==============
 
 async def get_next_quote_number():
