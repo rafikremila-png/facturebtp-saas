@@ -4,38 +4,45 @@
 Transform the FactureBTP project into a complete, production-ready SaaS platform for construction companies with multi-tenant architecture using FastAPI/PostgreSQL (Supabase).
 
 ## Current Architecture
-- **Backend**: FastAPI with PostgreSQL (Supabase) - Migration from MongoDB in progress
+- **Backend**: FastAPI with PostgreSQL (Supabase)
 - **Frontend**: React with Shadcn/UI, Tailwind CSS
 - **Database**: PostgreSQL via Supabase (multi-tenant with user_id)
-- **Authentication**: JWT-based (hybrid MongoDB/PostgreSQL sync)
+- **Authentication**: JWT-based
 
 ---
 
 ## Implemented Features (Dec 2025)
 
-### Phase 1: Architecture & Migration ✅
-- [x] PostgreSQL database schema (20+ tables) via Supabase
-- [x] Row Level Security (RLS) enabled on all tables
-- [x] User data migration from MongoDB (53 users)
-- [x] Auto-sync MongoDB users to PostgreSQL on authentication
+### Core Features ✅
+- [x] User authentication and authorization
+- [x] Client management
+- [x] Quote creation and management
+- [x] Invoice creation and management
+- [x] Project (Chantier) management
+- [x] Work Library (Bibliothèque d'ouvrages)
+- [x] Profile completion indicator
 
-### Backend Services ✅
-- [x] 90+ API routes created for all features
-- [x] Services: Users, Clients, Projects, Quotes, Invoices
-- [x] Admin Dashboard, Work Library, Financials
-- [x] Service Categories & Requests (PostgreSQL)
-- [x] Financial Dashboard with exports
+### Service Features ✅
+- [x] Service Categories (6 pre-filled categories)
+- [x] Service Requests with category selection
+- [x] Status badges (pending=orange, in_progress=blue, completed=green, cancelled=red)
+- [x] Filters by status and category
 
-### Bug Fixes ✅ (Dec 2025)
-- [x] **Project Creation Bug** - Fixed SelectItem empty value issue
-- [x] **CSV Export Bug** - Fixed BytesIO vs StringIO for CSV writer
+### Financial Dashboard ✅
+- [x] Revenue tracking (total, paid, pending, overdue)
+- [x] Monthly revenue chart
+- [x] Invoices by status breakdown
+- [x] Recent payments list
+- [x] CSV Export
+- [x] Excel Export
 
-### P0 Features ✅
-1. **Profile Completion Indicator** - 63% completion tracking
-2. **Work Library (Bibliothèque d'ouvrages)** - CRUD for reusable items
-3. **Projects (Chantiers)** - Full project management
-4. **Service Categories & Requests** - 6 pre-filled categories with services
-5. **Financial Dashboard** - Revenue tracking with exports
+### Electronic Signatures ✅ (NEW!)
+- [x] **Client Portal** - Secure access via token
+- [x] **Signature Canvas** - Draw signature with mouse or touch
+- [x] **Legal Compliance** - IP address, user agent, timestamp recorded
+- [x] **Pre-filled Forms** - Client info auto-filled
+- [x] **Visual Confirmation** - Signed badge and details shown
+- [x] **Table**: `quote_signatures` with full audit trail
 
 ---
 
@@ -46,113 +53,74 @@ Transform the FactureBTP project into a complete, production-ready SaaS platform
 - `GET /api/auth/me` - Current user
 - `GET /api/profile/completion` - Profile completion status
 
-### Projects (PostgreSQL)
-- `GET /api/projects` - List projects
-- `POST /api/projects` - Create project
-- `PUT /api/projects/{id}` - Update project
-- `DELETE /api/projects/{id}` - Delete project
+### Client Portal & Signatures
+- `POST /api/portal/generate-token/{client_id}` - Generate portal access token
+- `GET /api/portal/{token}` - Get portal data (quotes, invoices)
+- `POST /api/portal/{token}/quotes/{quote_id}/sign` - Sign a quote
 
-### Service Categories & Requests (PostgreSQL)
-- `GET /api/service-categories` - List categories (6 pre-filled)
-- `GET /api/service-categories/{id}/services` - Services for category
+### Service Requests
+- `GET /api/service-categories` - List categories
 - `POST /api/service-requests` - Create request
 - `GET /api/service-requests/me` - User's requests
-- `GET /api/service-requests` - All requests (admin)
-- `PUT /api/service-requests/{id}/status` - Update status (admin)
+- `PUT /api/service-requests/{id}/status` - Update status
 
-### Financial Dashboard (PostgreSQL)
+### Financial Reports
 - `GET /api/reports/financial` - Dashboard stats
 - `GET /api/reports/financial/export/csv` - CSV export
 - `GET /api/reports/financial/export/excel` - Excel export
 
 ---
 
-## Pre-filled Service Categories
+## Electronic Signature Flow
 
-1. **Site Web** (Globe icon)
-   - Création de site web (490€)
-   - Refonte de site web (390€)
-   - Site e-commerce (990€)
+1. **Generate Token** - Admin generates portal link for client
+2. **Client Access** - Client opens `/portal/{token}` (no login required)
+3. **View Quotes** - Client sees pending quotes with "Signer" button
+4. **Sign Quote** - Modal opens with:
+   - Pre-filled name and email
+   - Optional title/function
+   - Signature canvas
+   - Legal disclaimer
+5. **Submit** - Signature data, IP, timestamp saved
+6. **Confirmation** - Green badge shows "Signé par X le DATE"
 
-2. **SEO** (Search icon)
-   - Optimisation SEO (300€/mois)
-   - Audit SEO (150€)
-   - Google Business (100€)
-
-3. **Marketing Digital** (TrendingUp icon)
-   - Gestion Google Ads (250€/mois)
-   - Gestion Facebook Ads (200€/mois)
-   - Email Marketing (150€/mois)
-
-4. **Automatisation / IA** (Zap icon)
-   - Workflow automatisé (500€)
-   - Chatbot IA (800€)
-   - Analyse de données (400€)
-
-5. **CRM** (Users icon)
-   - Configuration CRM (300€)
-   - Formation CRM (200€)
-   - Migration données (150€)
-
-6. **Design** (Palette icon)
-   - Design landing page (250€)
-   - Charte graphique (500€)
-   - Cartes de visite (99€)
+### Signature Data Stored
+- `signer_name` - Full name
+- `signer_email` - Email address
+- `signer_title` - Optional function
+- `signature_data` - Base64 PNG image
+- `ip_address` - Client IP
+- `user_agent` - Browser info
+- `signed_at` - Timestamp
 
 ---
 
-## Status Badge Colors
+## Pre-filled Service Categories
 
-- `pending` → Orange (bg-orange-500)
-- `in_progress` → Blue (bg-blue-500)
-- `completed` → Green (bg-green-500)
-- `cancelled` → Red (bg-red-500)
+1. **Site Web** - Website creation, redesign, e-commerce
+2. **SEO** - SEO optimization, audit, Google Business
+3. **Marketing Digital** - Google Ads, Facebook Ads, Email
+4. **Automatisation / IA** - Workflows, Chatbots, Analytics
+5. **CRM** - Setup, training, data migration
+6. **Design** - Landing pages, branding, business cards
 
 ---
 
 ## Upcoming Tasks (P1)
 
-### To Do
-- [ ] **Recurring Invoices** - Automatic invoice generation (monthly/quarterly/yearly)
-- [ ] **Client Portal** - Secure token-based access for quotes/invoices
-- [ ] **AI PDF Analysis** - Gemini Vision integration for construction plans
-- [ ] **Work Library in Quotes** - Quick add items from library to quotes
-- [ ] **Remove MongoDB legacy code** - Complete PostgreSQL migration
-
-### Future (P2)
-- [ ] Electronic Signatures for quotes
-- [ ] Stripe payment integration
-- [ ] Email verification flow fix
-
----
-
-## Technical Notes
-
-### PostgreSQL Tables Created
-- `service_categories` - Pre-filled service categories
-- `services` - Services linked to categories
-- `service_requests` - User service requests with status
-- `ai_analyses` - AI analysis results storage
-
-### File Structure
-```
-/app/backend/app/
-├── api/routes/
-│   ├── service_requests.py    # Service request routes
-│   └── financial_dashboard.py # Financial dashboard routes
-├── services/
-│   └── service_request_pg_service.py # PostgreSQL service
-└── models/models.py           # All PostgreSQL models
-```
+- [ ] **Recurring Invoices** - Automatic generation
+- [ ] **AI PDF Analysis** - Gemini Vision for plans
+- [ ] **Work Library in Quotes** - Quick add from library
+- [ ] **Complete MongoDB migration** - Remove legacy code
 
 ---
 
 ## Test Credentials
 - **Admin**: admin@btpfacture.com / Admin123!
-- **User**: rafik.remila@gmail.com / Zeralda@0676
+- **Test Client**: client.test@example.fr
 
 ## Preview URL
 https://construction-saas-3.preview.emergentagent.com
 
-## Test Reports
-- `/app/test_reports/iteration_22.json` - Latest test results (100% pass rate)
+## Test Portal Token (7 days validity)
+`/portal/WQIBtLIGFfMwM8p1S-pyXaEp7fxY6e8koe6lAlnnxsp0TbKb32nVjJ9uyCsGtXIt`
