@@ -120,7 +120,7 @@ Transform the FactureBTP project into a complete, production-ready SaaS platform
 - **Test Client**: client.test@example.fr
 
 ## Preview URL
-https://construction-saas-3.preview.emergentagent.com
+https://btp-portal.preview.emergentagent.com
 
 ## Test Portal Token (7 days validity)
 `/portal/WQIBtLIGFfMwM8p1S-pyXaEp7fxY6e8koe6lAlnnxsp0TbKb32nVjJ9uyCsGtXIt`
