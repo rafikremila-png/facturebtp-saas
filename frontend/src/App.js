@@ -32,6 +32,7 @@ import SignaturePage from "@/pages/SignaturePage";
 import WorkLibraryPage from "@/pages/WorkLibraryPage";
 import ProjectsPage from "@/pages/ProjectsPage";
 import FinancialDashboardPage from "@/pages/FinancialDashboardPage";
+import ClientPortalPage from "@/pages/ClientPortalPage";
 import Layout from "@/components/Layout";
 
 const ProtectedRoute = ({ children }) => {
