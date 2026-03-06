@@ -53,10 +53,12 @@ Transform the FactureBTP project into a complete, production-ready SaaS platform
 - `GET /api/auth/me` - Current user
 - `GET /api/profile/completion` - Profile completion status
 
-### Client Portal & Signatures
-- `POST /api/portal/generate-token/{client_id}` - Generate portal access token
-- `GET /api/portal/{token}` - Get portal data (quotes, invoices)
-- `POST /api/portal/{token}/quotes/{quote_id}/sign` - Sign a quote
+### Client Portal & Signatures (MongoDB-based)
+- `POST /api/clients/{client_id}/portal-token` - Generate portal access token ✅
+- `GET /api/portal/{token}` - Get portal data (quotes, invoices) ✅
+- `POST /api/portal/{token}/quotes/{quote_id}/sign` - Sign a quote ✅
+
+**UI Entry Point**: Clients page → Action menu → "Portail & Signature" → Modal with link
 
 ### Service Requests
 - `GET /api/service-categories` - List categories
