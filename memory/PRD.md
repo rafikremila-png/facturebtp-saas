@@ -110,10 +110,22 @@ Transform the FactureBTP project into a complete, production-ready SaaS platform
 
 ## Upcoming Tasks (P1)
 
-- [ ] **Recurring Invoices** - Automatic generation
-- [ ] **AI PDF Analysis** - Gemini Vision for plans
-- [ ] **Work Library in Quotes** - Quick add from library
-- [ ] **Complete MongoDB migration** - Remove legacy code
+- [ ] **Recurring Invoices** - Automatic invoice generation with cron job
+- [ ] **Full PostgreSQL Migration** - Remove MongoDB for auth, unify on Supabase
+- [ ] **AI PDF Analysis** - Gemini Vision for construction plan analysis
+- [ ] **Work Library in Quotes** - Quick add items from library to quotes
+
+---
+
+## Architecture Note (Current State)
+
+The application currently operates in **hybrid mode**:
+- **MongoDB (test_database)**: Authentication, clients, quotes, invoices - active data
+- **PostgreSQL (Supabase)**: New features (service requests, financial reports, user sync)
+
+A user synchronization service (`user_sync_service.py`) bridges the two databases.
+
+**Target State**: Full PostgreSQL/Supabase architecture (migration in progress).
 
 ---
 
