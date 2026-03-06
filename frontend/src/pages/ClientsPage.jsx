@@ -90,7 +90,8 @@ export default function ClientsPage() {
         setGeneratingLink(true);
         
         try {
-            const response = await api.post(`/portal/generate-token/${client.id}`);
+            // Use MongoDB-based endpoint for clients
+            const response = await api.post(`/clients/${client.id}/portal-token`);
             const baseUrl = window.location.origin;
             const link = `${baseUrl}/portal/${response.data.token}`;
             setPortalLink(link);
