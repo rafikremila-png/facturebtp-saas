@@ -1285,9 +1285,23 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    token = credentials.credentials
+    
+    # Try Supabase token first (new auth)
+    try:
+        # Import Supabase auth service
+        from app.services.supabase_auth_service import verify_supabase_token
+        user = await verify_supabase_token(token)
+        if user:
+            user["is_impersonated"] = False
+            return user
+    except Exception as supabase_error:
+        logger.debug(f"Supabase token validation failed: {supabase_error}")
+    
+    # Fallback to legacy JWT (MongoDB auth) - for backward compatibility
     try:
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             JWT_SECRET,
             algorithms=[JWT_ALGORITHM],
             options={"verify_exp": True}
