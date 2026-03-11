@@ -6,16 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, Mail, Lock, User, Eye, EyeOff, Phone, Building, MapPin, ArrowLeft, CheckCircle } from "lucide-react";
-import OTPInput from "@/components/OTPInput";
-import axios from "axios";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { Building2, Mail, Lock, User, Eye, EyeOff, Phone, Building, MapPin, ArrowLeft, CheckCircle, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
     const [searchParams] = useSearchParams();
     const [isLogin, setIsLogin] = useState(true);
-    const [step, setStep] = useState("form"); // form, otp, success
+    const [step, setStep] = useState("form"); // form, success
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [name, setName] = useState("");
@@ -24,14 +20,19 @@ export default function LoginPage() {
     const [address, setAddress] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [otpCode, setOtpCode] = useState("");
-    const { login } = useAuth();
+    const { login, register, isAuthenticated } = useAuth();
     const navigate = useNavigate();
+
+    // Redirect if already authenticated
+    useEffect(() => {
+        if (isAuthenticated) {
+            navigate("/");
+        }
+    }, [isAuthenticated, navigate]);
 
     // Handle URL parameters for registration
     useEffect(() => {
         const mode = searchParams.get("mode");
-        
         if (mode === "register") {
             setIsLogin(false);
         }
@@ -47,26 +48,36 @@ export default function LoginPage() {
                 toast.success("Connexion réussie !");
                 navigate("/");
             } else {
-                // Register - this will require OTP verification
-                // business_type is now set in Settings, defaults to "general"
-                await axios.post(`${API}/auth/register`, {
-                    email,
-                    password,
+                // Register
+                const result = await register(email, password, {
                     name,
                     phone,
                     company_name: companyName,
                     address
                 });
-                toast.success("Code de vérification envoyé par email");
-                setStep("otp");
+                
+                // Check if email confirmation is required
+                if (result.user && !result.session) {
+                    toast.success("Compte créé ! Vérifiez votre email pour confirmer.");
+                    setStep("success");
+                } else {
+                    toast.success("Compte créé avec succès !");
+                    navigate("/");
+                }
             }
         } catch (error) {
-            const message = error.response?.data?.detail || "Une erreur est survenue";
+            console.error("Auth error:", error);
+            const message = error.message || "Une erreur est survenue";
             
-            // If email not verified, show OTP step
-            if (error.response?.status === 403 && message.includes("non vérifié")) {
-                toast.info("Vérifiez votre email avec le code envoyé");
-                setStep("otp");
+            // Translate common Supabase errors
+            if (message.includes("Invalid login credentials")) {
+                toast.error("Email ou mot de passe incorrect");
+            } else if (message.includes("Email not confirmed")) {
+                toast.error("Veuillez confirmer votre email");
+            } else if (message.includes("User already registered")) {
+                toast.error("Cet email est déjà utilisé");
+            } else if (message.includes("Password should be")) {
+                toast.error("Le mot de passe doit contenir au moins 6 caractères");
             } else {
                 toast.error(message);
             }
@@ -75,109 +86,6 @@ export default function LoginPage() {
         }
     };
 
-    const handleVerifyOTP = async () => {
-        if (otpCode.length !== 6) {
-            toast.error("Entrez le code à 6 chiffres");
-            return;
-        }
-
-        setLoading(true);
-        try {
-            const response = await axios.post(`${API}/auth/verify-email`, {
-                email,
-                otp_code: otpCode,
-                otp_type: "registration"
-            });
-
-            // Store token and redirect
-            localStorage.setItem("token", response.data.access_token);
-            toast.success("Email vérifié ! Bienvenue !");
-            setStep("success");
-            
-            setTimeout(() => {
-                window.location.href = "/";
-            }, 1500);
-        } catch (error) {
-            toast.error(error.response?.data?.detail || "Code invalide ou expiré");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleResendOTP = async () => {
-        setLoading(true);
-        try {
-            await axios.post(`${API}/auth/resend-otp`, {
-                email,
-                otp_type: "registration"
-            });
-            toast.success("Nouveau code envoyé !");
-        } catch (error) {
-            toast.error("Erreur lors de l'envoi du code");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const renderOTPStep = () => (
-        <div className="animate-fade-in">
-            <button
-                type="button"
-                onClick={() => setStep("form")}
-                className="flex items-center gap-2 text-slate-600 hover:text-orange-600 mb-6"
-            >
-                <ArrowLeft className="w-4 h-4" />
-                Retour
-            </button>
-
-            <Card className="shadow-xl border-0">
-                <CardHeader className="space-y-1 pb-4 text-center">
-                    <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Mail className="w-8 h-8 text-orange-600" />
-                    </div>
-                    <CardTitle className="text-2xl font-['Barlow_Condensed']">
-                        Vérifiez votre email
-                    </CardTitle>
-                    <CardDescription>
-                        Un code à 6 chiffres a été envoyé à <strong>{email}</strong>
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    <OTPInput
-                        length={6}
-                        value={otpCode}
-                        onChange={setOtpCode}
-                        disabled={loading}
-                    />
-
-                    <Button
-                        onClick={handleVerifyOTP}
-                        className="w-full bg-orange-600 hover:bg-orange-700"
-                        disabled={loading || otpCode.length !== 6}
-                        data-testid="verify-otp-btn"
-                    >
-                        {loading ? "Vérification..." : "Vérifier le code"}
-                    </Button>
-
-                    <div className="text-center">
-                        <button
-                            type="button"
-                            onClick={handleResendOTP}
-                            disabled={loading}
-                            className="text-sm text-slate-600 hover:text-orange-600"
-                        >
-                            Renvoyer le code
-                        </button>
-                    </div>
-
-                    <p className="text-xs text-slate-500 text-center">
-                        Le code expire dans 10 minutes
-                    </p>
-                </CardContent>
-            </Card>
-        </div>
-    );
-
     const renderSuccessStep = () => (
         <div className="animate-fade-in text-center">
             <Card className="shadow-xl border-0">
@@ -185,8 +93,23 @@ export default function LoginPage() {
                     <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <CheckCircle className="w-10 h-10 text-green-600" />
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Compte activé !</h2>
-                    <p className="text-slate-500">Redirection vers votre tableau de bord...</p>
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Vérifiez votre email</h2>
+                    <p className="text-slate-500 mb-4">
+                        Un email de confirmation a été envoyé à <strong>{email}</strong>
+                    </p>
+                    <p className="text-sm text-slate-400">
+                        Cliquez sur le lien dans l'email pour activer votre compte.
+                    </p>
+                    <Button
+                        variant="outline"
+                        className="mt-6"
+                        onClick={() => {
+                            setStep("form");
+                            setIsLogin(true);
+                        }}
+                    >
+                        Retour à la connexion
+                    </Button>
                 </CardContent>
             </Card>
         </div>
@@ -201,16 +124,18 @@ export default function LoginPage() {
                     </CardTitle>
                     <CardDescription>
                         {isLogin 
-                            ? "Entrez vos identifiants pour accéder à votre espace" 
-                            : "Remplissez le formulaire pour créer votre compte"}
+                            ? "Entrez vos identifiants pour accéder à votre compte"
+                            : "Remplissez le formulaire pour créer votre compte"
+                        }
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* Registration fields */}
                         {!isLogin && (
                             <>
                                 <div className="space-y-2">
-                                    <Label htmlFor="name">Nom complet *</Label>
+                                    <Label htmlFor="name">Nom complet</Label>
                                     <div className="relative">
                                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                         <Input
@@ -227,7 +152,7 @@ export default function LoginPage() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="phone">Téléphone *</Label>
+                                    <Label htmlFor="phone">Téléphone</Label>
                                     <div className="relative">
                                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                         <Input
@@ -237,7 +162,6 @@ export default function LoginPage() {
                                             value={phone}
                                             onChange={(e) => setPhone(e.target.value)}
                                             className="pl-10"
-                                            required={!isLogin}
                                             data-testid="phone-input"
                                         />
                                     </div>
@@ -276,9 +200,10 @@ export default function LoginPage() {
                                 </div>
                             </>
                         )}
-                        
+
+                        {/* Email field */}
                         <div className="space-y-2">
-                            <Label htmlFor="email">Email *</Label>
+                            <Label htmlFor="email">Email</Label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <Input
@@ -294,8 +219,9 @@ export default function LoginPage() {
                             </div>
                         </div>
 
+                        {/* Password field */}
                         <div className="space-y-2">
-                            <Label htmlFor="password">Mot de passe *</Label>
+                            <Label htmlFor="password">Mot de passe</Label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                 <Input
@@ -306,6 +232,7 @@ export default function LoginPage() {
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="pl-10 pr-10"
                                     required
+                                    minLength={6}
                                     data-testid="password-input"
                                 />
                                 <button
@@ -318,85 +245,90 @@ export default function LoginPage() {
                             </div>
                             {!isLogin && (
                                 <p className="text-xs text-slate-500">
-                                    Min. 8 caractères, 1 majuscule, 1 minuscule, 1 chiffre
+                                    Minimum 6 caractères
                                 </p>
                             )}
                         </div>
 
-                        <Button 
-                            type="submit" 
+                        {/* Submit button */}
+                        <Button
+                            type="submit"
                             className="w-full bg-orange-600 hover:bg-orange-700"
                             disabled={loading}
                             data-testid="submit-btn"
                         >
                             {loading ? (
-                                <span className="flex items-center gap-2">
-                                    <span className="spinner w-4 h-4"></span>
-                                    Chargement...
-                                </span>
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    {isLogin ? "Connexion..." : "Création..."}
+                                </>
                             ) : (
                                 isLogin ? "Se connecter" : "Créer le compte"
                             )}
                         </Button>
-                    </form>
 
-                    <div className="mt-6 text-center">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setIsLogin(!isLogin);
-                                setStep("form");
-                            }}
-                            className="text-sm text-slate-600 hover:text-orange-600 transition-colors"
-                            data-testid="toggle-auth-mode"
-                        >
-                            {isLogin 
-                                ? "Pas encore de compte ? Créer un compte" 
-                                : "Déjà un compte ? Se connecter"}
-                        </button>
-                    </div>
+                        {/* Toggle login/register */}
+                        <div className="text-center pt-4">
+                            <button
+                                type="button"
+                                onClick={() => setIsLogin(!isLogin)}
+                                className="text-sm text-orange-600 hover:text-orange-700"
+                            >
+                                {isLogin ? "Créer un compte" : "Déjà un compte ? Se connecter"}
+                            </button>
+                        </div>
+                    </form>
                 </CardContent>
             </Card>
         </div>
     );
 
     return (
-        <div className="min-h-screen flex" data-testid="login-page">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex">
             {/* Left side - Form */}
-            <div className="flex-1 flex items-center justify-center p-8 bg-slate-50">
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
                 <div className="w-full max-w-md">
                     {/* Logo */}
                     <div className="flex items-center gap-3 mb-8">
-                        <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center shadow-lg">
-                            <Building2 className="w-7 h-7 text-white" />
+                        <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center">
+                            <Building2 className="w-6 h-6 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold text-slate-900 font-['Barlow_Condensed']">BTP Facture</h1>
-                            <p className="text-sm text-slate-500">Gestion de devis et factures</p>
+                            <h1 className="text-2xl font-bold font-['Barlow_Condensed'] text-slate-900">
+                                BTP Facture
+                            </h1>
+                            <p className="text-sm text-slate-500">Gestion devis & factures</p>
                         </div>
                     </div>
 
-                    {step === "form" && renderForm()}
-                    {step === "otp" && renderOTPStep()}
-                    {step === "success" && renderSuccessStep()}
+                    {/* Form or Success */}
+                    {step === "success" ? renderSuccessStep() : renderForm()}
                 </div>
             </div>
 
-            {/* Right side - Image */}
-            <div 
-                className="hidden lg:block lg:w-1/2 bg-cover bg-center relative"
-                style={{ backgroundImage: "url('https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2070&auto=format&fit=crop')" }}
-            >
-                <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"></div>
-                <div className="absolute inset-0 flex items-center justify-center p-12">
-                    <div className="text-center text-white max-w-lg">
-                        <h2 className="text-4xl font-bold mb-4 font-['Barlow_Condensed']">
-                            Gérez votre activité BTP simplement
-                        </h2>
-                        <p className="text-lg text-slate-300">
-                            Créez des devis professionnels, transformez-les en factures d'un clic, 
-                            et suivez vos paiements en temps réel.
-                        </p>
+            {/* Right side - Image/Branding */}
+            <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-orange-500 to-orange-700 items-center justify-center p-12">
+                <div className="text-center text-white max-w-lg">
+                    <Building2 className="w-20 h-20 mx-auto mb-8 opacity-90" />
+                    <h2 className="text-4xl font-bold font-['Barlow_Condensed'] mb-4">
+                        Gérez votre activité BTP simplement
+                    </h2>
+                    <p className="text-lg opacity-90">
+                        Devis, factures, clients et projets — tout en un seul endroit.
+                    </p>
+                    <div className="mt-12 grid grid-cols-3 gap-6 text-center">
+                        <div>
+                            <div className="text-3xl font-bold">100%</div>
+                            <div className="text-sm opacity-80">Cloud</div>
+                        </div>
+                        <div>
+                            <div className="text-3xl font-bold">24/7</div>
+                            <div className="text-sm opacity-80">Accessible</div>
+                        </div>
+                        <div>
+                            <div className="text-3xl font-bold">SSL</div>
+                            <div className="text-sm opacity-80">Sécurisé</div>
+                        </div>
                     </div>
                 </div>
             </div>
