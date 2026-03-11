@@ -1,29 +1,29 @@
 import axios from 'axios';
+import { supabase } from '@/supabaseClient';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
-const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-};
 
 const api = axios.create({
     baseURL: API,
 });
 
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+// Add Supabase token to requests
+api.interceptors.request.use(async (config) => {
+    // Get current session from Supabase
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session?.access_token) {
+        config.headers.Authorization = `Bearer ${session.access_token}`;
     }
     return config;
 });
 
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
         if (error.response?.status === 401) {
-            localStorage.removeItem('token');
+            // Sign out from Supabase
+            await supabase.auth.signOut();
             window.location.href = '/login';
         }
         return Promise.reject(error);
