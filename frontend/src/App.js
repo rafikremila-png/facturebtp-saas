@@ -143,7 +143,9 @@ function AppRoutes() {
                 <Route path="factures/:id/edit" element={<InvoiceFormPage />} />
                 <Route path="parametres" element={<SettingsPage />} />
                 <Route path="services" element={<ServicesPage />} />
-                <Route path="facturation" element={<BillingPage />} />
+                <Route path="abonnement" element={<BillingPage />} />
+                {/* Redirect old URL to new one */}
+                <Route path="facturation" element={<Navigate to="/abonnement" replace />} />
                 <Route path="finances" element={<FinancialDashboardPage />} />
                 <Route path="ai-assistant" element={<AIAssistantPage />} />
                 <Route path="bibliotheque" element={<WorkLibraryPage />} />
