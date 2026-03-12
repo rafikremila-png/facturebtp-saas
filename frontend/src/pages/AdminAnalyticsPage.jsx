@@ -42,11 +42,7 @@ export default function AdminAnalyticsPage() {
     const fetchDashboard = async () => {
         try {
             setRefreshing(true);
-            const token = localStorage.getItem("token");
-            const response = await axios.get(
-                `${API}/admin/dashboard`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            const response = await api.get('/admin/dashboard');
             setDashboardData(response.data);
         } catch (error) {
             console.error("Error fetching dashboard:", error);
