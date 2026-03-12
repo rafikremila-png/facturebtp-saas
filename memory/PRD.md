@@ -118,10 +118,19 @@ Transform the FactureBTP project into a complete, production-ready SaaS platform
 
 ## Upcoming Tasks (P1)
 
+- [ ] **Full PostgreSQL Migration** - Remove MongoDB, migrate server.py routes to Supabase
 - [ ] **Recurring Invoices** - Automatic invoice generation with cron job
-- [ ] **Full PostgreSQL Migration** - Remove MongoDB for auth, unify on Supabase
-- [ ] **AI PDF Analysis** - Gemini Vision for construction plan analysis
+- [ ] **AI PDF Analysis** - Gemini Vision for construction plan analysis UI
 - [ ] **Work Library in Quotes** - Quick add items from library to quotes
+
+---
+
+## Recently Fixed (Dec 2025)
+
+- [x] **Renamed "Facturation" → "Abonnement"** in sidebar menu
+- [x] **Fixed BillingPage** - Now correctly loads subscription plans
+- [x] **Updated routes** - `/facturation` redirects to `/abonnement`
+- [x] **Fixed Stripe URLs** - Checkout success/cancel redirects to `/abonnement`
 
 ---
 
