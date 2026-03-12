@@ -42,22 +42,32 @@ export default function LoginPage() {
         e.preventDefault();
         setLoading(true);
         
+        // Add timeout for login operation
+        const timeoutId = setTimeout(() => {
+            setLoading(false);
+            toast.error("La connexion prend trop de temps. Veuillez réessayer.");
+        }, 15000);
+        
         try {
             if (isLogin) {
+                console.log('[Login] Attempting login:', email);
                 await login(email, password);
+                clearTimeout(timeoutId);
                 toast.success("Connexion réussie !");
                 navigate("/");
             } else {
                 // Register
+                console.log('[Login] Attempting registration:', email);
                 const result = await register(email, password, {
                     name,
                     phone,
                     company_name: companyName,
                     address
                 });
+                clearTimeout(timeoutId);
                 
                 // Check if email confirmation is required
-                if (result.user && !result.session) {
+                if (result?.user && !result?.session) {
                     toast.success("Compte créé ! Vérifiez votre email pour confirmer.");
                     setStep("success");
                 } else {
@@ -66,7 +76,8 @@ export default function LoginPage() {
                 }
             }
         } catch (error) {
-            console.error("Auth error:", error);
+            clearTimeout(timeoutId);
+            console.error("[Login] Auth error:", error);
             const message = error.message || "Une erreur est survenue";
             
             // Translate common Supabase errors
