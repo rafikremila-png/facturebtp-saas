@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AlertTriangle, Clock, Zap, X, ChevronRight, FileText, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import api from "@/lib/api";
@@ -8,20 +8,34 @@ export default function TrialBanner() {
     const [loading, setLoading] = useState(true);
     const [dismissed, setDismissed] = useState(false);
     const [error, setError] = useState(null);
+    const fetchAttempted = useRef(false);
 
     useEffect(() => {
+        // Prevent duplicate fetches
+        if (fetchAttempted.current) return;
+        fetchAttempted.current = true;
+        
         fetchTrialStatus();
     }, []);
 
     const fetchTrialStatus = async () => {
+        // Set a timeout to prevent hanging
+        const timeoutId = setTimeout(() => {
+            if (loading) {
+                console.log('[TrialBanner] Fetch timeout');
+                setLoading(false);
+            }
+        }, 5000);
+
         try {
             const response = await api.get("/trial/status");
             setTrialData(response.data);
             setError(null);
         } catch (err) {
-            console.error("Error fetching trial status:", err);
+            console.log('[TrialBanner] Fetch error:', err.message);
             setError(err.message);
         } finally {
+            clearTimeout(timeoutId);
             setLoading(false);
         }
     };
