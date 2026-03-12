@@ -125,12 +125,16 @@ Transform the FactureBTP project into a complete, production-ready SaaS platform
 
 ---
 
-## Recently Fixed (Dec 2025)
+## Recently Fixed (Mar 2026)
 
 - [x] **Renamed "Facturation" → "Abonnement"** in sidebar menu
 - [x] **Fixed BillingPage** - Now correctly loads subscription plans
 - [x] **Updated routes** - `/facturation` redirects to `/abonnement`
 - [x] **Fixed Stripe URLs** - Checkout success/cancel redirects to `/abonnement`
+- [x] **Fixed Admin Pages Auth** - AdminMetricsPage, AdminAnalyticsPage now use Supabase Auth properly
+- [x] **Fixed deps.py** - Updated to use Supabase Auth instead of legacy JWT
+- [x] **Fixed API interceptor** - Prevents unnecessary sign-out on 401 errors during init
+- [x] **Verified Trial Banner** - Shows correctly for trial users with countdown and limits
 
 ---
 
