@@ -225,8 +225,8 @@ export const deleteUser = (userId) => api.delete(`/users/${userId}`);
 
 // ============== SUBSCRIPTION & BILLING ==============
 
-// Get available subscription plans
-export const getSubscriptionPlans = () => api.get('/subscription/plans');
+// Get available subscription plans (uses trial endpoint)
+// export const getSubscriptionPlans = () => api.get('/subscription/plans'); // Moved to trial section
 
 // Get current subscription status
 export const getSubscriptionStatus = () => api.get('/subscription/status');
