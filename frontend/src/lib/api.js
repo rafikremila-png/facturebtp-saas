@@ -33,6 +33,12 @@ api.interceptors.response.use(
 // Dashboard
 export const getDashboard = () => api.get('/dashboard');
 
+// Trial & Limits
+export const getTrialStatus = () => api.get('/trial/status');
+export const getUsageLimits = () => api.get('/trial/limits');
+export const checkCanCreate = (resourceType) => api.post(`/trial/check-limit/${resourceType}`);
+export const getSubscriptionPlans = () => api.get('/trial/plans');
+
 // Clients
 export const getClients = () => api.get('/clients');
 export const getClient = (id) => api.get(`/clients/${id}`);
