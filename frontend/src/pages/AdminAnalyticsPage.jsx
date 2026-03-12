@@ -42,8 +42,21 @@ export default function AdminAnalyticsPage() {
     const fetchDashboard = async () => {
         try {
             setRefreshing(true);
-            const response = await api.get('/admin/dashboard');
-            setDashboardData(response.data);
+            // Use admin/metrics endpoint instead of admin/dashboard
+            const response = await api.get('/admin/metrics');
+            // Transform metrics data to dashboard format
+            const metrics = response.data;
+            setDashboardData({
+                total_users: (metrics.active_subscribers || 0) + (metrics.trial_users || 0) + (metrics.expired_accounts || 0),
+                active_users: metrics.active_subscribers || 0,
+                trial_users: metrics.trial_users || 0,
+                expired_users: metrics.expired_accounts || 0,
+                mrr: metrics.mrr || 0,
+                arr: metrics.arr || 0,
+                plan_distribution: metrics.plan_distribution || {},
+                churn_rate: metrics.churn_rate || 0,
+                new_users_this_month: metrics.new_users_this_month || 0
+            });
         } catch (error) {
             console.error("Error fetching dashboard:", error);
             if (error.response?.status === 403) {
