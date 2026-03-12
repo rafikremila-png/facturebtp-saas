@@ -1,17 +1,17 @@
 """
 Shared Dependencies
 Authentication and authorization dependencies for API routes
+Uses Supabase Auth for JWT validation
 """
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
-import os
 from typing import Optional
+import logging
+
+from app.services.supabase_auth_service import verify_supabase_token, get_supabase_client
 
 security = HTTPBearer(auto_error=False)
-
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
-JWT_ALGORITHM = "HS256"
+logger = logging.getLogger(__name__)
 
 async def get_current_user_optional(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Optional[dict]:
     """Get current user if authenticated, None otherwise"""
@@ -19,9 +19,8 @@ async def get_current_user_optional(credentials: HTTPAuthorizationCredentials = 
         return None
     
     try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return {"id": payload.get("sub"), **payload}
-    except jwt.InvalidTokenError:
+        return await verify_supabase_token(credentials.credentials)
+    except Exception:
         return None
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
@@ -33,45 +32,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         )
     
     try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id = payload.get("sub")
-        
-        # Get role from MongoDB (current active DB)
-        # This is a temporary bridge during the migration
-        from motor.motor_asyncio import AsyncIOMotorClient
-        import os
-        
-        MONGO_URL = os.environ.get('MONGO_URL')
-        DB_NAME = os.environ.get('DB_NAME', 'btp_invoice')
-        
-        client = AsyncIOMotorClient(MONGO_URL)
-        db = client[DB_NAME]
-        
-        user = await db.users.find_one({"id": user_id})
-        role = user.get("role", "user") if user else "user"
-        
-        client.close()
-        
-        # Sync user to PostgreSQL (for new features)
-        try:
-            from app.core.database import AsyncSessionLocal
-            from app.services.user_sync_service import ensure_user_in_postgres
-            
-            async with AsyncSessionLocal() as pg_session:
-                await ensure_user_in_postgres(pg_session, user_id)
-                await pg_session.commit()
-        except Exception as e:
-            # Don't fail if sync fails - just log it
-            import logging
-            logging.getLogger(__name__).warning(f"User sync to PostgreSQL failed: {e}")
-        
-        return {"id": user_id, "role": role, **payload}
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expiré"
-        )
-    except jwt.InvalidTokenError:
+        user_data = await verify_supabase_token(credentials.credentials)
+        return user_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Token validation error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token invalide"
