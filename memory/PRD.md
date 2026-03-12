@@ -147,11 +147,19 @@ A user synchronization service (`user_sync_service.py`) bridges the two database
 ---
 
 ## Test Credentials
-- **Admin**: admin@btpfacture.com / Admin123!
-- **Test Client**: client.test@example.fr
+- **Super Admin**: rafik.remila@gmail.com / Zeralda@0676
+- **Trial User**: test.trial@btpfacture.com / TestTrial123!
+- **Admin Legacy**: admin@btpfacture.com / Admin123!
 
 ## Preview URL
 https://construction-billing-3.preview.emergentagent.com
+
+## Key Routes
+- `/abonnement` - Subscription/billing page (renamed from /facturation)
+- `/devis` - Quotes
+- `/factures` - Invoices
+- `/clients` - Clients
+- `/portal/{token}` - Client signature portal
 
 ## Test Portal Token (7 days validity)
 `/portal/WQIBtLIGFfMwM8p1S-pyXaEp7fxY6e8koe6lAlnnxsp0TbKb32nVjJ9uyCsGtXIt`
