@@ -4,23 +4,31 @@
 Transform the FactureBTP project into a complete, production-ready SaaS platform for construction companies with multi-tenant architecture using FastAPI/PostgreSQL (Supabase).
 
 ## Current Architecture
-- **Backend**: FastAPI with PostgreSQL (Supabase)
+- **Backend**: FastAPI with PostgreSQL (Supabase) + MongoDB (legacy)
 - **Frontend**: React with Shadcn/UI, Tailwind CSS
-- **Database**: PostgreSQL via Supabase (multi-tenant with user_id)
-- **Authentication**: JWT-based
+- **Database**: PostgreSQL via Supabase (multi-tenant with user_id) + MongoDB (legacy data)
+- **Authentication**: Supabase Auth (migrated from JWT)
 
 ---
 
 ## Implemented Features (Dec 2025)
 
 ### Core Features ✅
-- [x] User authentication and authorization
+- [x] User authentication and authorization (Supabase Auth)
 - [x] Client management
 - [x] Quote creation and management
 - [x] Invoice creation and management
 - [x] Project (Chantier) management
 - [x] Work Library (Bibliothèque d'ouvrages)
 - [x] Profile completion indicator
+
+### SaaS/Trial System ✅ (NEW - Dec 2025)
+- [x] **7-day Free Trial** - Auto-starts on registration
+- [x] **Usage Limits** - 5 quotes/invoices during trial
+- [x] **Super Admin Role** - Unlimited access, no restrictions
+- [x] **Subscription Plans** - Essentiel (19€), Pro (29€), Business (59€)
+- [x] **UI Banners** - Trial status and usage counters on dashboard
+- [x] **Stripe Integration** - Checkout sessions configured
 
 ### Service Features ✅
 - [x] Service Categories (6 pre-filled categories)
