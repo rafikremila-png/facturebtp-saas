@@ -4408,6 +4408,123 @@ async def get_dashboard(user: dict = Depends(get_current_user)):
         logger.error(f"Dashboard error: {str(e)}")
         raise HTTPException(status_code=500, detail="Erreur lors de la récupération des statistiques")
 
+# ============== FINANCIAL REPORTS ROUTES (MongoDB) ==============
+
+class FinancialDashboardResponse(BaseModel):
+    total_revenue: float = 0
+    total_paid: float = 0
+    total_pending: float = 0
+    total_overdue: float = 0
+    monthly_revenue: List[dict] = []
+    recent_payments: List[dict] = []
+    invoices_by_status: dict = {}
+    average_payment_time: Optional[float] = None
+    collection_rate: float = 0
+
+@api_router.get("/reports/financial", response_model=FinancialDashboardResponse)
+async def get_financial_dashboard(
+    period: Optional[str] = Query("year", description="Period: month, quarter, year, all"),
+    user: dict = Depends(get_current_user)
+):
+    """Get financial dashboard statistics from MongoDB"""
+    try:
+        from datetime import datetime, timedelta
+        
+        # Calculate date range
+        now = datetime.utcnow()
+        start_date = None
+        
+        if period == "month":
+            start_date = now - timedelta(days=30)
+        elif period == "quarter":
+            start_date = now - timedelta(days=90)
+        elif period == "year":
+            start_date = now - timedelta(days=365)
+        
+        # Build query filter
+        query_filter = {"owner_id": user["id"]}
+        if start_date:
+            query_filter["created_at"] = {"$gte": start_date}
+        
+        # Get all invoices
+        invoices = await db.invoices.find(query_filter, {"_id": 0}).to_list(10000)
+        
+        # Calculate totals
+        total_revenue = sum(inv.get("total_ttc", 0) for inv in invoices)
+        total_paid = sum(inv.get("paid_amount", 0) for inv in invoices)
+        total_pending = total_revenue - total_paid
+        
+        # Calculate overdue (unpaid and past due date)
+        total_overdue = 0
+        for inv in invoices:
+            if inv.get("payment_status") in ["impaye", "partiel"]:
+                due_date = inv.get("due_date")
+                if due_date and due_date < now:
+                    remaining = inv.get("total_ttc", 0) - inv.get("paid_amount", 0)
+                    total_overdue += remaining
+        
+        # Monthly revenue
+        monthly_revenue = []
+        for i in range(12):
+            month_start = now.replace(day=1) - timedelta(days=30*i)
+            month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+            
+            month_invoices = [inv for inv in invoices 
+                           if inv.get("created_at") and 
+                           month_start <= inv["created_at"] <= month_end]
+            
+            month_total = sum(inv.get("total_ttc", 0) for inv in month_invoices)
+            month_paid = sum(inv.get("paid_amount", 0) for inv in month_invoices)
+            
+            monthly_revenue.append({
+                "month": month_start.strftime("%Y-%m"),
+                "revenue": round(month_total, 2),
+                "paid": round(month_paid, 2)
+            })
+        
+        monthly_revenue.reverse()
+        
+        # Invoices by status
+        invoices_by_status = {}
+        for inv in invoices:
+            status = inv.get("payment_status", "impaye")
+            invoices_by_status[status] = invoices_by_status.get(status, 0) + 1
+        
+        # Recent payments (last 10 paid invoices)
+        recent_payments = []
+        paid_invoices = sorted(
+            [inv for inv in invoices if inv.get("payment_status") == "paye"],
+            key=lambda x: x.get("paid_at", x.get("updated_at", datetime.min)),
+            reverse=True
+        )[:10]
+        
+        for inv in paid_invoices:
+            recent_payments.append({
+                "invoice_number": inv.get("invoice_number", ""),
+                "client_name": inv.get("client_name", ""),
+                "amount": inv.get("total_ttc", 0),
+                "paid_at": inv.get("paid_at", inv.get("updated_at"))
+            })
+        
+        # Collection rate
+        collection_rate = (total_paid / total_revenue * 100) if total_revenue > 0 else 0
+        
+        return FinancialDashboardResponse(
+            total_revenue=round(total_revenue, 2),
+            total_paid=round(total_paid, 2),
+            total_pending=round(total_pending, 2),
+            total_overdue=round(total_overdue, 2),
+            monthly_revenue=monthly_revenue[-6:],  # Last 6 months
+            recent_payments=recent_payments,
+            invoices_by_status=invoices_by_status,
+            average_payment_time=None,
+            collection_rate=round(collection_rate, 2)
+        )
+        
+    except Exception as e:
+        logger.error(f"Financial dashboard error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erreur lors du chargement des données financières")
+
 # ============== PREDEFINED ITEMS ROUTES ==============
 
 async def initialize_default_items():
