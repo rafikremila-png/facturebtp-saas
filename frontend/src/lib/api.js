@@ -21,10 +21,18 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
+        // Only sign out on 401 if we had a valid session
+        // This prevents race conditions during login
         if (error.response?.status === 401) {
-            // Sign out from Supabase
-            await supabase.auth.signOut();
-            window.location.href = '/login';
+            const { data: { session } } = await supabase.auth.getSession();
+            // Only sign out if we actually had a session (not during initial load)
+            if (session) {
+                console.log('[API] 401 error with active session - signing out');
+                await supabase.auth.signOut();
+                window.location.href = '/login';
+            } else {
+                console.log('[API] 401 error without session - ignoring');
+            }
         }
         return Promise.reject(error);
     }
