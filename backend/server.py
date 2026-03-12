@@ -6167,21 +6167,57 @@ async def get_saas_subscription(user: dict = Depends(get_current_user)):
 @api_router.get("/saas/usage")
 async def get_usage_stats(user: dict = Depends(get_current_user)):
     """Get current month usage statistics"""
-    plans_service = get_plans_service(db)
     try:
-        info = await plans_service.get_user_subscription_info(user["id"])
+        # Import Supabase service
+        from app.services.supabase_auth_service import get_supabase_client
+        from app.services.trial_service import calculate_trial_status, check_usage_limits
+        
+        supabase = get_supabase_client()
+        user_id = user["id"]
+        
+        # Get full user data
+        user_result = supabase.from_("users").select("*").eq("id", user_id).single().execute()
+        user_data = user_result.data or {}
+        
+        # Count quotes and invoices
+        quotes_result = supabase.from_("quotes").select("id", count="exact").eq("user_id", user_id).execute()
+        quotes_count = quotes_result.count or 0
+        
+        invoices_result = supabase.from_("invoices").select("id", count="exact").eq("user_id", user_id).execute()
+        invoices_count = invoices_result.count or 0
+        
+        # Calculate trial status and limits
+        usage_info = check_usage_limits(user_data, quotes_count, invoices_count)
+        
         return {
-            "quote_usage": info["quote_usage"],
-            "quote_limit": info["quote_limit"],
-            "invoice_usage": info["invoice_usage"],
-            "invoice_limit": info["invoice_limit"],
-            "can_create_quote": info["can_create_quote"],
-            "can_create_invoice": info["can_create_invoice"],
-            "is_trial": info["is_trial"],
-            "trial_days_remaining": info.get("trial_days_remaining"),
+            "quote_usage": quotes_count,
+            "quote_limit": usage_info["quote_limit"],
+            "invoice_usage": invoices_count,
+            "invoice_limit": usage_info["invoice_limit"],
+            "can_create_quote": usage_info["can_create_quote"],
+            "can_create_invoice": usage_info["can_create_invoice"],
+            "is_trial": usage_info["is_trial"],
+            "trial_days_remaining": usage_info.get("trial_days_remaining"),
+            "user_role": user_data.get("role", "user"),
         }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error getting usage stats: {e}")
+        # Fallback to MongoDB-based service
+        plans_service = get_plans_service(db)
+        try:
+            info = await plans_service.get_user_subscription_info(user["id"])
+            return {
+                "quote_usage": info["quote_usage"],
+                "quote_limit": info["quote_limit"],
+                "invoice_usage": info["invoice_usage"],
+                "invoice_limit": info["invoice_limit"],
+                "can_create_quote": info["can_create_quote"],
+                "can_create_invoice": info["can_create_invoice"],
+                "is_trial": info["is_trial"],
+                "trial_days_remaining": info.get("trial_days_remaining"),
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
 
 
 @api_router.post("/saas/checkout")
