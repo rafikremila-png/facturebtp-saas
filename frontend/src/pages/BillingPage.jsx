@@ -57,15 +57,35 @@ export default function BillingPage() {
 
     const loadData = async () => {
         try {
-            const [plansRes, statusRes] = await Promise.all([
-                getSubscriptionPlans(),
-                getSubscriptionStatus()
-            ]);
-            setPlans(plansRes.data);
-            setSubscription(statusRes.data);
+            // Load plans first (public endpoint)
+            const plansRes = await getSubscriptionPlans();
+            // Handle both {plans: [...]} and [...] response formats
+            const plansData = plansRes.data?.plans || plansRes.data || [];
+            setPlans(Array.isArray(plansData) ? plansData : []);
+            
+            // Try to load subscription status (requires auth)
+            try {
+                const statusRes = await getSubscriptionStatus();
+                setSubscription(statusRes.data || null);
+            } catch (statusError) {
+                console.warn("Could not load subscription status:", statusError);
+                // Set default subscription state for trial users
+                setSubscription({
+                    plan: "trial",
+                    plan_name: "Essai",
+                    is_trial: true,
+                    is_active: true,
+                    trial_days_remaining: 7,
+                    invoices_this_month: 0,
+                    invoices_limit: 5
+                });
+            }
         } catch (error) {
             console.error("Error loading billing data:", error);
             toast.error("Erreur lors du chargement des données");
+            // Set empty defaults
+            setPlans([]);
+            setSubscription(null);
         } finally {
             setLoading(false);
         }

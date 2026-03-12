@@ -37,7 +37,7 @@ const navItems = [
     { to: "/bibliotheque", icon: Library, label: "Bibliothèque" },
     { to: "/ai-assistant", icon: Sparkles, label: "Assistant IA" },
     { to: "/services", icon: Briefcase, label: "Services Pro" },
-    { to: "/facturation", icon: CreditCard, label: "Facturation" },
+    { to: "/abonnement", icon: CreditCard, label: "Abonnement" },
     { to: "/parametres", icon: Settings, label: "Paramètres" },
 ];
 
