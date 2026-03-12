@@ -7176,12 +7176,23 @@ except Exception as e:
 cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
 cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
 
+# Add production domains
+production_origins = [
+    "https://www.facturebtp.fr",
+    "https://facturebtp.fr",
+    "https://construction-billing-3.preview.emergentagent.com",
+    "http://localhost:3000"
+]
+for origin in production_origins:
+    if origin not in cors_origins:
+        cors_origins.append(origin)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
     allow_headers=["*"],
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     max_age=3600,
 )
 
