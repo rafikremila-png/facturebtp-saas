@@ -62,12 +62,43 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
             logger.debug(f"Could not get auth user: {auth_error}")
         
         # Get user profile from database (this is the source of truth)
+        profile = None
         try:
             profile_response = supabase.from_("users").select("*").eq("id", user_id).single().execute()
             profile = profile_response.data
         except Exception as db_error:
-            logger.error(f"Could not get user profile: {db_error}")
+            # User not found in database - this is expected for users not yet synced
+            logger.debug(f"User {user_id} not in users table, will auto-create if auth exists")
             profile = None
+        
+        # If no profile but we have auth_user, auto-create the profile
+        if not profile and auth_user:
+            try:
+                # Determine role based on email (super admin check)
+                email = auth_user.email or ""
+                role = "super_admin" if email == "rafik.remila@gmail.com" else "user"
+                
+                # Create user profile in PostgreSQL
+                new_user_data = {
+                    "id": str(user_id),
+                    "email": email,
+                    "name": auth_user.user_metadata.get("name", "") if auth_user.user_metadata else "",
+                    "role": role,
+                    "subscription_plan": "trial",
+                    "subscription_status": "active",
+                    "trial_status": "trial",
+                    "quote_limit": 5,
+                    "invoice_limit": 5,
+                }
+                
+                # Insert into users table
+                insert_result = supabase.from_("users").insert(new_user_data).execute()
+                if insert_result.data:
+                    profile = insert_result.data[0] if isinstance(insert_result.data, list) else insert_result.data
+                    logger.info(f"Auto-created user profile for {email}")
+            except Exception as create_error:
+                logger.warning(f"Could not auto-create user profile: {create_error}")
+                # Continue with auth_user data as fallback
         
         # Build user data
         if profile:
@@ -83,18 +114,25 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
                 "siret": profile.get("siret"),
                 "subscription_plan": profile.get("subscription_plan"),
                 "subscription_status": profile.get("subscription_status"),
+                "trial_status": profile.get("trial_status"),
+                "quote_limit": profile.get("quote_limit", 5),
+                "invoice_limit": profile.get("invoice_limit", 5),
             }
             return user_data
         elif auth_user:
-            # Fallback to auth user if no profile
+            # Fallback to auth user if no profile and couldn't create
             return {
                 "id": str(auth_user.id),
                 "email": auth_user.email,
-                "role": "user",
+                "role": "super_admin" if auth_user.email == "rafik.remila@gmail.com" else "user",
                 "name": auth_user.user_metadata.get("name", "") if auth_user.user_metadata else "",
                 "phone": "",
                 "company_name": "",
                 "address": "",
+                "subscription_plan": "trial",
+                "trial_status": "trial",
+                "quote_limit": 5,
+                "invoice_limit": 5,
             }
         else:
             raise HTTPException(
