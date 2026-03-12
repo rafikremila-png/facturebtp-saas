@@ -136,6 +136,13 @@ Transform the FactureBTP project into a complete, production-ready SaaS platform
 - [x] **Fixed API interceptor** - Prevents unnecessary sign-out on 401 errors during init
 - [x] **Verified Trial Banner** - Shows correctly for trial users with countdown and limits
 
+### Audit Bugs Fixed (Mar 2026)
+- [x] **CRITICAL: User Auto-Sync** - Users in Supabase Auth now auto-create in PostgreSQL users table
+- [x] **CRITICAL: Financial Dashboard** - New MongoDB-based route `/reports/financial` working
+- [x] **HIGH: Plans Unified** - `/trial/plans` now matches `/subscription/plans` structure
+- [x] **MEDIUM: CORS Restricted** - Production domains whitelisted, no more `*` wildcard
+- [x] **Rate Limiting** - Already configured on auth routes (5/min login, 5/hour register)
+
 ---
 
 ## Architecture Note (Current State)
