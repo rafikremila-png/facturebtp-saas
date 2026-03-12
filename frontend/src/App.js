@@ -35,15 +35,25 @@ import FinancialDashboardPage from "@/pages/FinancialDashboardPage";
 import ClientPortalPage from "@/pages/ClientPortalPage";
 import Layout from "@/components/Layout";
 
+// Loading component with timeout indication
+const LoadingScreen = ({ message = "Chargement..." }) => (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
+        <div className="spinner"></div>
+        <p className="text-sm text-slate-500">{message}</p>
+    </div>
+);
+
 const ProtectedRoute = ({ children }) => {
-    const { isAuthenticated, loading } = useAuth();
+    const { isAuthenticated, loading, authReady, error } = useAuth();
     
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <div className="spinner"></div>
-            </div>
-        );
+    // Show error if auth failed
+    if (error && !loading) {
+        console.log('[ProtectedRoute] Auth error:', error);
+    }
+    
+    // Show loading only while actually loading
+    if (loading && !authReady) {
+        return <LoadingScreen message="Vérification de l'authentification..." />;
     }
     
     if (!isAuthenticated) {
@@ -55,14 +65,10 @@ const ProtectedRoute = ({ children }) => {
 
 // Admin-only protected route
 const AdminRoute = ({ children }) => {
-    const { isAuthenticated, loading, isAdmin } = useAuth();
+    const { isAuthenticated, loading, authReady, isAdmin } = useAuth();
     
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <div className="spinner"></div>
-            </div>
-        );
+    if (loading && !authReady) {
+        return <LoadingScreen message="Vérification des droits..." />;
     }
     
     if (!isAuthenticated) {
@@ -77,14 +83,10 @@ const AdminRoute = ({ children }) => {
 };
 
 const PublicRoute = ({ children }) => {
-    const { isAuthenticated, loading } = useAuth();
+    const { isAuthenticated, loading, authReady } = useAuth();
     
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <div className="spinner"></div>
-            </div>
-        );
+    if (loading && !authReady) {
+        return <LoadingScreen />;
     }
     
     if (isAuthenticated) {
