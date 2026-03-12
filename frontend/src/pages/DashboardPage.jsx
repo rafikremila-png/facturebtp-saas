@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import UsageCounter from "@/components/UsageCounter";
 import ProfileCompletionCard from "@/components/ProfileCompletionCard";
+import TrialBanner from "@/components/TrialBanner";
 
 export default function DashboardPage() {
     const { user } = useAuth();
