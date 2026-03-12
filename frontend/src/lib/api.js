@@ -37,7 +37,7 @@ export const getDashboard = () => api.get('/dashboard');
 export const getTrialStatus = () => api.get('/trial/status');
 export const getUsageLimits = () => api.get('/trial/limits');
 export const checkCanCreate = (resourceType) => api.post(`/trial/check-limit/${resourceType}`);
-export const getSubscriptionPlans = () => api.get('/trial/plans');
+export const getSubscriptionPlans = () => api.get('/subscription/plans');
 
 // Clients
 export const getClients = () => api.get('/clients');
