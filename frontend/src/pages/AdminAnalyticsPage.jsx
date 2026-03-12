@@ -21,9 +21,7 @@ import {
     TrendingUp
 } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import api from "@/lib/api";
 
 export default function AdminAnalyticsPage() {
     const { user } = useAuth();
