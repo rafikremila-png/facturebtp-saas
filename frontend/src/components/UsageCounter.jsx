@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getUsageStats } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -10,19 +10,36 @@ import { useNavigate } from "react-router-dom";
 export default function UsageCounter({ onUpgradeClick }) {
     const [usage, setUsage] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const navigate = useNavigate();
+    const fetchAttempted = useRef(false);
 
     useEffect(() => {
+        // Prevent duplicate fetches
+        if (fetchAttempted.current) return;
+        fetchAttempted.current = true;
+        
         fetchUsage();
     }, []);
 
     const fetchUsage = async () => {
+        // Set a timeout to prevent hanging
+        const timeoutId = setTimeout(() => {
+            if (loading) {
+                console.log('[UsageCounter] Fetch timeout');
+                setLoading(false);
+            }
+        }, 5000);
+
         try {
             const response = await getUsageStats();
             setUsage(response.data);
-        } catch (error) {
-            console.error("Error fetching usage:", error);
+            setError(null);
+        } catch (err) {
+            console.log('[UsageCounter] Fetch error:', err.message);
+            setError(err.message);
         } finally {
+            clearTimeout(timeoutId);
             setLoading(false);
         }
     };
