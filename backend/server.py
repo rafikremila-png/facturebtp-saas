@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, status, Request, Body
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, status, Request, Body, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
