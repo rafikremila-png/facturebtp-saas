@@ -27,30 +27,50 @@ export default function DashboardPage() {
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const fetchAttempted = React.useRef(false);
 
     // Debug: Log trial status
     useEffect(() => {
         if (user) {
-            console.log('[TRIAL DEBUG] User trial info:', {
+            console.log('[Dashboard] User info:', {
+                email: user.email,
+                role: user.role,
                 trial_status: user.trial_status,
-                trial_started_at: user.trial_started_at,
-                trial_ends_at: user.trial_ends_at,
-                invoice_limit: user.invoice_limit
             });
         }
     }, [user]);
 
     useEffect(() => {
+        // Prevent duplicate fetches
+        if (fetchAttempted.current) return;
+        fetchAttempted.current = true;
+        
         loadDashboard();
     }, []);
 
     const loadDashboard = async () => {
+        // Set a timeout to prevent hanging
+        const timeoutId = setTimeout(() => {
+            if (loading) {
+                console.log('[Dashboard] Load timeout');
+                setLoading(false);
+                setError('Timeout - Les données mettent trop de temps à charger');
+            }
+        }, 8000);
+
         try {
+            console.log('[Dashboard] Loading data...');
             const response = await getDashboard();
+            console.log('[Dashboard] Data loaded:', response.data);
             setStats(response.data);
-        } catch (error) {
-            toast.error("Erreur lors du chargement du tableau de bord");
+            setError(null);
+        } catch (err) {
+            console.error('[Dashboard] Load error:', err);
+            setError(err.message);
+            // Don't show toast on timeout/network errors to avoid spam
         } finally {
+            clearTimeout(timeoutId);
             setLoading(false);
         }
     };
@@ -69,8 +89,29 @@ export default function DashboardPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
+            <div className="flex flex-col items-center justify-center h-64 gap-3">
                 <div className="spinner"></div>
+                <p className="text-sm text-slate-500">Chargement du tableau de bord...</p>
+            </div>
+        );
+    }
+
+    // Show error state but still render the page
+    if (error && !stats) {
+        return (
+            <div className="space-y-8" data-testid="dashboard-page">
+                <TrialBanner />
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <p className="text-amber-800">
+                        Impossible de charger les statistiques. 
+                        <button 
+                            onClick={() => { fetchAttempted.current = false; setLoading(true); loadDashboard(); }}
+                            className="ml-2 underline hover:no-underline"
+                        >
+                            Réessayer
+                        </button>
+                    </p>
+                </div>
             </div>
         );
     }
