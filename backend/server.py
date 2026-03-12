@@ -7012,6 +7012,14 @@ if PG_ROUTES_AVAILABLE:
     except Exception as e:
         logger.warning(f"Could not load PostgreSQL routes: {e}")
 
+# Trial and subscription routes
+try:
+    from app.api.routes.trial_routes import router as trial_router
+    app.include_router(trial_router, prefix="/api")
+    logger.info("✅ Trial routes loaded successfully")
+except Exception as e:
+    logger.warning(f"Could not load trial routes: {e}")
+
 cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
 cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
 
