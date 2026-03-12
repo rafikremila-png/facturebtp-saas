@@ -6233,8 +6233,8 @@ async def create_saas_checkout(
     
     try:
         origin_url = request.origin_url.rstrip("/")
-        success_url = f"{origin_url}/facturation"
-        cancel_url = f"{origin_url}/facturation"
+        success_url = f"{origin_url}/abonnement"
+        cancel_url = f"{origin_url}/abonnement"
         
         result = await stripe_service.create_checkout_session(
             user_id=user["id"],
