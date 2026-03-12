@@ -40,13 +40,8 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
     """
     try:
         # Decode without verification first to get the user ID
-        # Supabase tokens are signed with the JWT secret
         unverified = jwt.decode(token, options={"verify_signature": False})
         
-        # Get user from Supabase to verify the token is valid
-        supabase = get_supabase_client()
-        
-        # Use admin API to get user
         user_id = unverified.get("sub")
         if not user_id:
             raise HTTPException(
@@ -54,40 +49,58 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
                 detail="Token invalide"
             )
         
-        # Verify token by getting user
-        user_response = supabase.auth.admin.get_user_by_id(user_id)
+        # Get Supabase client
+        supabase = get_supabase_client()
         
-        if not user_response or not user_response.user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Utilisateur non trouvé"
-            )
+        # Try to get user from auth (may fail if user was created differently)
+        auth_user = None
+        try:
+            user_response = supabase.auth.admin.get_user_by_id(user_id)
+            if user_response and user_response.user:
+                auth_user = user_response.user
+        except Exception as auth_error:
+            logger.debug(f"Could not get auth user: {auth_error}")
         
-        auth_user = user_response.user
-        
-        # Get user profile from database
-        profile_response = supabase.from_("users").select("*").eq("id", user_id).single().execute()
-        
-        user_data = {
-            "id": str(auth_user.id),
-            "email": auth_user.email,
-            "role": "user",
-            "name": "",
-            "phone": "",
-            "company_name": "",
-            "address": "",
-        }
-        
-        # Merge with profile data if exists
-        if profile_response.data:
+        # Get user profile from database (this is the source of truth)
+        try:
+            profile_response = supabase.from_("users").select("*").eq("id", user_id).single().execute()
             profile = profile_response.data
-            user_data.update({
+        except Exception as db_error:
+            logger.error(f"Could not get user profile: {db_error}")
+            profile = None
+        
+        # Build user data
+        if profile:
+            user_data = {
+                "id": str(user_id),
+                "email": profile.get("email") or (auth_user.email if auth_user else ""),
                 "role": profile.get("role", "user"),
                 "name": profile.get("name", ""),
                 "phone": profile.get("phone", ""),
                 "company_name": profile.get("company_name", ""),
                 "address": profile.get("address", ""),
                 "business_type": profile.get("business_type"),
+                "siret": profile.get("siret"),
+                "subscription_plan": profile.get("subscription_plan"),
+                "subscription_status": profile.get("subscription_status"),
+            }
+            return user_data
+        elif auth_user:
+            # Fallback to auth user if no profile
+            return {
+                "id": str(auth_user.id),
+                "email": auth_user.email,
+                "role": "user",
+                "name": auth_user.user_metadata.get("name", "") if auth_user.user_metadata else "",
+                "phone": "",
+                "company_name": "",
+                "address": "",
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Utilisateur non trouvé"
+            )
                 "siret": profile.get("siret"),
                 "subscription_plan": profile.get("subscription_plan"),
                 "subscription_status": profile.get("subscription_status"),
