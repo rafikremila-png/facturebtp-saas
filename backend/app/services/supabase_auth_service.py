@@ -101,12 +101,6 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Utilisateur non trouvé"
             )
-                "siret": profile.get("siret"),
-                "subscription_plan": profile.get("subscription_plan"),
-                "subscription_status": profile.get("subscription_status"),
-            })
-        
-        return user_data
         
     except jwt.ExpiredSignatureError:
         raise HTTPException(
