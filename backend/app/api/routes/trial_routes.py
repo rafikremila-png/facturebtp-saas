@@ -189,34 +189,43 @@ async def check_can_create(resource_type: str, user: Dict = Depends(get_current_
 @router.get("/plans")
 async def get_subscription_plans():
     """
-    Get available subscription plans
+    Get available subscription plans (unified with /subscription/plans)
     """
     return {
         "plans": [
             {
-                "id": "starter",
-                "name": "Starter",
+                "id": "essentiel",
+                "name": "Essentiel",
                 "price": 19,
-                "quote_limit": 20,
-                "invoice_limit": 20,
-                "features": ["20 devis/mois", "20 factures/mois", "Support email"],
+                "price_monthly": 19,
+                "quote_limit": 99999,
+                "invoice_limit": 30,
+                "max_users": 1,
+                "features": ["Devis illimités", "30 factures/mois", "Bibliothèque articles", "Support email"],
+                "description": "Pour les artisans débutants"
             },
             {
-                "id": "professional",
-                "name": "Professionnel",
-                "price": 49,
-                "quote_limit": 100,
-                "invoice_limit": 100,
-                "features": ["100 devis/mois", "100 factures/mois", "Support prioritaire", "Export comptable"],
-                "popular": True,
-            },
-            {
-                "id": "enterprise",
-                "name": "Entreprise",
-                "price": 99,
+                "id": "pro",
+                "name": "Pro",
+                "price": 29,
+                "price_monthly": 29,
                 "quote_limit": 99999,
                 "invoice_limit": 99999,
-                "features": ["Devis illimités", "Factures illimitées", "Support dédié", "API access", "Multi-utilisateurs"],
+                "max_users": 1,
+                "features": ["Devis illimités", "Factures illimitées", "Kits prédéfinis", "Prix intelligents", "Support prioritaire"],
+                "popular": True,
+                "description": "Pour les professionnels actifs"
+            },
+            {
+                "id": "business",
+                "name": "Business",
+                "price": 59,
+                "price_monthly": 59,
+                "quote_limit": 99999,
+                "invoice_limit": 99999,
+                "max_users": 10,
+                "features": ["Tout Pro +", "10 utilisateurs", "Dashboard avancé", "API access", "Support dédié"],
+                "description": "Pour les entreprises en croissance"
             },
         ],
     }
