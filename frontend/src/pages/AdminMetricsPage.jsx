@@ -39,11 +39,7 @@ export default function AdminMetricsPage() {
         try {
             if (forceRefresh) setRefreshing(true);
             
-            const token = localStorage.getItem("token");
-            const response = await axios.get(
-                `${API}/admin/metrics?force_refresh=${forceRefresh}`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            const response = await api.get(`/admin/metrics?force_refresh=${forceRefresh}`);
             setMetrics(response.data);
         } catch (error) {
             console.error("Error fetching metrics:", error);
