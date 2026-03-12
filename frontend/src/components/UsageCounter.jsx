@@ -28,7 +28,7 @@ export default function UsageCounter({ onUpgradeClick }) {
     };
 
     const getProgressColor = (current, limit) => {
-        if (limit === -1) return "bg-green-500"; // Unlimited
+        if (limit === -1 || limit >= 99999) return "bg-green-500"; // Unlimited
         const percentage = (current / limit) * 100;
         if (percentage >= 100) return "bg-red-500";
         if (percentage >= 70) return "bg-orange-500";
@@ -36,12 +36,12 @@ export default function UsageCounter({ onUpgradeClick }) {
     };
 
     const getProgressPercentage = (current, limit) => {
-        if (limit === -1) return 10; // Show small bar for unlimited
+        if (limit === -1 || limit >= 99999) return 10; // Show small bar for unlimited
         return Math.min(100, (current / limit) * 100);
     };
 
     const formatLimit = (limit) => {
-        return limit === -1 ? "∞" : limit;
+        return (limit === -1 || limit >= 99999) ? "∞" : limit;
     };
 
     const handleUpgrade = () => {
@@ -64,6 +64,27 @@ export default function UsageCounter({ onUpgradeClick }) {
 
     if (!usage) {
         return null;
+    }
+
+    // Don't show for super admin with unlimited access
+    if (usage.user_role === "super_admin" || (usage.quote_limit >= 99999 && usage.invoice_limit >= 99999)) {
+        return (
+            <Card className="border-green-200 bg-green-50" data-testid="usage-counter">
+                <CardContent className="py-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-100 rounded-full">
+                            <TrendingUp className="w-5 h-5 text-green-600" />
+                        </div>
+                        <div>
+                            <h3 className="font-semibold text-green-800">Accès illimité</h3>
+                            <p className="text-sm text-green-600">
+                                {usage.quote_usage} devis • {usage.invoice_usage} factures créés
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        );
     }
 
     const quotePercentage = getProgressPercentage(usage.quote_usage, usage.quote_limit);
