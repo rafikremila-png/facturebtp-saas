@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { AlertTriangle, Clock, Zap, X, ChevronRight, FileText, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import api from "@/lib/api";
 
 export default function TrialBanner() {
     const [trialData, setTrialData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [dismissed, setDismissed] = useState(false);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         fetchTrialStatus();
@@ -17,14 +17,19 @@ export default function TrialBanner() {
         try {
             const response = await api.get("/trial/status");
             setTrialData(response.data);
-        } catch (error) {
-            console.error("Error fetching trial status:", error);
+            setError(null);
+        } catch (err) {
+            console.error("Error fetching trial status:", err);
+            setError(err.message);
         } finally {
             setLoading(false);
         }
     };
 
-    if (loading || dismissed || !trialData) return null;
+    // Don't render anything if loading, dismissed, error, or no data
+    if (loading || dismissed || error || !trialData) {
+        return null;
+    }
 
     // Don't show banner for super admin or active subscriptions
     if (trialData.user_role === "super_admin" || trialData.subscription_active) {
@@ -33,18 +38,38 @@ export default function TrialBanner() {
 
     const { 
         is_trial, 
-        trial_days_remaining, 
-        trial_expired,
-        quotes_count,
-        quote_limit,
-        invoices_count,
-        invoice_limit,
-        banner 
+        trial_days_remaining = 0, 
+        trial_expired = false,
+        trial_ends_at,
+        quotes_count = 0,
+        quote_limit = 5,
+        invoices_count = 0,
+        invoice_limit = 5,
     } = trialData;
 
+    // Don't show if not in trial
+    if (!is_trial) {
+        return null;
+    }
+
     // Calculate percentages for progress bars
-    const quotesPercent = Math.min(100, (quotes_count / quote_limit) * 100);
-    const invoicesPercent = Math.min(100, (invoices_count / invoice_limit) * 100);
+    const quotesPercent = Math.min(100, (quotes_count / Math.max(quote_limit, 1)) * 100);
+    const invoicesPercent = Math.min(100, (invoices_count / Math.max(invoice_limit, 1)) * 100);
+
+    // Format expiration date
+    const formatExpirationDate = (dateStr) => {
+        if (!dateStr) return "";
+        try {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('fr-FR', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+            });
+        } catch {
+            return "";
+        }
+    };
 
     // Determine banner style based on status
     const getBannerStyle = () => {
@@ -76,6 +101,7 @@ export default function TrialBanner() {
                 <button
                     onClick={() => setDismissed(true)}
                     className="absolute top-2 right-2 opacity-50 hover:opacity-100 transition-opacity"
+                    aria-label="Fermer"
                 >
                     <X className="w-4 h-4" />
                 </button>
@@ -92,16 +118,23 @@ export default function TrialBanner() {
                     </div>
 
                     <div className="flex-1">
-                        <h3 className="font-semibold text-sm">
-                            {trial_expired 
-                                ? "Période d'essai expirée" 
-                                : `Essai gratuit - ${trial_days_remaining} jour${trial_days_remaining > 1 ? 's' : ''} restant${trial_days_remaining > 1 ? 's' : ''}`
-                            }
-                        </h3>
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                            <h3 className="font-semibold text-sm">
+                                {trial_expired 
+                                    ? "Période d'essai expirée" 
+                                    : `Essai gratuit - ${trial_days_remaining} jour${trial_days_remaining > 1 ? 's' : ''} restant${trial_days_remaining > 1 ? 's' : ''}`
+                                }
+                            </h3>
+                            {trial_ends_at && !trial_expired && (
+                                <span className="text-xs opacity-75">
+                                    Expire le {formatExpirationDate(trial_ends_at)}
+                                </span>
+                            )}
+                        </div>
                         <p className="text-sm mt-1 opacity-90">
                             {trial_expired
-                                ? "Votre période d'essai est terminée. Passez à un abonnement pour continuer à utiliser toutes les fonctionnalités."
-                                : `Profitez de votre essai gratuit avec ${quote_limit} devis et ${invoice_limit} factures.`
+                                ? "Votre période d'essai est terminée. Passez à un abonnement pour continuer."
+                                : `Limite: ${quote_limit} devis et ${invoice_limit} factures pendant l'essai.`
                             }
                         </p>
 
@@ -109,7 +142,7 @@ export default function TrialBanner() {
                             <Button
                                 size="sm"
                                 className="mt-3 bg-orange-600 hover:bg-orange-700 text-white"
-                                onClick={() => window.location.href = "/settings/subscription"}
+                                onClick={() => window.location.href = "/tarifs"}
                             >
                                 Passer à l'abonnement
                                 <ChevronRight className="w-4 h-4 ml-1" />
@@ -119,7 +152,7 @@ export default function TrialBanner() {
                 </div>
             </div>
 
-            {/* Usage Limits Banner */}
+            {/* Usage Limits Banner - Only show during active trial */}
             {is_trial && !trial_expired && (
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
                     <h4 className="text-sm font-medium text-slate-700 mb-3">
