@@ -14,6 +14,9 @@ api.interceptors.request.use(async (config) => {
     
     if (session?.access_token) {
         config.headers.Authorization = `Bearer ${session.access_token}`;
+        console.log('[API] Token added to request:', config.url);
+    } else {
+        console.log('[API] No token available for request:', config.url);
     }
     return config;
 });
