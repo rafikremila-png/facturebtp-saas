@@ -5912,8 +5912,8 @@ async def create_checkout_session(
     
     # Build success and cancel URLs
     origin_url = request.origin_url.rstrip("/")
-    success_url = f"{origin_url}/facturation?session_id={{CHECKOUT_SESSION_ID}}&success=true"
-    cancel_url = f"{origin_url}/facturation?canceled=true"
+    success_url = f"{origin_url}/abonnement?session_id={{CHECKOUT_SESSION_ID}}&success=true"
+    cancel_url = f"{origin_url}/abonnement?canceled=true"
     
     # Initialize Stripe
     webhook_url = f"{str(http_request.base_url).rstrip('/')}/api/webhook/stripe"
