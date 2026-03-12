@@ -134,7 +134,7 @@ A user synchronization service (`user_sync_service.py`) bridges the two database
 - **Test Client**: client.test@example.fr
 
 ## Preview URL
-https://btp-portal.preview.emergentagent.com
+https://construction-billing-3.preview.emergentagent.com
 
 ## Test Portal Token (7 days validity)
 `/portal/WQIBtLIGFfMwM8p1S-pyXaEp7fxY6e8koe6lAlnnxsp0TbKb32nVjJ9uyCsGtXIt`
