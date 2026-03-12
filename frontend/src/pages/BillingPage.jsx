@@ -217,7 +217,7 @@ export default function BillingPage() {
         <div className="max-w-6xl mx-auto space-y-8" data-testid="billing-page">
             <div>
                 <h1 className="font-['Barlow_Condensed'] text-3xl font-bold text-slate-900">
-                    Facturation & Abonnement
+                    Abonnement
                 </h1>
                 <p className="text-slate-500 mt-1">
                     Gérez votre abonnement et accédez à plus de fonctionnalités
