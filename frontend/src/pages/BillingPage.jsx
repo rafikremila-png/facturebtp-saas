@@ -98,7 +98,7 @@ export default function BillingPage() {
 
         if (canceled) {
             toast.info("Paiement annulé");
-            navigate("/facturation", { replace: true });
+            navigate("/abonnement", { replace: true });
             return;
         }
 
@@ -116,7 +116,7 @@ export default function BillingPage() {
                         toast.success(`Abonnement ${statusRes.data.plan_name} activé !`);
                         await refreshUser();
                         await loadData();
-                        navigate("/facturation", { replace: true });
+                        navigate("/abonnement", { replace: true });
                         return;
                     }
                     
@@ -130,7 +130,7 @@ export default function BillingPage() {
                 toast.error("Erreur lors de la vérification du paiement");
             } finally {
                 setCheckingPayment(false);
-                navigate("/facturation", { replace: true });
+                navigate("/abonnement", { replace: true });
             }
         }
     };
