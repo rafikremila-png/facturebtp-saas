@@ -118,6 +118,9 @@ Transform the FactureBTP project into a complete, production-ready SaaS platform
 
 ## Upcoming Tasks (P1)
 
+- [ ] **MIGRATION: Execute SQL in Supabase** - Run `/app/backend/database/migrations/002_complete_schema.sql` in Supabase Dashboard
+- [ ] **MIGRATION: Migrate MongoDB Data** - Use migration script in `/app/MIGRATION_GUIDE.md`
+- [ ] **PRODUCTION: Configure Vercel** - Set environment variables (without BACKEND_URL for Supabase-only mode)
 - [ ] **Full PostgreSQL Migration** - Remove MongoDB, migrate server.py routes to Supabase
 - [ ] **Recurring Invoices** - Automatic invoice generation with cron job
 - [ ] **AI PDF Analysis** - Gemini Vision for construction plan analysis UI
