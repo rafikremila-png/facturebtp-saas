@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getQuotes, deleteQuote, downloadQuotePdf, bulkDeleteQuotes, getClients } from "@/lib/api";
+import { getQuotes, deleteQuote, bulkDeleteQuotes, getClients, getSettings } from "@/lib/api";
+import { downloadQuotePdf as generateQuotePdf } from "@/lib/pdfGenerator";
+import { exportQuotesCSV } from "@/lib/csvExport";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,7 +32,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Search, Eye, Pencil, Trash2, Download, FileText, Users } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, Download, FileText, Users, FileDown } from "lucide-react";
 import { toast } from "sonner";
 
 const statusLabels = {
@@ -117,7 +119,21 @@ export default function QuotesPage() {
 
     const handleDownloadPdf = async (quote) => {
         try {
-            await downloadQuotePdf(quote.id, quote.quote_number);
+            const settingsRes = await getSettings();
+            // Parse items if it's a JSON string
+            const quoteData = { ...quote };
+            if (quoteData.items && typeof quoteData.items === 'string') {
+                try {
+                    quoteData.items = JSON.parse(quoteData.items);
+                } catch (e) {
+                    console.error('Failed to parse quote items:', e);
+                    quoteData.items = [];
+                }
+            }
+            if (!Array.isArray(quoteData.items)) {
+                quoteData.items = [];
+            }
+            generateQuotePdf(quoteData, settingsRes.data || {});
             toast.success("PDF téléchargé");
         } catch (error) {
             toast.error("Erreur lors du téléchargement du PDF");
@@ -190,6 +206,10 @@ export default function QuotesPage() {
                             Supprimer ({selectedIds.length})
                         </Button>
                     )}
+                    <Button variant="outline" onClick={() => exportQuotesCSV(quotes)} data-testid="export-quotes-csv">
+                        <FileDown className="w-4 h-4 mr-2" />
+                        Export CSV
+                    </Button>
                     <Link to="/devis/new">
                         <Button className="bg-orange-600 hover:bg-orange-700" data-testid="add-quote-btn">
                             <Plus className="w-4 h-4 mr-2" />

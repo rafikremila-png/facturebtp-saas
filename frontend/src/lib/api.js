@@ -94,11 +94,10 @@ export const bulkDeleteQuotes = async (ids) => {
 };
 export const convertQuoteToInvoice = (id) => wrap(quotesService.convertToInvoice(id));
 
-// PDF downloads - stub (requires backend or Edge Function)
-export const downloadQuotePdf = async (id, quoteNumber) => {
-    // TODO: Implement with Supabase Edge Function or client-side PDF generation
-    console.warn('[API] PDF generation requires a backend service');
-    throw new Error('La génération de PDF sera disponible prochainement.');
+// PDF downloads - now handled by pdfGenerator.js directly in components
+export const downloadQuotePdf = async (id) => {
+    console.warn('[API] Use pdfGenerator.js directly for PDF generation');
+    return { data: null };
 };
 
 // ============== INVOICES ==============
@@ -117,9 +116,9 @@ export const bulkDeleteInvoices = async (ids) => {
     return { data: { deleted: ids.length } };
 };
 
-export const downloadInvoicePdf = async (id, invoiceNumber) => {
-    console.warn('[API] PDF generation requires a backend service');
-    throw new Error('La génération de PDF sera disponible prochainement.');
+export const downloadInvoicePdf = async (id) => {
+    console.warn('[API] Use pdfGenerator.js directly for PDF generation');
+    return { data: null };
 };
 
 // ============== RETENUE DE GARANTIE ==============
@@ -393,11 +392,9 @@ export const getPendingReminders = async () => { return { data: [] }; };
 export const sendReminder = async () => { throw new Error('Les relances seront disponibles prochainement.'); };
 export const getReminderHistory = async () => { return { data: [] }; };
 
-// ============== CSV EXPORT ==============
-export const exportInvoicesCSV = async () => { throw new Error('Export CSV sera disponible prochainement.'); };
-export const exportQuotesCSV = async () => { throw new Error('Export CSV sera disponible prochainement.'); };
-export const exportClientsCSV = async () => { throw new Error('Export CSV sera disponible prochainement.'); };
-export const exportAccountingCSV = async () => { throw new Error('Export CSV sera disponible prochainement.'); };
+// ============== CSV EXPORT (client-side) ==============
+export { exportClientsCSV, exportQuotesCSV, exportInvoicesCSV } from '@/lib/csvExport';
+export const exportAccountingCSV = async () => { throw new Error('Export comptable sera disponible prochainement.'); };
 
 // ============== DEFAULT EXPORT (for api.get/post/put/delete pattern) ==============
 // This provides backward compatibility for pages that use api.get('/some/path')

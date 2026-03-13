@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getInvoice, updateInvoice, downloadInvoicePdf, createInvoiceShareLink, sendInvoiceEmail, applyRetenueGarantie, removeRetenueGarantie, releaseRetenueGarantie } from "@/lib/api";
+import { getInvoice, updateInvoice, createInvoiceShareLink, sendInvoiceEmail, applyRetenueGarantie, removeRetenueGarantie, releaseRetenueGarantie, getSettings } from "@/lib/api";
+import { downloadInvoicePdf as generateInvoicePdf } from "@/lib/pdfGenerator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,8 +40,28 @@ function InvoiceViewPage() {
 
     function loadInvoice() {
         getInvoice(params.id).then(function(res) {
-            setInvoice(res.data);
-            setPaidAmount(String(res.data.paid_amount || 0));
+            var invoiceData = res.data;
+            
+            // Parse items if it's a JSON string (defensive coding for Supabase data)
+            if (invoiceData && invoiceData.items) {
+                if (typeof invoiceData.items === 'string') {
+                    try {
+                        invoiceData.items = JSON.parse(invoiceData.items);
+                    } catch (e) {
+                        console.error('Failed to parse invoice items:', e);
+                        invoiceData.items = [];
+                    }
+                }
+                // Ensure items is always an array
+                if (!Array.isArray(invoiceData.items)) {
+                    invoiceData.items = [];
+                }
+            } else {
+                invoiceData.items = [];
+            }
+            
+            setInvoice(invoiceData);
+            setPaidAmount(String(invoiceData.paid_amount || 0));
             setLoading(false);
         }).catch(function() { toast.error("Erreur"); navigate("/factures"); });
     }
@@ -67,7 +88,13 @@ function InvoiceViewPage() {
         }).catch(function() { toast.error("Erreur"); });
     }
 
-    function downloadPdf() { downloadInvoicePdf(invoice.id, invoice.invoice_number).catch(function() { toast.error("Erreur"); }); }
+    async function downloadPdf() {
+        try {
+            const settingsRes = await getSettings();
+            generateInvoicePdf(invoice, settingsRes.data || {});
+            toast.success("PDF téléchargé");
+        } catch (e) { toast.error("Erreur lors du téléchargement"); }
+    }
     function fmt(n) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2 }) + " €"; }
 
     // Retenue de garantie functions

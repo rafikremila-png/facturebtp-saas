@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getClients, deleteClient } from "@/lib/api";
 import api from "@/lib/api";
+import { exportClientsCSV } from "@/lib/csvExport";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -38,7 +39,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Search, Pencil, Trash2, Mail, Phone, MapPin, Users, MoreVertical, ExternalLink, Copy, PenTool, Link2, Check, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Mail, Phone, MapPin, Users, MoreVertical, ExternalLink, Copy, PenTool, Link2, Check, Loader2, FileDown } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ClientsPage() {
@@ -136,12 +137,18 @@ export default function ClientsPage() {
                     </h1>
                     <p className="text-slate-500 mt-1">{clients.length} client(s) enregistré(s)</p>
                 </div>
-                <Link to="/clients/new">
-                    <Button className="bg-orange-600 hover:bg-orange-700" data-testid="add-client-btn">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Nouveau client
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => exportClientsCSV(clients)} data-testid="export-clients-csv">
+                        <FileDown className="w-4 h-4 mr-2" />
+                        Export CSV
                     </Button>
-                </Link>
+                    <Link to="/clients/new">
+                        <Button className="bg-orange-600 hover:bg-orange-700" data-testid="add-client-btn">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Nouveau client
+                        </Button>
+                    </Link>
+                </div>
             </div>
 
             {/* Search */}

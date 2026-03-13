@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { getQuote, updateQuote, convertQuoteToInvoice, downloadQuotePdf, createQuoteShareLink, sendQuoteEmail, createAcompte, getAcomptesSummary, createFinalInvoice, createSituation, getSituationsSummary, createSituationFinalInvoice, getProjectFinancialSummary } from "@/lib/api";
+import { getQuote, updateQuote, convertQuoteToInvoice, createQuoteShareLink, sendQuoteEmail, createAcompte, getAcomptesSummary, createFinalInvoice, createSituation, getSituationsSummary, createSituationFinalInvoice, getProjectFinancialSummary, getSettings } from "@/lib/api";
+import { downloadQuotePdf as generateQuotePdf } from "@/lib/pdfGenerator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -128,7 +129,27 @@ export default function QuoteDetailPage() {
     const loadQuote = async () => {
         try {
             const response = await getQuote(id);
-            setQuote(response.data);
+            const quoteData = response.data;
+            
+            // Parse items if it's a JSON string (defensive coding for Supabase data)
+            if (quoteData && quoteData.items) {
+                if (typeof quoteData.items === 'string') {
+                    try {
+                        quoteData.items = JSON.parse(quoteData.items);
+                    } catch (e) {
+                        console.error('Failed to parse quote items:', e);
+                        quoteData.items = [];
+                    }
+                }
+                // Ensure items is always an array
+                if (!Array.isArray(quoteData.items)) {
+                    quoteData.items = [];
+                }
+            } else {
+                quoteData.items = [];
+            }
+            
+            setQuote(quoteData);
         } catch (error) {
             toast.error("Erreur lors du chargement du devis");
             navigate("/devis");
@@ -313,7 +334,8 @@ export default function QuoteDetailPage() {
 
     const handleDownloadPdf = async () => {
         try {
-            await downloadQuotePdf(quote.id, quote.quote_number);
+            const settingsRes = await getSettings();
+            generateQuotePdf(quote, settingsRes.data || {});
             toast.success("PDF téléchargé");
         } catch (error) {
             toast.error("Erreur lors du téléchargement du PDF");

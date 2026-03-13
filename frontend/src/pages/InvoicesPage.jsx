@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getInvoices, deleteInvoice, downloadInvoicePdf, bulkDeleteInvoices, getClients } from "@/lib/api";
+import { getInvoices, deleteInvoice, bulkDeleteInvoices, getClients, getSettings } from "@/lib/api";
+import { downloadInvoicePdf as generateInvoicePdf } from "@/lib/pdfGenerator";
+import { exportInvoicesCSV } from "@/lib/csvExport";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,7 +32,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Search, Eye, Pencil, Trash2, Download, Receipt, Users } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, Download, Receipt, Users, FileDown } from "lucide-react";
 import { toast } from "sonner";
 
 const statusLabels = {
@@ -113,7 +115,21 @@ export default function InvoicesPage() {
 
     const handleDownloadPdf = async (invoice) => {
         try {
-            await downloadInvoicePdf(invoice.id, invoice.invoice_number);
+            const settingsRes = await getSettings();
+            // Parse items if it's a JSON string
+            const invoiceData = { ...invoice };
+            if (invoiceData.items && typeof invoiceData.items === 'string') {
+                try {
+                    invoiceData.items = JSON.parse(invoiceData.items);
+                } catch (e) {
+                    console.error('Failed to parse invoice items:', e);
+                    invoiceData.items = [];
+                }
+            }
+            if (!Array.isArray(invoiceData.items)) {
+                invoiceData.items = [];
+            }
+            generateInvoicePdf(invoiceData, settingsRes.data || {});
             toast.success("PDF téléchargé");
         } catch (error) {
             toast.error("Erreur lors du téléchargement du PDF");
@@ -186,6 +202,10 @@ export default function InvoicesPage() {
                             Supprimer ({selectedIds.length})
                         </Button>
                     )}
+                    <Button variant="outline" onClick={() => exportInvoicesCSV(invoices)} data-testid="export-invoices-csv">
+                        <FileDown className="w-4 h-4 mr-2" />
+                        Export CSV
+                    </Button>
                     <Link to="/factures/new">
                         <Button className="bg-orange-600 hover:bg-orange-700" data-testid="add-invoice-btn">
                             <Plus className="w-4 h-4 mr-2" />
