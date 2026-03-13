@@ -1,7 +1,14 @@
 import axios from 'axios';
 import { supabase } from '@/supabaseClient';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+// Detect if we have a FastAPI backend or should use Supabase directly
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const USE_SUPABASE_DIRECT = !BACKEND_URL || BACKEND_URL.includes('supabase');
+
+console.log(`[API] Mode: ${USE_SUPABASE_DIRECT ? 'Supabase Direct' : 'FastAPI Backend'}`);
+console.log(`[API] Backend URL: ${BACKEND_URL || 'None (using Supabase)'}`);
+
+const API = USE_SUPABASE_DIRECT ? '' : `${BACKEND_URL}/api`;
 
 const api = axios.create({
     baseURL: API,
