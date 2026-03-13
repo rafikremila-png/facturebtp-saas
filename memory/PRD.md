@@ -1,65 +1,59 @@
 # BTP Facture - PRD (Product Requirements Document)
 
 ## Problème Initial
-Application de gestion de devis et factures pour les professionnels du BTP (Bâtiment et Travaux Publics).
+Application de gestion de devis et factures pour les professionnels du BTP.
 
-## Architecture (ATTEINTE)
+## Architecture
 ```
 Vercel (React frontend) + Supabase (Auth + PostgreSQL + Storage)
 ```
-- Pas de backend serveur - toutes les opérations passent directement par Supabase
-- Auth: Supabase Auth
-- Base de données: Supabase PostgreSQL avec RLS (Row Level Security)
-- Frontend: React avec Shadcn UI
-- PDF: Génération côté client avec jsPDF
-- CSV: Export côté client
 
 ## Utilisateurs
 - **Super Admin**: rafik.remila@gmail.com
-- **Admin système**: admin@btpfacture.com
-- 52 comptes de test supprimés le 13 mars 2026
+- **Admin**: admin@btpfacture.com
 
 ## Fonctionnalités Implémentées
 
+### Authentification
+- Login email/mot de passe (Supabase Auth)
+- Inscription avec vérification OTP 6 chiffres par email
+- Formulaire OTP avec auto-focus, paste, renvoi de code
+- Gestion d'erreurs (email invalide, rate limit, etc.)
+
 ### Core (100% Supabase)
 - Tableau de bord avec statistiques
-- CRUD Clients (17 clients)
-- CRUD Devis (11 devis)
-- CRUD Factures (21 factures)
+- CRUD Clients, Devis, Factures
 - Paramètres entreprise
-- Bibliothèque d'ouvrages (67 articles prédéfinis)
-- Page Finances avec rapports financiers
-- Gestion des abonnements (page Abonnement)
-- Navigation complète avec sidebar
-- Authentification Supabase Auth
-- **Génération PDF** (jsPDF côté client) - devis et factures
-- **Export CSV** - clients, devis, factures
+- Bibliothèque d'ouvrages (67 articles)
+- Page Finances avec rapports
+- Gestion abonnements
 
-### Stubs (Nécessitent Edge Functions ou service externe)
-- Envoi d'emails
-- Assistant IA (Gemini)
-- Paiement Stripe
+### Documents
+- Génération PDF (jsPDF côté client)
+- Export CSV (clients, devis, factures)
+
+### Stubs
+- Envoi d'emails, IA Gemini, Stripe
 
 ## Fichiers Clés
-- `/app/frontend/src/lib/api.js` - Couche API (wraps supabaseService)
-- `/app/frontend/src/lib/supabaseService.js` - Requêtes directes Supabase
-- `/app/frontend/src/lib/pdfGenerator.js` - Génération PDF jsPDF
-- `/app/frontend/src/lib/csvExport.js` - Export CSV côté client
-- `/app/frontend/src/context/AuthContext.js` - Auth Supabase
-- `/app/frontend/src/supabaseClient.js` - Client Supabase
+- `/app/frontend/src/pages/LoginPage.jsx` - Login + inscription + OTP
+- `/app/frontend/src/context/AuthContext.js` - Auth (login, register, verifyOtp, resendVerification)
+- `/app/frontend/src/lib/api.js` - Couche API Supabase
+- `/app/frontend/src/lib/supabaseService.js` - Requêtes Supabase
+- `/app/frontend/src/lib/pdfGenerator.js` - PDF jsPDF
+- `/app/frontend/src/lib/csvExport.js` - Export CSV
 
-## Historique des Migrations
-- 13 Mars 2026: Migration complète MongoDB → Supabase (113/116 records)
-- 13 Mars 2026: Frontend basculé en mode Supabase-only
-- 13 Mars 2026: Backend FastAPI décommissionné
-- 13 Mars 2026: Génération PDF côté client (jsPDF) ajoutée
-- 13 Mars 2026: Export CSV côté client ajouté
-- 13 Mars 2026: 52 comptes de test supprimés
+## Historique
+- 13 Mars 2026: Migration MongoDB → Supabase
+- 13 Mars 2026: PDF + CSV + nettoyage comptes
+- 13 Mars 2026: Système OTP remplace confirmation par lien
 
-## Backlog (P0-P2)
-- **P1**: Nettoyage comptes auth.users Supabase (les 52 comptes de test existent encore dans auth.users)
-- **P2**: Factures récurrentes
+## Backlog
+- **P1**: Factures récurrentes
+- **P1**: Système d'email (notifications, rappels)
+- **P2**: Intégration Stripe abonnements
 - **P2**: Analyse PDF avec Gemini IA
-- **P2**: Bibliothèque de travaux connectée aux devis
-- **P2**: Système d'email (vérification et rappels)
-- **P2**: Intégration Stripe pour abonnements payants
+- **P2**: Bibliothèque travaux → formulaire devis
+
+## Note importante
+Pour que le code OTP à 6 chiffres s'affiche dans l'email de confirmation Supabase, vérifiez que le template email dans Supabase Dashboard (Authentication > Email Templates > Confirm signup) inclut `{{ .Token }}`.
