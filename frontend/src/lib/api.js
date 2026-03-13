@@ -1,508 +1,307 @@
-/**
- * API Service - Unified interface for FastAPI (preview) or Supabase (production)
- * 
- * In production (Vercel), this uses direct Supabase queries.
- * In preview (with FastAPI backend), this uses axios to call the backend API.
- */
-
 import axios from 'axios';
 import { supabase } from '@/supabaseClient';
-import supabaseService from './supabaseService';
 
-// Detect if we have a FastAPI backend available
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const USE_FASTAPI = BACKEND_URL && !BACKEND_URL.includes('supabase');
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-console.log(`[API] Mode: ${USE_FASTAPI ? 'FastAPI Backend' : 'Supabase Direct'}`);
-console.log(`[API] Backend URL: ${BACKEND_URL || 'None'}`);
-
-// Axios instance for FastAPI backend (preview mode)
-const axiosApi = axios.create({
-    baseURL: `${BACKEND_URL}/api`,
+const api = axios.create({
+    baseURL: API,
 });
 
-// Add Supabase token to axios requests
-axiosApi.interceptors.request.use(async (config) => {
+// Add Supabase token to requests
+api.interceptors.request.use(async (config) => {
+    // Get current session from Supabase
     const { data: { session } } = await supabase.auth.getSession();
+    
     if (session?.access_token) {
         config.headers.Authorization = `Bearer ${session.access_token}`;
     }
     return config;
 });
 
-axiosApi.interceptors.response.use(
+api.interceptors.response.use(
     (response) => response,
     async (error) => {
+        // Only sign out on 401 if we had a valid session
+        // This prevents race conditions during login
         if (error.response?.status === 401) {
             const { data: { session } } = await supabase.auth.getSession();
+            // Only sign out if we actually had a session (not during initial load)
             if (session) {
                 console.log('[API] 401 error with active session - signing out');
                 await supabase.auth.signOut();
                 window.location.href = '/login';
+            } else {
+                console.log('[API] 401 error without session - ignoring');
             }
         }
         return Promise.reject(error);
     }
 );
 
-// ============== WRAPPER FUNCTIONS ==============
-// These functions work with both FastAPI and Supabase
+// Dashboard
+export const getDashboard = () => api.get('/dashboard');
 
-// Helper to wrap Supabase results in axios-like response
-const wrapResponse = (data) => ({ data, status: 200 });
+// Trial & Limits
+export const getTrialStatus = () => api.get('/trial/status');
+export const getUsageLimits = () => api.get('/trial/limits');
+export const checkCanCreate = (resourceType) => api.post(`/trial/check-limit/${resourceType}`);
+export const getSubscriptionPlans = () => api.get('/subscription/plans');
 
-// ============== DASHBOARD ==============
+// Clients
+export const getClients = () => api.get('/clients');
+export const getClient = (id) => api.get(`/clients/${id}`);
+export const createClient = (data) => api.post('/clients', data);
+export const updateClient = (id, data) => api.put(`/clients/${id}`, data);
+export const deleteClient = (id) => api.delete(`/clients/${id}`);
 
-export const getDashboard = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/dashboard');
-    }
-    const data = await supabaseService.dashboard.getStats();
-    return wrapResponse(data);
+// Quotes
+export const getQuotes = (status, clientId) => api.get('/quotes', { params: { status, client_id: clientId } });
+export const getQuote = (id) => api.get(`/quotes/${id}`);
+export const createQuote = (data) => api.post('/quotes', data);
+export const updateQuote = (id, data) => api.put(`/quotes/${id}`, data);
+export const deleteQuote = (id) => api.delete(`/quotes/${id}`);
+export const bulkDeleteQuotes = (ids) => api.post('/quotes/bulk-delete', { ids });
+export const convertQuoteToInvoice = (id) => api.post(`/quotes/${id}/convert`);
+export const downloadQuotePdf = async (id, quoteNumber) => {
+    const response = await api.get(`/quotes/${id}/pdf`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `devis_${quoteNumber}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
 };
 
-// ============== TRIAL & SUBSCRIPTION ==============
+// Invoices
+export const getInvoices = (paymentStatus, clientId) => api.get('/invoices', { params: { payment_status: paymentStatus, client_id: clientId } });
+export const getInvoice = (id) => api.get(`/invoices/${id}`);
+export const createInvoice = (data) => api.post('/invoices', data);
+export const updateInvoice = (id, data) => api.put(`/invoices/${id}`, data);
+export const deleteInvoice = (id) => api.delete(`/invoices/${id}`);
+export const bulkDeleteInvoices = (ids) => api.post('/invoices/bulk-delete', { ids });
 
-export const getTrialStatus = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/trial/status');
-    }
-    const data = await supabaseService.trial.getStatus();
-    return wrapResponse(data);
+// Retenue de garantie (Retention Guarantee)
+export const applyRetenueGarantie = (invoiceId, data) => api.post(`/invoices/${invoiceId}/retenue-garantie`, data);
+export const removeRetenueGarantie = (invoiceId) => api.delete(`/invoices/${invoiceId}/retenue-garantie`);
+export const releaseRetenueGarantie = (invoiceId) => api.post(`/invoices/${invoiceId}/retenue-garantie/release`);
+export const getQuoteRetenuesSummary = (quoteId) => api.get(`/quotes/${quoteId}/retenues-garantie/summary`);
+
+// Project Financial Summary
+export const getProjectFinancialSummary = (quoteId) => api.get(`/quotes/${quoteId}/financial-summary`);
+export const getPublicFinancialSummary = (shareToken) => api.get(`/public/quote/${shareToken}/financial-summary`);
+export const downloadFinancialSummaryPdf = async (quoteId, quoteNumber) => {
+    const response = await api.get(`/quotes/${quoteId}/financial-summary/pdf`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Recapitulatif_financier_${quoteNumber}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
 };
 
-export const getUsageLimits = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/trial/limits');
-    }
-    const status = await supabaseService.trial.getStatus();
-    return wrapResponse({
-        quote_limit: status?.quote_limit || 5,
-        invoice_limit: status?.invoice_limit || 5,
-        quotes_used: status?.quotes_used || 0,
-        invoices_used: status?.invoices_used || 0
-    });
+export const downloadInvoicePdf = async (id, invoiceNumber) => {
+    const response = await api.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `facture_${invoiceNumber}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
 };
 
-export const checkCanCreate = async (resourceType) => {
-    if (USE_FASTAPI) {
-        return axiosApi.post(`/trial/check-limit/${resourceType}`);
-    }
-    const result = await supabaseService.trial.checkLimit(resourceType);
-    return wrapResponse(result);
-};
-
-export const getSubscriptionPlans = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/subscription/plans');
-    }
-    // Return static plans for Supabase mode
-    return wrapResponse([
-        {
-            id: "essentiel",
-            name: "Essentiel",
-            price_monthly: 19,
-            description: "Pour les artisans débutants",
-            features: {
-                unlimited_quotes: true,
-                invoices_per_month: 30,
-                article_library: true,
-                manual_creation: true,
-                users: 1,
-                predefined_kits: false,
-                smart_pricing: false,
-                advanced_dashboard: false,
-                priority_support: false
-            }
-        },
-        {
-            id: "pro",
-            name: "Pro",
-            price_monthly: 29,
-            description: "Pour les professionnels actifs",
-            popular: true,
-            features: {
-                unlimited_quotes: true,
-                unlimited_invoices: true,
-                article_library: true,
-                manual_creation: true,
-                users: 1,
-                predefined_kits: true,
-                smart_pricing: true,
-                advanced_dashboard: false,
-                priority_support: true
-            }
-        },
-        {
-            id: "business",
-            name: "Business",
-            price_monthly: 59,
-            description: "Pour les entreprises en croissance",
-            features: {
-                unlimited_quotes: true,
-                unlimited_invoices: true,
-                article_library: true,
-                manual_creation: true,
-                users: 10,
-                predefined_kits: true,
-                smart_pricing: true,
-                advanced_dashboard: true,
-                priority_support: true
-            }
-        }
-    ]);
-};
-
-// ============== CLIENTS ==============
-
-export const getClients = async (params) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/clients', { params });
-    }
-    const data = await supabaseService.clients.getAll();
-    return wrapResponse(data);
-};
-
-export const getClient = async (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get(`/clients/${id}`);
-    }
-    const data = await supabaseService.clients.getById(id);
-    return wrapResponse(data);
-};
-
-export const createClient = async (clientData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.post('/clients', clientData);
-    }
-    const data = await supabaseService.clients.create(clientData);
-    return wrapResponse(data);
-};
-
-export const updateClient = async (id, clientData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.put(`/clients/${id}`, clientData);
-    }
-    const data = await supabaseService.clients.update(id, clientData);
-    return wrapResponse(data);
-};
-
-export const deleteClient = async (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.delete(`/clients/${id}`);
-    }
-    await supabaseService.clients.delete(id);
-    return wrapResponse({ success: true });
-};
-
-// ============== QUOTES ==============
-
-export const getQuotes = async (params) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/quotes', { params });
-    }
-    const data = await supabaseService.quotes.getAll(params);
-    return wrapResponse(data);
-};
-
-export const getQuote = async (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get(`/quotes/${id}`);
-    }
-    const data = await supabaseService.quotes.getById(id);
-    return wrapResponse(data);
-};
-
-export const createQuote = async (quoteData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.post('/quotes', quoteData);
-    }
-    const data = await supabaseService.quotes.create(quoteData);
-    return wrapResponse(data);
-};
-
-export const updateQuote = async (id, quoteData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.put(`/quotes/${id}`, quoteData);
-    }
-    const data = await supabaseService.quotes.update(id, quoteData);
-    return wrapResponse(data);
-};
-
-export const deleteQuote = async (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.delete(`/quotes/${id}`);
-    }
-    await supabaseService.quotes.delete(id);
-    return wrapResponse({ success: true });
-};
-
-export const convertQuoteToInvoice = async (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.post(`/quotes/${id}/convert`);
-    }
-    const data = await supabaseService.quotes.convertToInvoice(id);
-    return wrapResponse(data);
-};
-
-export const getQuotePDF = (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get(`/quotes/${id}/pdf`, { responseType: 'blob' });
-    }
-    // For Supabase mode, PDF generation would need Edge Function
-    throw new Error('PDF generation requires Edge Function in production');
-};
-
-// ============== INVOICES ==============
-
-export const getInvoices = async (params) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/invoices', { params });
-    }
-    const data = await supabaseService.invoices.getAll(params);
-    return wrapResponse(data);
-};
-
-export const getInvoice = async (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get(`/invoices/${id}`);
-    }
-    const data = await supabaseService.invoices.getById(id);
-    return wrapResponse(data);
-};
-
-export const createInvoice = async (invoiceData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.post('/invoices', invoiceData);
-    }
-    const data = await supabaseService.invoices.create(invoiceData);
-    return wrapResponse(data);
-};
-
-export const updateInvoice = async (id, invoiceData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.put(`/invoices/${id}`, invoiceData);
-    }
-    const data = await supabaseService.invoices.update(id, invoiceData);
-    return wrapResponse(data);
-};
-
-export const deleteInvoice = async (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.delete(`/invoices/${id}`);
-    }
-    await supabaseService.invoices.delete(id);
-    return wrapResponse({ success: true });
-};
-
-export const markInvoicePaid = async (id, amount) => {
-    if (USE_FASTAPI) {
-        return axiosApi.post(`/invoices/${id}/payment`, { amount });
-    }
-    const data = await supabaseService.invoices.markAsPaid(id, amount);
-    return wrapResponse(data);
-};
-
-export const getInvoicePDF = (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
-    }
-    throw new Error('PDF generation requires Edge Function in production');
-};
-
-// ============== SETTINGS ==============
-
-export const getSettings = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/settings');
-    }
-    const data = await supabaseService.settings.get();
-    return wrapResponse(data || {});
-};
-
-export const updateSettings = async (settingsData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.put('/settings', settingsData);
-    }
-    const data = await supabaseService.settings.update(settingsData);
-    return wrapResponse(data);
-};
-
+// Settings
+export const getSettings = () => api.get('/settings');
+export const updateSettings = (data) => api.put('/settings', data);
 export const uploadLogo = async (file) => {
-    if (USE_FASTAPI) {
-        const formData = new FormData();
-        formData.append('file', file);
-        return axiosApi.post('/settings/logo', formData);
-    }
-    const url = await supabaseService.settings.uploadLogo(file);
-    return wrapResponse({ url });
-};
-
-// ============== FINANCIAL REPORTS ==============
-
-export const getFinancialReport = async (params) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/reports/financial', { params });
-    }
-    const data = await supabaseService.dashboard.getFinancialReport(params?.period);
-    return wrapResponse(data);
-};
-
-// ============== PREDEFINED ITEMS ==============
-
-export const getCategories = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/categories');
-    }
-    const data = await supabaseService.predefinedItems.getCategories();
-    return wrapResponse(data);
-};
-
-export const getPredefinedItems = async (category) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/predefined-items', { params: { category } });
-    }
-    const data = await supabaseService.predefinedItems.getByCategory(category);
-    return wrapResponse(data);
-};
-
-export const createPredefinedItem = async (itemData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.post('/predefined-items', itemData);
-    }
-    const data = await supabaseService.predefinedItems.create(itemData);
-    return wrapResponse(data);
-};
-
-export const updatePredefinedItem = async (id, itemData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.put(`/predefined-items/${id}`, itemData);
-    }
-    const data = await supabaseService.predefinedItems.update(id, itemData);
-    return wrapResponse(data);
-};
-
-export const deletePredefinedItem = async (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.delete(`/predefined-items/${id}`);
-    }
-    await supabaseService.predefinedItems.delete(id);
-    return wrapResponse({ success: true });
-};
-
-// ============== KITS ==============
-
-export const getKits = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/kits');
-    }
-    const data = await supabaseService.kits.getAll();
-    return wrapResponse(data);
-};
-
-export const getKit = async (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.get(`/kits/${id}`);
-    }
-    const data = await supabaseService.kits.getById(id);
-    return wrapResponse(data);
-};
-
-export const createKit = async (kitData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.post('/kits', kitData);
-    }
-    const data = await supabaseService.kits.create(kitData);
-    return wrapResponse(data);
-};
-
-export const updateKit = async (id, kitData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.put(`/kits/${id}`, kitData);
-    }
-    const data = await supabaseService.kits.update(id, kitData);
-    return wrapResponse(data);
-};
-
-export const deleteKit = async (id) => {
-    if (USE_FASTAPI) {
-        return axiosApi.delete(`/kits/${id}`);
-    }
-    await supabaseService.kits.delete(id);
-    return wrapResponse({ success: true });
-};
-
-// ============== SUBSCRIPTION STATUS ==============
-
-export const getSubscriptionStatus = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/subscription/status');
-    }
-    const status = await supabaseService.trial.getStatus();
-    return wrapResponse({
-        plan: status?.plan || 'trial',
-        plan_name: status?.plan === 'trial' ? 'Essai' : status?.plan,
-        is_trial: status?.is_trial,
-        is_active: true,
-        trial_days_remaining: status?.days_remaining,
-        invoices_this_month: status?.invoices_used,
-        invoices_limit: status?.invoice_limit
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/settings/logo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
     });
 };
 
-// ============== PROFILE ==============
+// Predefined Items (Legacy - for backward compatibility)
+export const getPredefinedCategories = () => api.get('/predefined-items/categories');
+export const getPredefinedItems = (category) => api.get('/predefined-items', { params: { category } });
+export const createPredefinedItem = (data) => api.post('/predefined-items', data);
+export const updatePredefinedItem = (id, data) => api.put(`/predefined-items/${id}`, data);
+export const deletePredefinedItem = (id) => api.delete(`/predefined-items/${id}`);
+export const resetPredefinedItems = () => api.post('/predefined-items/reset');
 
-export const getProfile = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/auth/profile');
-    }
-    const user = await supabaseService.auth.getUser();
-    return wrapResponse(user);
+// Dynamic Service Categories (New system - filtered by business_type)
+export const getDynamicCategories = () => api.get('/categories');
+export const getDynamicCategoriesWithItems = () => api.get('/categories/with-items');
+export const getDynamicCategoryItems = (categoryId) => api.get(`/categories/${categoryId}/items`);
+export const searchCategoryItems = (query) => api.get('/categories/search/items', { params: { q: query } });
+export const getBusinessTypes = () => api.get('/business-types');
+
+// Service Categories V3 (Simplified - No Subcategories, Enriched Library)
+export const getCategoriesV3 = () => api.get('/v3/categories');
+export const getCategoriesWithItemsV3 = () => api.get('/v3/categories/with-items');
+export const getCategoryV3 = (categoryId) => api.get(`/v3/categories/${categoryId}`);
+export const getCategoryItemsV3 = (categoryId) => api.get(`/v3/categories/${categoryId}/items`);
+export const getItemV3 = (itemId) => api.get(`/v3/items/${itemId}`);
+export const searchItemsV3 = (query) => api.get('/v3/items/search', { params: { q: query } });
+export const getKitsV3 = () => api.get('/v3/kits');
+export const getKitV3 = (kitId) => api.get(`/v3/kits/${kitId}`);
+export const seedCategoriesV3 = (force = false) => api.post(`/v3/categories/seed?force=${force}`);
+
+// Renovation Kits
+export const getKits = () => api.get('/kits');
+export const getKit = (id) => api.get(`/kits/${id}`);
+export const createKit = (data) => api.post('/kits', data);
+export const updateKit = (id, data) => api.put(`/kits/${id}`, data);
+export const deleteKit = (id) => api.delete(`/kits/${id}`);
+export const createKitFromQuote = (quoteId, name, description = "") => 
+    api.post(`/kits/from-quote/${quoteId}`, null, { params: { kit_name: name, kit_description: description } });
+export const resetKits = () => api.post('/kits/reset');
+
+// Share Links
+export const createQuoteShareLink = (quoteId) => api.post(`/quotes/${quoteId}/share`);
+export const revokeQuoteShareLink = (quoteId) => api.delete(`/quotes/${quoteId}/share`);
+export const createInvoiceShareLink = (invoiceId) => api.post(`/invoices/${invoiceId}/share`);
+export const revokeInvoiceShareLink = (invoiceId) => api.delete(`/invoices/${invoiceId}/share`);
+
+// Acomptes (Advance Payments)
+export const createAcompte = (quoteId, data) => api.post(`/quotes/${quoteId}/acompte`, data);
+export const getQuoteAcomptes = (quoteId) => api.get(`/quotes/${quoteId}/acomptes`);
+export const getAcomptesSummary = (quoteId) => api.get(`/quotes/${quoteId}/acomptes/summary`);
+export const createFinalInvoice = (quoteId) => api.post(`/quotes/${quoteId}/final-invoice`);
+
+// Situations (Progressive Billing)
+export const createSituation = (quoteId, data) => api.post(`/quotes/${quoteId}/situation`, data);
+export const getQuoteSituations = (quoteId) => api.get(`/quotes/${quoteId}/situations`);
+export const getSituationsSummary = (quoteId) => api.get(`/quotes/${quoteId}/situations/summary`);
+export const createSituationFinalInvoice = (quoteId) => api.post(`/quotes/${quoteId}/situation/final-invoice`);
+
+// Public endpoints (no auth)
+export const getPublicQuote = (token) => axios.get(`${API}/public/quote/${token}`);
+export const getPublicInvoice = (token) => axios.get(`${API}/public/invoice/${token}`);
+export const downloadPublicQuotePdf = async (token) => {
+    const response = await axios.get(`${API}/public/quote/${token}/pdf`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `devis.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+};
+export const downloadPublicInvoicePdf = async (token) => {
+    const response = await axios.get(`${API}/public/invoice/${token}/pdf`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `facture.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
 };
 
-export const updateProfile = async (profileData) => {
-    if (USE_FASTAPI) {
-        return axiosApi.put('/auth/profile', profileData);
-    }
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data } = await supabase
-        .from('users')
-        .update(profileData)
-        .eq('id', user.id)
-        .select()
-        .single();
-    return wrapResponse(data);
-};
+// Email
+export const sendQuoteEmail = (quoteId, data) => api.post(`/quotes/${quoteId}/send-email`, data);
+export const sendInvoiceEmail = (invoiceId, data) => api.post(`/invoices/${invoiceId}/send-email`, data);
+export const getEmailStatus = () => api.get('/email/status');
 
-export const getProfileCompletion = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/profile/completion');
-    }
-    const user = await supabaseService.auth.getUser();
-    const fields = ['name', 'phone', 'company_name', 'address', 'siret'];
-    const completed = fields.filter(f => user && user[f]).length;
-    return wrapResponse({
-        percentage: Math.round((completed / fields.length) * 100),
-        completed_fields: completed,
-        total_fields: fields.length
-    });
-};
+// ============== USER MANAGEMENT (ADMIN ONLY) ==============
 
-// ============== SAAS USAGE ==============
+// List all users
+export const getUsers = () => api.get('/users');
 
-export const getSaasUsage = async () => {
-    if (USE_FASTAPI) {
-        return axiosApi.get('/saas/usage');
-    }
-    const status = await supabaseService.trial.getStatus();
-    return wrapResponse({
-        quotes_used: status?.quotes_used || 0,
-        quotes_limit: status?.quote_limit || 5,
-        invoices_used: status?.invoices_used || 0,
-        invoices_limit: status?.invoice_limit || 5
-    });
-};
+// Get single user
+export const getUser = (userId) => api.get(`/users/${userId}`);
 
-// Export axios instance for backward compatibility
-export const api = axiosApi;
+// Update user role
+export const updateUserRole = (userId, role) => api.patch(`/users/${userId}/role`, { role });
+
+// Activate user
+export const activateUser = (userId) => api.patch(`/users/${userId}/activate`);
+
+// Deactivate user
+export const deactivateUser = (userId) => api.patch(`/users/${userId}/deactivate`);
+
+// Delete user (super admin only)
+export const deleteUser = (userId) => api.delete(`/users/${userId}`);
+
+// ============== SUBSCRIPTION & BILLING ==============
+
+// Get available subscription plans (uses trial endpoint)
+// export const getSubscriptionPlans = () => api.get('/subscription/plans'); // Moved to trial section
+
+// Get current subscription status
+export const getSubscriptionStatus = () => api.get('/subscription/status');
+
+// Create checkout session for a plan
+export const createCheckoutSession = (planId, originUrl) => api.post('/subscription/checkout', { plan_id: planId, origin_url: originUrl });
+
+// Check checkout session status
+export const checkCheckoutStatus = (sessionId) => api.get(`/subscription/checkout/status/${sessionId}`);
+
+// Cancel subscription
+export const cancelSubscription = () => api.post('/subscription/cancel');
+
+// Check feature access
+export const checkFeatureAccess = (feature) => api.get(`/subscription/features/${feature}`);
+
+// ============== SAAS / NEW SUBSCRIPTION SYSTEM ==============
+
+// Get SaaS plans with full details
+export const getSaaSPlans = () => api.get('/saas/plans');
+
+// Get user's subscription info with usage
+export const getSaaSSubscription = () => api.get('/saas/subscription');
+
+// Get usage stats (quotes/invoices this month)
+export const getUsageStats = () => api.get('/saas/usage');
+
+// Create checkout session for SaaS plan
+export const createSaaSCheckout = (planId, billingPeriod, originUrl) => 
+    api.post('/saas/checkout', { plan_id: planId, billing_period: billingPeriod, origin_url: originUrl });
+
+// Cancel SaaS subscription
+export const cancelSaaSSubscription = () => api.post('/saas/cancel');
+
+// Check SaaS feature access
+export const checkSaaSFeature = (feature) => api.get(`/saas/feature/${feature}`);
+
+// ============== REMINDERS (Pro Feature) ==============
+
+// Get reminder stats
+export const getReminderStats = () => api.get('/reminders/stats');
+
+// Get pending reminders
+export const getPendingReminders = () => api.get('/reminders/pending');
+
+// Send reminder for invoice
+export const sendReminder = (invoiceId) => api.post(`/reminders/send/${invoiceId}`);
+
+// Get reminder history for invoice
+export const getReminderHistory = (invoiceId) => api.get(`/reminders/history/${invoiceId}`);
+
+// ============== CSV EXPORT (Pro Feature) ==============
+
+// Export invoices to CSV
+export const exportInvoicesCSV = (params) => 
+    api.get('/export/invoices/csv', { params, responseType: 'blob' });
+
+// Export quotes to CSV
+export const exportQuotesCSV = (params) => 
+    api.get('/export/quotes/csv', { params, responseType: 'blob' });
+
+// Export clients to CSV
+export const exportClientsCSV = () => 
+    api.get('/export/clients/csv', { responseType: 'blob' });
+
+// Export accounting summary
+export const exportAccountingCSV = (year, month) => 
+    api.get('/export/accounting/csv', { params: { year, month }, responseType: 'blob' });
+
 export default api;
