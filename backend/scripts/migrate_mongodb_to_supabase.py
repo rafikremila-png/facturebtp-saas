@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 """
-Script de migration des données MongoDB vers Supabase PostgreSQL
-Exécutez ce script depuis le serveur qui a accès à MongoDB
-
-Usage:
-    python migrate_mongodb_to_supabase.py
+Script de migration MongoDB → Supabase PostgreSQL
+Migre les données de test_database vers les tables Supabase existantes.
 """
 
 import os
 import sys
-from datetime import datetime
 import json
 
 # Configuration
@@ -17,243 +13,325 @@ MONGO_URL = os.environ.get('MONGO_URL')
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
 SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY')
 
+# Default owner for records without owner_id
+# This is rafik.remila@gmail.com's Supabase Auth UUID
+DEFAULT_OWNER_ID = 'c4b63af1-22a9-4cb0-881e-5ebde48fdcc4'
+
+def load_env():
+    """Load env vars from backend/.env if not already set"""
+    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, val = line.split('=', 1)
+                    if not os.environ.get(key):
+                        os.environ[key] = val
+
 def check_config():
-    """Vérifier que toutes les variables sont configurées"""
+    global MONGO_URL, SUPABASE_URL, SUPABASE_SERVICE_KEY
+    load_env()
+    MONGO_URL = os.environ.get('MONGO_URL')
+    SUPABASE_URL = os.environ.get('SUPABASE_URL')
+    SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY')
+
     missing = []
-    if not MONGO_URL:
-        missing.append('MONGO_URL')
-    if not SUPABASE_URL:
-        missing.append('SUPABASE_URL')
-    if not SUPABASE_SERVICE_KEY:
-        missing.append('SUPABASE_SERVICE_KEY')
-    
+    if not MONGO_URL: missing.append('MONGO_URL')
+    if not SUPABASE_URL: missing.append('SUPABASE_URL')
+    if not SUPABASE_SERVICE_KEY: missing.append('SUPABASE_SERVICE_KEY')
     if missing:
-        print(f"❌ Variables d'environnement manquantes: {', '.join(missing)}")
-        print("\nConfigurez-les avec:")
-        print("  export MONGO_URL='mongodb://...'")
-        print("  export SUPABASE_URL='https://xxx.supabase.co'")
-        print("  export SUPABASE_SERVICE_KEY='eyJhbG...'")
+        print(f"Variables manquantes: {', '.join(missing)}")
         sys.exit(1)
+
+
+def build_user_mapping(mongo_db, supabase):
+    """Build mapping: MongoDB user_id -> Supabase Auth user_id (by email)"""
+    mapping = {}
+
+    # Get Supabase Auth users
+    auth_users = supabase.auth.admin.list_users()
+    auth_by_email = {u.email: u.id for u in auth_users}
+
+    # Get MongoDB users
+    mongo_users = list(mongo_db.users.find({}, {'_id': 0, 'id': 1, 'email': 1}))
+    for mu in mongo_users:
+        mongo_id = mu.get('id')
+        email = mu.get('email')
+        if mongo_id and email and email in auth_by_email:
+            mapping[mongo_id] = auth_by_email[email]
+
+    print(f"  Mapping utilisateurs: {len(mapping)} correspondances trouvees")
+    for mongo_id, auth_id in mapping.items():
+        print(f"    {mongo_id} -> {auth_id}")
+
+    return mapping
+
+
+def resolve_user_id(owner_id, user_mapping):
+    """Resolve a MongoDB owner_id to a Supabase Auth user_id"""
+    if not owner_id:
+        return DEFAULT_OWNER_ID
+    if owner_id in user_mapping:
+        return user_mapping[owner_id]
+    # Unknown owner - assign to default
+    return DEFAULT_OWNER_ID
+
+
+def safe_float(val, default=0):
+    try:
+        return float(val) if val is not None else default
+    except (ValueError, TypeError):
+        return default
+
+
+def safe_str(val):
+    if val is None:
+        return None
+    if hasattr(val, 'isoformat'):
+        return val.isoformat()
+    return str(val)
+
+
+def migrate_clients(mongo_db, supabase, user_mapping):
+    print("\n--- Migration des clients ---")
+    clients = list(mongo_db.clients.find({}, {'_id': 0}))
+    stats = {'total': len(clients), 'ok': 0, 'err': 0}
+
+    for c in clients:
+        try:
+            pg = {
+                'id': c['id'],
+                'user_id': resolve_user_id(c.get('owner_id'), user_mapping),
+                'name': c.get('name', ''),
+                'email': c.get('email'),
+                'phone': c.get('phone'),
+                'address': c.get('address'),
+                'city': c.get('city'),
+                'postal_code': c.get('postal_code'),
+                'country': c.get('country', 'France'),
+                'company_name': c.get('company_name'),
+                'siret': c.get('siret'),
+                'contact_name': c.get('contact_name'),
+                'notes': c.get('notes'),
+                'created_at': safe_str(c.get('created_at')),
+                'updated_at': safe_str(c.get('updated_at')),
+            }
+            pg = {k: v for k, v in pg.items() if v is not None}
+            supabase.from_('clients').upsert(pg).execute()
+            stats['ok'] += 1
+            print(f"  OK: {pg.get('name')}")
+        except Exception as e:
+            stats['err'] += 1
+            print(f"  ERREUR client {c.get('name')}: {e}")
+
+    return stats
+
+
+def migrate_quotes(mongo_db, supabase, user_mapping):
+    print("\n--- Migration des devis ---")
+    quotes = list(mongo_db.quotes.find({}, {'_id': 0}))
+    stats = {'total': len(quotes), 'ok': 0, 'err': 0}
+
+    for q in quotes:
+        try:
+            items = q.get('items', [])
+            if isinstance(items, list):
+                items_json = json.dumps(items)
+            else:
+                items_json = items
+
+            pg = {
+                'id': q['id'],
+                'user_id': resolve_user_id(q.get('owner_id'), user_mapping),
+                'client_id': q.get('client_id'),
+                'quote_number': q.get('quote_number', ''),
+                'client_name': q.get('client_name'),
+                'status': q.get('status', 'draft'),
+                'quote_date': safe_str(q.get('issue_date')),
+                'validity_date': safe_str(q.get('validity_date')),
+                'items': items_json,
+                'total_ht': safe_float(q.get('total_ht')),
+                'total_vat': safe_float(q.get('total_vat')),
+                'total_ttc': safe_float(q.get('total_ttc')),
+                'notes': q.get('notes'),
+                'share_token': q.get('share_token'),
+                'created_at': safe_str(q.get('created_at')),
+            }
+            pg = {k: v for k, v in pg.items() if v is not None}
+            supabase.from_('quotes').upsert(pg).execute()
+            stats['ok'] += 1
+            print(f"  OK: {pg.get('quote_number')}")
+        except Exception as e:
+            stats['err'] += 1
+            print(f"  ERREUR devis {q.get('quote_number')}: {e}")
+
+    return stats
+
+
+def migrate_invoices(mongo_db, supabase, user_mapping):
+    print("\n--- Migration des factures ---")
+    invoices = list(mongo_db.invoices.find({}, {'_id': 0}))
+    stats = {'total': len(invoices), 'ok': 0, 'err': 0}
+
+    for inv in invoices:
+        try:
+            items = inv.get('items', [])
+            if isinstance(items, list):
+                items_json = json.dumps(items)
+            else:
+                items_json = items
+
+            pg = {
+                'id': inv['id'],
+                'user_id': resolve_user_id(inv.get('owner_id'), user_mapping),
+                'client_id': inv.get('client_id'),
+                'invoice_number': inv.get('invoice_number', ''),
+                'client_name': inv.get('client_name'),
+                'invoice_date': safe_str(inv.get('issue_date')),
+                'due_date': safe_str(inv.get('payment_due_date')),
+                'items': items_json,
+                'total_ht': safe_float(inv.get('total_ht')),
+                'total_vat': safe_float(inv.get('total_vat')),
+                'total_ttc': safe_float(inv.get('total_ttc')),
+                'payment_status': inv.get('payment_status', 'unpaid'),
+                'paid_amount': safe_float(inv.get('paid_amount')),
+                'notes': inv.get('notes'),
+                'share_token': inv.get('share_token'),
+                'created_at': safe_str(inv.get('created_at')),
+            }
+            # Map paid_at if payment is marked as paid
+            if inv.get('payment_status') in ('paye', 'paid') and inv.get('created_at'):
+                pg['paid_at'] = safe_str(inv.get('created_at'))
+
+            pg = {k: v for k, v in pg.items() if v is not None}
+            supabase.from_('invoices').upsert(pg).execute()
+            stats['ok'] += 1
+            print(f"  OK: {pg.get('invoice_number')}")
+        except Exception as e:
+            stats['err'] += 1
+            print(f"  ERREUR facture {inv.get('invoice_number')}: {e}")
+
+    return stats
+
+
+def migrate_settings(mongo_db, supabase):
+    """Migrate company settings to Supabase settings table (UUID user_id)"""
+    print("\n--- Migration des parametres ---")
+    settings_list = list(mongo_db.settings.find({}, {'_id': 0}))
+    stats = {'total': len(settings_list), 'ok': 0, 'err': 0}
+
+    for s in settings_list:
+        try:
+            pg = {
+                'user_id': DEFAULT_OWNER_ID,  # Must be a valid auth.users UUID
+                'company_name': s.get('company_name'),
+                'company_address': s.get('address'),
+                'company_phone': s.get('phone'),
+                'company_email': s.get('email'),
+                'company_siret': s.get('siret'),
+                'company_tva': s.get('tva_number'),
+                'bank_name': s.get('bank_name'),
+                'bank_iban': s.get('iban') or s.get('bic'),
+                'bank_bic': s.get('bic'),
+                'legal_mentions': s.get('auto_entrepreneur_mention'),
+            }
+            # Handle logo - skip base64 data (too large for direct insert)
+            # The logo should be uploaded to Supabase Storage separately
+
+            pg = {k: v for k, v in pg.items() if v is not None}
+            if pg.get('user_id'):
+                supabase.from_('settings').upsert(pg, on_conflict='user_id').execute()
+                stats['ok'] += 1
+                print(f"  OK: {pg.get('company_name')}")
+        except Exception as e:
+            stats['err'] += 1
+            print(f"  ERREUR settings: {e}")
+
+    return stats
+
+
+def migrate_predefined_items(mongo_db, supabase):
+    """Migrate predefined items (global catalog)"""
+    print("\n--- Migration des articles predefinis ---")
+    items = list(mongo_db.predefined_items.find({}, {'_id': 0}))
+    stats = {'total': len(items), 'ok': 0, 'err': 0}
+
+    for item in items:
+        try:
+            pg = {
+                'id': item['id'],
+                'category': item.get('category', ''),
+                'description': item.get('description', ''),
+                'unit': item.get('unit', 'u'),
+                'default_price': safe_float(item.get('default_price')),
+                'default_vat_rate': safe_float(item.get('default_vat_rate'), 20.0),
+                'is_global': True,  # These are shared catalog items
+            }
+            pg = {k: v for k, v in pg.items() if v is not None}
+            supabase.from_('predefined_items').upsert(pg).execute()
+            stats['ok'] += 1
+        except Exception as e:
+            stats['err'] += 1
+            if stats['err'] <= 3:  # Show first 3 errors only
+                print(f"  ERREUR item: {e}")
+
+    print(f"  {stats['ok']}/{stats['total']} articles migres")
+    return stats
+
 
 def main():
     check_config()
-    
-    # Import après vérification
+
     from pymongo import MongoClient
     from supabase import create_client
-    
-    # Connexions
-    print("🔌 Connexion à MongoDB...")
+
+    # Connect to MongoDB - use test_database
+    print("Connexion a MongoDB (test_database)...")
     mongo_client = MongoClient(MONGO_URL)
-    mongo_db = mongo_client['btp_invoice']
-    
-    print("🔌 Connexion à Supabase...")
+    mongo_db = mongo_client['test_database']
+
+    # Verify connection
+    collections = mongo_db.list_collection_names()
+    print(f"  Collections trouvees: {len(collections)}")
+
+    # Connect to Supabase
+    print("Connexion a Supabase...")
     supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    
-    # Stats
-    stats = {
-        'clients': {'total': 0, 'migrated': 0, 'errors': 0},
-        'quotes': {'total': 0, 'migrated': 0, 'errors': 0},
-        'invoices': {'total': 0, 'migrated': 0, 'errors': 0},
-        'settings': {'total': 0, 'migrated': 0, 'errors': 0}
-    }
-    
-    # ============== MIGRATION DES CLIENTS ==============
-    print("\n📦 Migration des clients...")
-    clients = list(mongo_db.clients.find())
-    stats['clients']['total'] = len(clients)
-    
-    for client in clients:
-        try:
-            # Mapper les champs MongoDB vers PostgreSQL
-            pg_client = {
-                'user_id': client.get('owner_id'),
-                'company_name': client.get('company_name') or client.get('name', ''),
-                'contact_name': client.get('contact_name') or client.get('contact', ''),
-                'email': client.get('email'),
-                'phone': client.get('phone'),
-                'address': client.get('address'),
-                'city': client.get('city'),
-                'postal_code': client.get('postal_code') or client.get('zip_code'),
-                'country': client.get('country', 'France'),
-                'siret': client.get('siret'),
-                'tva_number': client.get('tva_number') or client.get('vat_number'),
-                'notes': client.get('notes'),
-            }
-            
-            # Supprimer les valeurs None
-            pg_client = {k: v for k, v in pg_client.items() if v is not None}
-            
-            # Ajouter l'ID MongoDB comme référence
-            if client.get('id'):
-                pg_client['id'] = client['id']
-            
-            result = supabase.from_('clients').upsert(pg_client).execute()
-            stats['clients']['migrated'] += 1
-            print(f"  ✅ Client: {pg_client.get('company_name', pg_client.get('contact_name', 'N/A'))}")
-            
-        except Exception as e:
-            stats['clients']['errors'] += 1
-            print(f"  ❌ Erreur client: {e}")
-    
-    # ============== MIGRATION DES DEVIS ==============
-    print("\n📄 Migration des devis...")
-    quotes = list(mongo_db.quotes.find())
-    stats['quotes']['total'] = len(quotes)
-    
-    for quote in quotes:
-        try:
-            # Mapper les champs
-            pg_quote = {
-                'user_id': quote.get('owner_id'),
-                'client_id': quote.get('client_id'),
-                'quote_number': quote.get('quote_number') or quote.get('number'),
-                'client_name': quote.get('client_name'),
-                'client_email': quote.get('client_email'),
-                'client_address': quote.get('client_address'),
-                'items': json.dumps(quote.get('items', [])) if isinstance(quote.get('items'), list) else quote.get('items', '[]'),
-                'total_ht': float(quote.get('total_ht', 0)),
-                'total_tva': float(quote.get('total_tva', 0)),
-                'total_ttc': float(quote.get('total_ttc', 0)),
-                'status': quote.get('status', 'draft'),
-                'validity_days': quote.get('validity_days', 30),
-                'notes': quote.get('notes'),
-                'share_token': quote.get('share_token'),
-            }
-            
-            # Gérer les dates
-            if quote.get('signed_at'):
-                pg_quote['signed_at'] = quote['signed_at'].isoformat() if hasattr(quote['signed_at'], 'isoformat') else str(quote['signed_at'])
-            
-            # Supprimer les valeurs None
-            pg_quote = {k: v for k, v in pg_quote.items() if v is not None}
-            
-            if quote.get('id'):
-                pg_quote['id'] = quote['id']
-            
-            result = supabase.from_('quotes').upsert(pg_quote).execute()
-            stats['quotes']['migrated'] += 1
-            print(f"  ✅ Devis: {pg_quote.get('quote_number', 'N/A')}")
-            
-        except Exception as e:
-            stats['quotes']['errors'] += 1
-            print(f"  ❌ Erreur devis: {e}")
-    
-    # ============== MIGRATION DES FACTURES ==============
-    print("\n🧾 Migration des factures...")
-    invoices = list(mongo_db.invoices.find())
-    stats['invoices']['total'] = len(invoices)
-    
-    for invoice in invoices:
-        try:
-            # Mapper le statut de paiement
-            payment_status_map = {
-                'impaye': 'unpaid',
-                'paye': 'paid',
-                'partiel': 'partial',
-                'unpaid': 'unpaid',
-                'paid': 'paid',
-                'partial': 'partial'
-            }
-            
-            pg_invoice = {
-                'user_id': invoice.get('owner_id'),
-                'client_id': invoice.get('client_id'),
-                'quote_id': invoice.get('quote_id'),
-                'invoice_number': invoice.get('invoice_number') or invoice.get('number'),
-                'client_name': invoice.get('client_name'),
-                'client_email': invoice.get('client_email'),
-                'client_address': invoice.get('client_address'),
-                'items': json.dumps(invoice.get('items', [])) if isinstance(invoice.get('items'), list) else invoice.get('items', '[]'),
-                'total_ht': float(invoice.get('total_ht', 0)),
-                'total_tva': float(invoice.get('total_tva', 0)),
-                'total_ttc': float(invoice.get('total_ttc', 0)),
-                'payment_status': payment_status_map.get(invoice.get('payment_status', 'unpaid'), 'unpaid'),
-                'paid_amount': float(invoice.get('paid_amount', 0)),
-                'notes': invoice.get('notes'),
-                'share_token': invoice.get('share_token'),
-            }
-            
-            # Gérer les dates
-            if invoice.get('paid_at'):
-                pg_invoice['paid_at'] = invoice['paid_at'].isoformat() if hasattr(invoice['paid_at'], 'isoformat') else str(invoice['paid_at'])
-            if invoice.get('due_date'):
-                pg_invoice['due_date'] = invoice['due_date'].isoformat() if hasattr(invoice['due_date'], 'isoformat') else str(invoice['due_date'])
-            
-            # Supprimer les valeurs None
-            pg_invoice = {k: v for k, v in pg_invoice.items() if v is not None}
-            
-            if invoice.get('id'):
-                pg_invoice['id'] = invoice['id']
-            
-            result = supabase.from_('invoices').upsert(pg_invoice).execute()
-            stats['invoices']['migrated'] += 1
-            print(f"  ✅ Facture: {pg_invoice.get('invoice_number', 'N/A')}")
-            
-        except Exception as e:
-            stats['invoices']['errors'] += 1
-            print(f"  ❌ Erreur facture: {e}")
-    
-    # ============== MIGRATION DES PARAMÈTRES ==============
-    print("\n⚙️ Migration des paramètres...")
-    settings_list = list(mongo_db.settings.find())
-    stats['settings']['total'] = len(settings_list)
-    
-    for setting in settings_list:
-        try:
-            pg_setting = {
-                'user_id': setting.get('user_id') or setting.get('owner_id'),
-                'company_name': setting.get('company_name'),
-                'company_address': setting.get('company_address') or setting.get('address'),
-                'company_phone': setting.get('company_phone') or setting.get('phone'),
-                'company_email': setting.get('company_email') or setting.get('email'),
-                'company_siret': setting.get('company_siret') or setting.get('siret'),
-                'company_tva': setting.get('company_tva') or setting.get('tva_number'),
-                'company_logo_url': setting.get('company_logo_url') or setting.get('logo_url'),
-                'bank_name': setting.get('bank_name'),
-                'bank_iban': setting.get('bank_iban') or setting.get('iban'),
-                'bank_bic': setting.get('bank_bic') or setting.get('bic'),
-                'default_vat_rate': float(setting.get('default_vat_rate', 20)),
-                'default_payment_terms': int(setting.get('default_payment_terms', 30)),
-                'quote_prefix': setting.get('quote_prefix', 'DEV'),
-                'invoice_prefix': setting.get('invoice_prefix', 'FAC'),
-                'legal_mentions': setting.get('legal_mentions'),
-            }
-            
-            # Supprimer les valeurs None
-            pg_setting = {k: v for k, v in pg_setting.items() if v is not None}
-            
-            if pg_setting.get('user_id'):
-                result = supabase.from_('settings').upsert(pg_setting).execute()
-                stats['settings']['migrated'] += 1
-                print(f"  ✅ Paramètres pour: {pg_setting.get('company_name', 'N/A')}")
-            
-        except Exception as e:
-            stats['settings']['errors'] += 1
-            print(f"  ❌ Erreur paramètres: {e}")
-    
-    # ============== RÉSUMÉ ==============
-    print("\n" + "="*50)
-    print("📊 RÉSUMÉ DE LA MIGRATION")
-    print("="*50)
-    
-    for table, data in stats.items():
-        status = "✅" if data['errors'] == 0 else "⚠️"
-        print(f"{status} {table.upper()}: {data['migrated']}/{data['total']} migrés ({data['errors']} erreurs)")
-    
-    total_migrated = sum(d['migrated'] for d in stats.values())
-    total_errors = sum(d['errors'] for d in stats.values())
-    total_items = sum(d['total'] for d in stats.values())
-    
-    print("-"*50)
-    print(f"TOTAL: {total_migrated}/{total_items} éléments migrés")
-    if total_errors > 0:
-        print(f"⚠️  {total_errors} erreurs à vérifier")
+
+    # Build user ID mapping
+    print("\nConstruction du mapping utilisateurs...")
+    user_mapping = build_user_mapping(mongo_db, supabase)
+
+    # Run migrations
+    all_stats = {}
+    all_stats['clients'] = migrate_clients(mongo_db, supabase, user_mapping)
+    all_stats['quotes'] = migrate_quotes(mongo_db, supabase, user_mapping)
+    all_stats['invoices'] = migrate_invoices(mongo_db, supabase, user_mapping)
+    all_stats['settings'] = migrate_settings(mongo_db, supabase)
+    all_stats['predefined_items'] = migrate_predefined_items(mongo_db, supabase)
+
+    # Summary
+    print("\n" + "=" * 50)
+    print("RESUME DE LA MIGRATION")
+    print("=" * 50)
+    total_ok = 0
+    total_err = 0
+    for table, s in all_stats.items():
+        icon = "OK" if s['err'] == 0 else "!!"
+        print(f"  [{icon}] {table}: {s['ok']}/{s['total']} migres ({s['err']} erreurs)")
+        total_ok += s['ok']
+        total_err += s['err']
+
+    print("-" * 50)
+    print(f"  TOTAL: {total_ok} migres, {total_err} erreurs")
+    if total_err == 0:
+        print("  Migration terminee sans erreurs!")
     else:
-        print("🎉 Migration terminée sans erreurs!")
-    
-    # Fermer connexions
+        print(f"  {total_err} erreurs a verifier")
+
     mongo_client.close()
+
 
 if __name__ == '__main__':
     main()

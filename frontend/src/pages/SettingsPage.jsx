@@ -123,9 +123,17 @@ export default function SettingsPage() {
                 getBusinessTypes()
             ]);
             
-            // Set business types
+            // Set business types - handle array or object format
             if (businessTypesRes.data) {
-                setBusinessTypes(businessTypesRes.data);
+                // If it's an array of strings, convert to { types: [...], labels: {} }
+                if (Array.isArray(businessTypesRes.data)) {
+                    const typesArray = businessTypesRes.data;
+                    const labels = {};
+                    typesArray.forEach(t => labels[t] = t);
+                    setBusinessTypes({ types: typesArray, labels });
+                } else {
+                    setBusinessTypes(businessTypesRes.data);
+                }
             }
             
             if (settingsRes.data) {
@@ -163,12 +171,16 @@ export default function SettingsPage() {
                 });
             }
             
-            setCategories(categoriesRes.data);
-            if (categoriesRes.data.length > 0) {
-                setSelectedCategory(categoriesRes.data[0].name);
+            // Categories might be either strings or objects with name property
+            const cats = categoriesRes.data || [];
+            // If it's array of strings, convert to objects with name property
+            const normalizedCats = cats.map(c => typeof c === 'string' ? { name: c, items: [] } : c);
+            setCategories(normalizedCats);
+            if (normalizedCats.length > 0) {
+                setSelectedCategory(normalizedCats[0].name);
             }
             
-            setKits(kitsRes.data);
+            setKits(kitsRes.data || []);
         } catch (error) {
             toast.error("Erreur lors du chargement des paramètres");
         } finally {

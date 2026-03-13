@@ -1,0 +1,178 @@
+<analysis>**original_problem_statement:**
+The user's initial request was to fix a broken Facturation (Billing) page, rename it to Abonnement (Subscription), and perform a general check-up of the application. This evolved into a request for a full pre-launch audit, which uncovered a critical architectural mismatch between the development environment (React + FastAPI + MongoDB) and the user's production target (React + Supabase only). The primary goal is now to execute a full migration of the application's backend from the FastAPI/MongoDB monolith to a serverless, Supabase-only architecture.
+
+**PRODUCT REQUIREMENTS:**
+1.  **Full Supabase Migration:** Eliminate the FastAPI backend () and MongoDB database entirely.
+2.  **Backend Logic:** All backend logic must be handled by Supabase (PostgreSQL database, Auth, Storage, and potentially Edge Functions).
+3.  **Data Migration:** All existing data from the MongoDB  (clients, quotes, invoices, etc.) must be migrated to the corresponding PostgreSQL tables in Supabase.
+4.  **Multi-Tenancy:** Ensure Row Level Security (RLS) policies are correctly implemented and active on all relevant tables to isolate company data.
+5.  **Frontend Connection:** The React frontend must connect directly and exclusively to Supabase via the  client.
+6.  **Fix All Bugs:** Resolve all critical and high-priority bugs identified during the pre-launch audit, most of which are symptoms of the architectural mismatch.
+
+**User's preferred language**: French
+
+**what currently exists?**
+The application is in a fragile, hybrid state, midway through a major architectural migration. A comprehensive 11-step audit was performed, and numerous critical bugs were fixed, significantly improving the stability of the preview environment.
+- **Authentication:** Fully migrated to Supabase Auth. A critical bug causing session instability was fixed by unifying the auth validation logic in  and the  interceptor.
+- **Database Schema:** SQL scripts to create the complete PostgreSQL schema in Supabase have been generated. The user has successfully executed the Row Level Security (RLS) policy scripts.
+- **Data Migration:** A Python script () has been created to move data from MongoDB to Supabase. An initial run failed because it targeted the wrong MongoDB database.
+- **Frontend:** The frontend has been stabilized. Admin pages and the Finances page, which were previously broken, now work correctly in the preview environment. The Abonnement (Billing) page has been fixed and renamed.
+
+**Last working item**:
+- **Last item agent was working:** The agent was attempting to migrate data from MongoDB to Supabase using the  script. The script failed because it was configured to read from an empty database () instead of the correct database () which contains the actual user data.
+- **Status:** IN PROGRESS
+- **Agent Testing Done:** N
+- **Which testing method agent to use?** The agent must first use  to modify the Python migration script to target , then re-run the script. No other testing is needed for this specific step.
+- **User Testing Done:** N
+
+**All Pending/In progress Issue list**:
+- **Issue 1: Data migration script is targeting the wrong database (P0 - HIGHEST)**
+
+**Issues Detail:**
+- **Issue 1:**
+    - **Description:** The data migration script at  is hardcoded or configured to connect to the  database in MongoDB, which is empty. The user's actual data resides in the . The migration cannot proceed until the script is corrected.
+    - **Attempted fixes:** The first run of the script failed, revealing the issue.
+    - **Next debug checklist:**
+        1.  View the file .
+        2.  Identify the line where the MongoDB database name is specified.
+        3.  Use  to change  (or the current value) to .
+        4.  Re-run the script: ❌ Variables d'environnement manquantes: MONGO_URL, SUPABASE_URL, SUPABASE_SERVICE_KEY
+
+Configurez-les avec:
+  export MONGO_URL='mongodb://...'
+  export SUPABASE_URL='https://xxx.supabase.co'
+  export SUPABASE_SERVICE_KEY='eyJhbG...'.
+        5.  Verify the script's output to confirm that it is now migrating documents from the correct collections.
+    - **Why fix this issue and what will be achieved with the fix?** This is the primary blocker for the entire migration. Fixing it will move all legacy data into the new Supabase architecture, enabling the project to decommission MongoDB and FastAPI.
+    - **Status:** IN PROGRESS
+    - **Is recurring issue?** N
+    - **Should Test frontend/backend/both after fix?** Backend (by verifying script output).
+    - **Blocked on other issue:** None. This is the main blocker.
+
+**In progress Task List**:
+- **Task 1: Complete the full migration to a Supabase-only backend.**
+
+**Task Detail:**
+- **Task 1:**
+    - **Where to resume:** Resume at fixing and re-running the data migration script as described in Issue 1 above.
+    - **What will be achieved with this?** A complete, simplified, and production-ready architecture running entirely on Vercel and Supabase, which will resolve the user's production white screen issue permanently.
+    - **Status:** IN PROGRESS
+    - **Should Test frontend/backend/both after fix?** Both. A full regression test will be required after the migration is complete.
+    - **Blocked on something:** Blocked on completing the data migration (Issue 1).
+
+**Upcoming and Future Tasks**
+*   **Upcoming Tasks:**
+    *   **P0: Switch Frontend to Supabase-Only Mode:** After the data migration is confirmed successful, modify  to remove the /FastAPI logic and exclusively use the Supabase client for all data fetching.
+    *   **P1: Decommission Legacy Backend:** Once the frontend is fully switched to Supabase, delete , remove FastAPI and related dependencies from , and clean up any other obsolete files.
+    *   **P2: Full Regression Testing:** After decommissioning the old backend, perform a comprehensive test of the entire application (as a super admin and a regular trial user) to ensure all functionalities work as expected in the Supabase-only environment.
+    *   **P3: Clean Up Test User Accounts:** The audit identified 53 user accounts. Before launch, these should be reviewed and non-essential test accounts should be deleted.
+*   **Future Tasks:**
+    *   Implement Recurring Invoices.
+    *   Integrate AI PDF Analysis with Gemini.
+    *   Connect the Work Library to the quote creation form.
+    *   Implement an email system for user verification and reminders.
+
+**Completed work in this session**
+- **Audit:** Performed a complete 11-step pre-launch audit, identifying critical architectural flaws, security recommendations, and functional bugs.
+- **Bug Fix:** Repaired a critical session instability bug by unifying authentication logic across the backend () and frontend () to correctly use Supabase Auth.
+- **Bug Fix:** Fixed the Admin pages (Métriques SaaS, Analytics Utilisateurs) by replacing legacy  calls with the modern  instance.
+- **Bug Fix:** Repaired the Finances page by implementing a new MongoDB-backed endpoint () in  as a temporary fix pending full migration.
+- **Bug Fix:** Fixed and renamed the Abonnement (Billing) page, updating all related routes and redirects.
+- **Migration Prep:** Created a complete set of SQL migration scripts for Supabase (schema, RLS policies, indexes).
+- **Migration Prep:** Created the Python script to migrate data from MongoDB to Supabase.
+- **Migration Execution:** Successfully guided the user to apply all RLS policies to the Supabase database.
+
+**Earlier issues found/mentioned but not fixed**
+- The full MongoDB to PostgreSQL migration is the main outstanding task, which is currently in progress.
+
+**Known issue recurrence from previous fork**
+- **White Screen on Production:** The previous fork struggled with a white screen on the user's Vercel deployment. This session identified the root cause: the production environment was missing the FastAPI/MongoDB backend that the application code relied on. The current migration to a Supabase-only architecture is the definitive solution to this recurring problem.
+
+**Code Architecture**
+The project is transitioning from a hybrid architecture to a serverless one.
+
+**Current (Hybrid) Architecture:**
+
+
+**Target (Supabase-Only) Architecture:**
+
+
+**Key Technical Concepts**
+- **Architectural Migration:** Moving from a traditional three-tier architecture (React -> FastAPI -> MongoDB) to a two-tier serverless architecture (React -> Supabase).
+- **Supabase:** Used as a comprehensive Backend-as-a-Service (BaaS) provider for Auth, PostgreSQL Database, and Row Level Security (RLS).
+- **Data Migration:** Using a custom Python script with  and  to transfer data between the two database systems.
+
+**key DB schema**
+The target Supabase schema includes the following key tables:
+- **users:** {id (uuid), email, role, company_id, trial_started_at, status}
+- **companies:** {id (uuid), name, owner_id}
+- **clients:** {id (uuid), company_id, name, email, address}
+- **quotes:** {id (uuid), company_id, client_id, total, status, quote_number}
+- **invoices:** {id (uuid), company_id, client_id, total, status, invoice_number}
+- **subscriptions:** {id (uuid), company_id, plan, status, stripe_customer_id}
+
+**changes in tech stack**
+- **Backend:** Actively migrating from **FastAPI** to **Supabase** (direct client calls and potentially Edge Functions).
+- **Database:** Migrating from **MongoDB** to **PostgreSQL** (hosted on Supabase).
+
+**All files of reference**
+- : **(NEEDS FIX)** The key script for the data migration.
+- : Folder containing all SQL scripts for creating the Supabase schema and RLS policies.
+- : The central API wrapper, modified to support a future Supabase-only mode.
+- : Was modified to correctly use Supabase Auth for new routes.
+- : The legacy monolith that is the target for complete removal.
+
+**Areas that need refactoring**:
+- **:** This 7000+ line file is the primary source of technical debt and is slated for complete removal once the migration to Supabase is finished.
+
+**key api endpoints**
+The application currently relies on 160+ legacy API endpoints served by  (e.g., , , , ). The goal is to eliminate all of these and replace them with direct calls to Supabase using the  client library.
+
+**Critical Info for New Agent**
+- **The #1 priority is the Supabase-only migration.** The user has explicitly chosen this path to resolve their production environment issues permanently. Do not propose deploying the FastAPI backend.
+- **The immediate next step is to fix the data migration script.** You must edit  to point to  instead of  and re-run it.
+- **All RLS policies have been successfully applied.** You do not need to re-run the SQL for RLS.
+- Once the data migration is complete, the frontend code in  must be switched to Supabase-only mode, and then the old  and MongoDB dependencies can be removed.
+
+**documents and test reports created in this job**
+- 
+- 
+- 
+- 
+- 
+-  (Updated with audit findings and migration plan)
+
+**Last 10 User Messages and any pending HUMAN messages**
+- **LATEST:** User confirms all 4 RLS script blocks (Users, Clients, Quotes, Invoices) ran successfully. (COMPLETED)
+- User requests to continue with the remaining RLS blocks. (IN PROGRESS)
+- User provides a blurry screenshot of their Supabase tables. (ADDRESSED)
+- User reports an error () when running the RLS script. (ADDRESSED)
+- User reports an error () when running the RLS script. (ADDRESSED)
+- User reports an error related to  vs  type mismatch in RLS policies. (ADDRESSED)
+- User provides a screenshot of the first SQL error they encountered. (ADDRESSED)
+- User asks for guidance on the next steps for the migration after Phase 1 was declared complete by the agent. (IN PROGRESS)
+- User confirms the final target architecture is Vercel + Supabase only and asks the agent to proceed with the migration. (IN PROGRESS)
+- User confirms they want the agent to fix all bugs identified in the audit. (IN PROGRESS)
+
+**Project Health Check:**
+- **Broken:** The application is in a highly transitional and fragile state. While the preview environment is mostly functional due to numerous bug fixes, the overall architecture is not production-ready and does not match the user's target. The migration is the only path forward.
+- **Mocked:** None.
+
+**3rd Party Integrations**
+- **Supabase:** Core integration for Auth and as the target PostgreSQL database.
+- **MongoDB:** Legacy database, currently being migrated away from.
+- **Stripe:** Exists in the codebase but is not actively used or integrated into the subscription flow.
+- **Gemini:** A backend service for AI analysis exists but is not connected to any UI.
+
+**Testing status**
+- **Testing agent used after significant changes:** NO (But a comprehensive manual audit was performed by the agent).
+- **Troubleshoot agent used after agent stuck in loop:** NO
+- **Test files created:** None.
+- **Known regressions:** None from this session; many bugs were fixed.
+
+**Credentials to test flow:**
+- **Super Admin:**  / 
+- **Trial User:**  / 
+
+**What agent forgot to execute**
+The agent correctly identified the architectural problem and the need for migration. The only oversight was not confirming the correct MongoDB database name () before running the migration script, leading to a failed first attempt. This is a minor discovery issue, not a strategic error.</analysis>

@@ -70,8 +70,8 @@ export default function ProfileCompletionCard({ compact = false }) {
 
     if (!completion) return null;
 
-    const { completion_percentage, items, summary } = completion;
-    const missingItems = items.filter(item => !item.completed);
+    const { completion_percentage = 0, items = [], summary = {} } = completion;
+    const missingItems = (items || []).filter(item => !item.completed);
 
     // Compact version for sidebar/header
     if (compact) {

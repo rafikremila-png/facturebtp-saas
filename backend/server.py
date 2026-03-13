@@ -7180,7 +7180,7 @@ cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
 production_origins = [
     "https://www.facturebtp.fr",
     "https://facturebtp.fr",
-    "https://construction-billing-3.preview.emergentagent.com",
+    "https://serverless-launch.preview.emergentagent.com",
     "http://localhost:3000"
 ]
 for origin in production_origins:

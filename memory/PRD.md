@@ -166,7 +166,7 @@ A user synchronization service (`user_sync_service.py`) bridges the two database
 - **Admin Legacy**: admin@btpfacture.com / Admin123!
 
 ## Preview URL
-https://construction-billing-3.preview.emergentagent.com
+https://serverless-launch.preview.emergentagent.com
 
 ## Key Routes
 - `/abonnement` - Subscription/billing page (renamed from /facturation)

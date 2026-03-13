@@ -241,7 +241,7 @@ class TestCheckoutSession:
             headers=headers,
             json={
                 "plan_id": "pro",
-                "origin_url": "https://construction-billing-3.preview.emergentagent.com"
+                "origin_url": "https://serverless-launch.preview.emergentagent.com"
             }
         )
         
