@@ -209,19 +209,43 @@ export const AuthProvider = ({ children }) => {
         try {
             setError(null);
             
-            const { data: authData, error: authError } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    data: {
-                        name: userData.name,
-                        phone: userData.phone,
+            let authData, authError;
+            try {
+                const result = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            name: userData.name,
+                            phone: userData.phone,
+                        }
                     }
+                });
+                authData = result.data;
+                authError = result.error;
+            } catch (sdkError) {
+                // Handle supabase-js SDK parsing failures
+                const msg = sdkError?.message || '';
+                log('SignUp SDK error:', msg);
+                if (msg.includes('body stream already read') || msg.includes('json')) {
+                    throw new Error("Adresse email invalide ou service temporairement indisponible. Veuillez réessayer.");
                 }
-            });
+                throw sdkError;
+            }
             
             if (authError) {
                 log('Register error:', authError);
+                const code = authError.code || authError.error_code || '';
+                const msg = authError.message || '';
+                if (code === 'email_address_invalid' || msg.includes('invalid')) {
+                    throw new Error("Adresse email invalide.");
+                }
+                if (code === 'over_email_send_rate_limit' || msg.includes('rate limit')) {
+                    throw new Error("Trop de tentatives. Veuillez réessayer dans quelques minutes.");
+                }
+                if (msg.includes('User already registered') || msg.includes('already registered')) {
+                    throw new Error("Cet email est déjà utilisé.");
+                }
                 throw authError;
             }
             
@@ -254,9 +278,71 @@ export const AuthProvider = ({ children }) => {
                 }
             }
             
-            return authData;
+            // Return needs_verification flag so UI knows to show OTP form
+            return {
+                ...authData,
+                needs_verification: !authData?.session,
+            };
         } catch (err) {
             log('Register exception:', err.message);
+            setError(err.message);
+            throw err;
+        }
+    };
+
+    // Verify OTP code after signup
+    const verifyOtp = async (email, token) => {
+        log('Verify OTP attempt:', { email });
+        
+        try {
+            setError(null);
+            
+            const { data, error: otpError } = await supabase.auth.verifyOtp({
+                email,
+                token,
+                type: 'signup',
+            });
+            
+            if (otpError) {
+                log('OTP verification error:', otpError);
+                throw otpError;
+            }
+            
+            log('OTP verified successfully:', { userId: data?.user?.id });
+            
+            if (data?.user) {
+                await fetchUserProfile(data.user.id);
+            }
+            
+            return data;
+        } catch (err) {
+            log('OTP verify exception:', err.message);
+            setError(err.message);
+            throw err;
+        }
+    };
+
+    // Resend verification code
+    const resendVerification = async (email) => {
+        log('Resend verification:', { email });
+        
+        try {
+            setError(null);
+            
+            const { error: resendError } = await supabase.auth.resend({
+                type: 'signup',
+                email,
+            });
+            
+            if (resendError) {
+                log('Resend error:', resendError);
+                throw resendError;
+            }
+            
+            log('Verification resent successfully');
+            return true;
+        } catch (err) {
+            log('Resend exception:', err.message);
             setError(err.message);
             throw err;
         }
@@ -312,6 +398,8 @@ export const AuthProvider = ({ children }) => {
         authReady,
         login,
         register,
+        verifyOtp,
+        resendVerification,
         logout,
         isAuthenticated: !!user,
         isAdmin,
