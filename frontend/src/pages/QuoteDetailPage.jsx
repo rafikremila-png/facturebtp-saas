@@ -366,7 +366,10 @@ export default function QuoteDetailPage() {
     };
 
     const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('fr-FR', {
+        if (!dateString) return '-';
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return '-';
+        return d.toLocaleDateString('fr-FR', {
             day: 'numeric',
             month: 'long',
             year: 'numeric'
@@ -534,7 +537,7 @@ export default function QuoteDetailPage() {
                             </div>
                             <div>
                                 <p className="text-sm text-slate-500">Date d'émission</p>
-                                <p className="font-medium">{formatDate(quote.issue_date)}</p>
+                                <p className="font-medium">{formatDate(quote.quote_date || quote.issue_date)}</p>
                             </div>
                         </div>
                         <div className="flex items-start gap-3">

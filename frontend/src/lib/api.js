@@ -446,7 +446,12 @@ const apiProxy = {
         // Work items
         if (url === 'work-items') {
             const { data } = await supabase.from('predefined_items').select('*').order('category');
-            return { data: data || [] };
+            const items = (data || []).map(item => ({
+                ...item,
+                unit_price: item.default_price || 0,
+                vat_rate: item.default_vat_rate || 20,
+            }));
+            return { data: items };
         }
         if (url === 'work-items/categories') {
             const cats = await predefinedItemsService.getCategories();

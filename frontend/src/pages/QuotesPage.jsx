@@ -151,7 +151,10 @@ export default function QuotesPage() {
     const isSomeSelected = selectedIds.length > 0 && selectedIds.length < filteredQuotes.length;
 
     const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('fr-FR');
+        if (!dateString) return '-';
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return '-';
+        return d.toLocaleDateString('fr-FR');
     };
 
     const formatCurrency = (amount) => {
@@ -297,7 +300,7 @@ export default function QuotesPage() {
                                         </TableCell>
                                         <TableCell className="font-mono font-medium">{quote.quote_number}</TableCell>
                                         <TableCell className="font-medium">{quote.client_name}</TableCell>
-                                        <TableCell className="text-slate-600">{formatDate(quote.issue_date)}</TableCell>
+                                        <TableCell className="text-slate-600">{formatDate(quote.quote_date || quote.issue_date)}</TableCell>
                                         <TableCell className="font-medium">{formatCurrency(quote.total_ttc)}</TableCell>
                                         <TableCell>
                                             <span className={`status-badge status-${quote.status}`}>

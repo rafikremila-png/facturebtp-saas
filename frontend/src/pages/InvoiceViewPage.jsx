@@ -169,7 +169,7 @@ function InvoiceViewPage() {
                 </div>
             </div>
             <Card><CardHeader><CardTitle className="font-mono">{invoice.invoice_number}</CardTitle></CardHeader>
-                <CardContent><p><strong>Client:</strong> {invoice.client_name}</p><p><strong>Date:</strong> {new Date(invoice.issue_date).toLocaleDateString("fr-FR")}</p></CardContent></Card>
+                <CardContent><p><strong>Client:</strong> {invoice.client_name}</p><p><strong>Date:</strong> {(invoice.invoice_date || invoice.issue_date) ? new Date(invoice.invoice_date || invoice.issue_date).toLocaleDateString("fr-FR") : '-'}</p></CardContent></Card>
             <Card><CardHeader><CardTitle>Paiement</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-3 gap-4">
                     <div><Label>Statut</Label><Select value={invoice.payment_status} onValueChange={updateStatus}><SelectTrigger><SelectValue /></SelectTrigger>

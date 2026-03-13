@@ -212,6 +212,7 @@ export default function WorkLibraryPage() {
     }, {});
 
     const formatPrice = (price) => {
+        if (price == null || isNaN(price)) return '0,00 €';
         return new Intl.NumberFormat('fr-FR', {
             style: 'currency',
             currency: 'EUR'

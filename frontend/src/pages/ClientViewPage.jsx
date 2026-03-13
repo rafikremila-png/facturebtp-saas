@@ -209,7 +209,7 @@ export default function ClientViewPage() {
                             <div className="flex items-center gap-2">
                                 <Calendar className="w-4 h-4 text-slate-400" />
                                 <span className="text-slate-500">Date d'émission :</span>
-                                <span className="font-medium">{new Date(document.issue_date).toLocaleDateString('fr-FR')}</span>
+                                <span className="font-medium">{(document.quote_date || document.invoice_date || document.issue_date) ? new Date(document.quote_date || document.invoice_date || document.issue_date).toLocaleDateString('fr-FR') : '-'}</span>
                             </div>
                             {type === "devis" && document.validity_date && (
                                 <div className="flex items-center gap-2">

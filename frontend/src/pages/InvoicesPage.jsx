@@ -147,7 +147,10 @@ export default function InvoicesPage() {
     const isSomeSelected = selectedIds.length > 0 && selectedIds.length < filteredInvoices.length;
 
     const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('fr-FR');
+        if (!dateString) return '-';
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return '-';
+        return d.toLocaleDateString('fr-FR');
     };
 
     const formatCurrency = (amount) => {
@@ -291,7 +294,7 @@ export default function InvoicesPage() {
                                         </TableCell>
                                         <TableCell className="font-mono font-medium">{invoice.invoice_number}</TableCell>
                                         <TableCell className="font-medium">{invoice.client_name}</TableCell>
-                                        <TableCell className="text-slate-600">{formatDate(invoice.issue_date)}</TableCell>
+                                        <TableCell className="text-slate-600">{formatDate(invoice.invoice_date || invoice.issue_date)}</TableCell>
                                         <TableCell className="font-medium">{formatCurrency(invoice.total_ttc)}</TableCell>
                                         <TableCell>
                                             <span className={`status-badge status-${invoice.payment_status}`}>
