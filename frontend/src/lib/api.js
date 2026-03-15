@@ -196,7 +196,12 @@ export const getDynamicCategoriesWithItems = async () => {
     const cats = await predefinedItemsService.getCategories();
     const result = [];
     for (const cat of cats) {
-        const items = await predefinedItemsService.getByCategory(cat);
+        const rawItems = await predefinedItemsService.getByCategory(cat);
+        const items = (rawItems || []).map(item => ({
+            ...item,
+            name: item.description || item.name || '',
+            smart_price: item.default_price || 0,
+        }));
         result.push({ id: cat, name: cat, items });
     }
     return { data: result };
@@ -224,8 +229,24 @@ export const getItemV3 = async (itemId) => {
     return { data };
 };
 export const searchItemsV3 = searchCategoryItems;
-export const getKitsV3 = async () => wrap(kitsService.getAll());
-export const getKitV3 = async (kitId) => wrap(kitsService.getById(kitId));
+export const getKitsV3 = async () => {
+    const rawKits = await kitsService.getAll();
+    const kits = (rawKits || []).map(k => ({
+        ...k,
+        business_type: 'general',
+    }));
+    return { data: kits };
+};
+export const getKitV3 = async (kitId) => {
+    const rawKit = await kitsService.getById(kitId);
+    const kitItems = Array.isArray(rawKit.items) ? rawKit.items : JSON.parse(rawKit.items || '[]');
+    const expandedItems = kitItems.map(item => ({
+        ...item,
+        total: (item.quantity || 1) * (item.unit_price || 0),
+    }));
+    const totalHt = expandedItems.reduce((sum, i) => sum + i.total, 0);
+    return { data: { ...rawKit, expanded_items: expandedItems, total_ht: totalHt } };
+};
 export const seedCategoriesV3 = async () => { return { data: { message: 'OK' } }; };
 
 // ============== KITS ==============

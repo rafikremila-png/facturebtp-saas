@@ -45,8 +45,8 @@ export default function TrialBanner() {
         return null;
     }
 
-    // Don't show banner for super admin or active subscriptions
-    if (trialData.user_role === "super_admin" || trialData.subscription_active) {
+    // Don't show banner for active paid subscriptions (not trial)
+    if (trialData.subscription_active && !trialData.is_trial) {
         return null;
     }
 

@@ -450,17 +450,25 @@ export const trialService = {
         const trialEnds = new Date(profile.trial_ends_at);
         const daysRemaining = Math.max(0, Math.ceil((trialEnds - now) / (1000 * 60 * 60 * 24)));
         
+        const trialExpired = profile.trial_ends_at ? now > trialEnds : false;
+
         return {
             plan: profile.subscription_plan || 'trial',
             status: profile.trial_status || 'trial',
             is_trial: profile.trial_status === 'trial',
+            trial_expired: trialExpired,
             trial_ends_at: profile.trial_ends_at,
+            trial_days_remaining: daysRemaining,
             days_remaining: daysRemaining,
             quote_limit: profile.quote_limit || 5,
             invoice_limit: profile.invoice_limit || 5,
+            quotes_count: profile.quotes_created || 0,
+            invoices_count: profile.invoices_created || 0,
             quotes_used: profile.quotes_created || 0,
             invoices_used: profile.invoices_created || 0,
-            is_super_admin: profile.role === 'super_admin'
+            user_role: profile.role,
+            is_super_admin: profile.role === 'super_admin',
+            subscription_active: profile.subscription_status === 'active' && profile.subscription_plan !== 'trial',
         };
     },
 
