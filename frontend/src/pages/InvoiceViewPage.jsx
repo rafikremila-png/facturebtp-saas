@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getInvoice, updateInvoice, createInvoiceShareLink, sendInvoiceEmail, applyRetenueGarantie, removeRetenueGarantie, releaseRetenueGarantie, getSettings } from "@/lib/api";
+import { getInvoice, updateInvoice, createInvoiceShareLink, sendInvoiceEmail, sendReminder, sendPaymentConfirmation, applyRetenueGarantie, removeRetenueGarantie, releaseRetenueGarantie, getSettings } from "@/lib/api";
 import { downloadInvoicePdf as generateInvoicePdf } from "@/lib/pdfGenerator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,6 +95,25 @@ function InvoiceViewPage() {
             toast.success("PDF téléchargé");
         } catch (e) { toast.error("Erreur lors du téléchargement"); }
     }
+
+    async function handleSendReminder() {
+        try {
+            await sendReminder(invoice.id);
+            toast.success("Rappel envoyé au client");
+            loadInvoice();
+        } catch (e) { toast.error(e.message || "Erreur lors de l'envoi du rappel"); }
+    }
+
+    async function handleMarkPaidWithNotification() {
+        const amount = invoice.has_retenue_garantie ? invoice.net_a_payer : invoice.total_ttc;
+        try {
+            await updateInvoice(params.id, { payment_status: "paye", paid_amount: amount });
+            setInvoice(p => ({ ...p, payment_status: "paye", paid_amount: amount }));
+            toast.success("Facture marquée comme payée");
+            try { await sendPaymentConfirmation(invoice.id); } catch {}
+        } catch { toast.error("Erreur"); }
+    }
+
     function fmt(n) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2 }) + " €"; }
 
     // Retenue de garantie functions
@@ -170,12 +189,12 @@ function InvoiceViewPage() {
         
         setSendingEmail(true);
         try {
-            await sendInvoiceEmail(invoice.id, emailData);
+            await sendInvoiceEmail(invoice.id, emailData.recipient_email);
             toast.success("Facture envoyée par email");
             setShowEmailModal(false);
             setEmailData({ recipient_email: "", custom_message: "" });
         } catch (error) {
-            toast.error(error.response?.data?.detail || "Erreur lors de l'envoi");
+            toast.error(error.message || "Erreur lors de l'envoi");
         } finally {
             setSendingEmail(false);
         }
@@ -190,9 +209,10 @@ function InvoiceViewPage() {
                 <Button variant="ghost" onClick={function() { navigate("/factures"); }} data-testid="back-btn"><ArrowLeft className="w-4 h-4 mr-2" />Retour</Button>
                 <div className="flex gap-2">
                     <Button variant="outline" onClick={() => setShowEmailModal(true)} className="bg-blue-50 hover:bg-blue-100 border-blue-200" data-testid="send-email-btn"><Mail className="w-4 h-4 mr-2 text-blue-600" />Envoyer par email</Button>
+                    {invoice.payment_status !== "paye" && <Button variant="outline" onClick={handleSendReminder} className="bg-amber-50 hover:bg-amber-100 border-amber-200" data-testid="send-reminder-btn"><AlertTriangle className="w-4 h-4 mr-2 text-amber-600" />Rappel</Button>}
                     <Button variant="outline" onClick={handleShare} data-testid="share-btn"><Share2 className="w-4 h-4 mr-2" />Partager</Button>
                     <Button variant="outline" onClick={downloadPdf} data-testid="download-pdf-btn"><Download className="w-4 h-4 mr-2" />PDF</Button>
-                    {invoice.payment_status !== "paye" && <Button className="bg-green-600" onClick={markPaid} data-testid="mark-paid-btn"><CheckCircle className="w-4 h-4 mr-2" />Payée</Button>}
+                    {invoice.payment_status !== "paye" && <Button className="bg-green-600" onClick={handleMarkPaidWithNotification} data-testid="mark-paid-btn"><CheckCircle className="w-4 h-4 mr-2" />Payée</Button>}
                 </div>
             </div>
             <Card><CardHeader><CardTitle className="font-mono">{invoice.invoice_number}</CardTitle></CardHeader>

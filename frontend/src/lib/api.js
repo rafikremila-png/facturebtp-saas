@@ -325,14 +325,56 @@ export const downloadPublicInvoicePdf = async () => {
 };
 
 // ============== EMAIL ==============
-export const sendQuoteEmail = async () => {
-    throw new Error("L'envoi d'emails sera disponible prochainement.");
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+
+const getAuthHeaders = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`,
+    };
 };
-export const sendInvoiceEmail = async () => {
-    throw new Error("L'envoi d'emails sera disponible prochainement.");
+
+export const sendQuoteEmail = async (quoteId, clientEmail) => {
+    // Quotes don't have a dedicated email endpoint yet - use invoice endpoint pattern
+    throw new Error("L'envoi de devis par email sera disponible prochainement.");
 };
+
+export const sendInvoiceEmail = async (invoiceId, clientEmail) => {
+    const headers = await getAuthHeaders();
+    const resp = await fetch(`${BACKEND_URL}/api/email/invoice`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ invoice_id: invoiceId, client_email: clientEmail }),
+    });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || "Erreur lors de l'envoi de l'email");
+    }
+    return { data: await resp.json() };
+};
+
+export const sendPaymentConfirmation = async (invoiceId) => {
+    const headers = await getAuthHeaders();
+    const resp = await fetch(`${BACKEND_URL}/api/email/payment-confirmation`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ invoice_id: invoiceId }),
+    });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || "Erreur lors de l'envoi");
+    }
+    return { data: await resp.json() };
+};
+
 export const getEmailStatus = async () => {
-    return { data: { configured: false, provider: 'none' } };
+    try {
+        const resp = await fetch(`${BACKEND_URL}/api/email/status`);
+        return { data: await resp.json() };
+    } catch {
+        return { data: { configured: false, provider: 'none' } };
+    }
 };
 
 // ============== USER MANAGEMENT (ADMIN) ==============
@@ -387,10 +429,54 @@ export const cancelSaaSSubscription = cancelSubscription;
 export const checkSaaSFeature = checkFeatureAccess;
 
 // ============== REMINDERS ==============
-export const getReminderStats = async () => { return { data: { total: 0, sent: 0, pending: 0 } }; };
-export const getPendingReminders = async () => { return { data: [] }; };
-export const sendReminder = async () => { throw new Error('Les relances seront disponibles prochainement.'); };
-export const getReminderHistory = async () => { return { data: [] }; };
+export const getReminderStats = async () => {
+    const { data: invoices } = await supabase
+        .from('invoices')
+        .select('id, payment_status, reminder_count, due_date')
+        .in('payment_status', ['unpaid', 'impaye', 'en_attente']);
+    const all = invoices || [];
+    const sent = all.filter(i => (i.reminder_count || 0) > 0).length;
+    const pending = all.filter(i => (i.reminder_count || 0) === 0).length;
+    return { data: { total: all.length, sent, pending } };
+};
+export const getPendingReminders = async () => {
+    const { data } = await supabase
+        .from('invoices')
+        .select('*')
+        .in('payment_status', ['unpaid', 'impaye', 'en_attente'])
+        .not('due_date', 'is', null)
+        .order('due_date', { ascending: true });
+    return { data: data || [] };
+};
+export const sendReminder = async (invoiceId) => {
+    const headers = await getAuthHeaders();
+    const resp = await fetch(`${BACKEND_URL}/api/email/reminder`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ invoice_id: invoiceId }),
+    });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || "Erreur lors de l'envoi du rappel");
+    }
+    return { data: await resp.json() };
+};
+export const getReminderHistory = async () => {
+    const { data } = await supabase
+        .from('invoices')
+        .select('id, invoice_number, client_name, reminder_count, last_reminder_at')
+        .gt('reminder_count', 0)
+        .order('last_reminder_at', { ascending: false });
+    return { data: data || [] };
+};
+export const triggerReminderCheck = async () => {
+    const headers = await getAuthHeaders();
+    const resp = await fetch(`${BACKEND_URL}/api/email/check-reminders`, {
+        method: 'POST',
+        headers,
+    });
+    return { data: await resp.json() };
+};
 
 // ============== CSV EXPORT (client-side) ==============
 export { exportClientsCSV, exportQuotesCSV, exportInvoicesCSV } from '@/lib/csvExport';
