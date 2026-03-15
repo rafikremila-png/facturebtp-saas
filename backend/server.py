@@ -374,10 +374,11 @@ async def api_check_reminders(authorization: str = Header(None)):
 @app.get("/api/email/status")
 async def api_email_status():
     configured = bool(os.environ.get('RESEND_API_KEY'))
+    sender = os.environ.get('SENDER_EMAIL', 'facturation@facturebtp.fr') if configured else None
     return {
         "configured": configured,
         "provider": "resend" if configured else "none",
-        "sender": "facturation@facturebtp.fr" if configured else None,
+        "sender": sender,
     }
 
 
