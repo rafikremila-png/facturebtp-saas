@@ -1,178 +1,225 @@
 <analysis>**original_problem_statement:**
-The user's initial request was to fix a broken Facturation (Billing) page, rename it to Abonnement (Subscription), and perform a general check-up of the application. This evolved into a request for a full pre-launch audit, which uncovered a critical architectural mismatch between the development environment (React + FastAPI + MongoDB) and the user's production target (React + Supabase only). The primary goal is now to execute a full migration of the application's backend from the FastAPI/MongoDB monolith to a serverless, Supabase-only architecture.
+The user has reported a set of critical bugs that are preventing the application from being production-ready, despite a recent successful migration to a Supabase-only architecture. The primary goal is to fix these issues while adhering to strict stability rules, ensuring no new regressions are introduced.
 
-**PRODUCT REQUIREMENTS:**
-1.  **Full Supabase Migration:** Eliminate the FastAPI backend () and MongoDB database entirely.
-2.  **Backend Logic:** All backend logic must be handled by Supabase (PostgreSQL database, Auth, Storage, and potentially Edge Functions).
-3.  **Data Migration:** All existing data from the MongoDB  (clients, quotes, invoices, etc.) must be migrated to the corresponding PostgreSQL tables in Supabase.
-4.  **Multi-Tenancy:** Ensure Row Level Security (RLS) policies are correctly implemented and active on all relevant tables to isolate company data.
-5.  **Frontend Connection:** The React frontend must connect directly and exclusively to Supabase via the  client.
-6.  **Fix All Bugs:** Resolve all critical and high-priority bugs identified during the pre-launch audit, most of which are symptoms of the architectural mismatch.
+**PRODUCT REQUIREMENTS (from user's latest request):**
+1.  **Fix Super Admin Permissions:** Super Admins must have full, unrestricted access to all data (users, clients, quotes, invoices, etc.), bypassing all Row Level Security (RLS) policies.
+2.  **Fix CRUD Operations:** Core create, read, update, and delete operations for clients, quotes, and invoices are failing and must be fixed.
+3.  **Fix Catalog/Predefined Items:** The predefined items library is broken and needs to be repaired so that categories and items load correctly.
+4.  **Fix Email Sending:** The Resend integration is failing. All transactional email flows (signup, OTP, invoice sending, reminders) must be made functional.
+5.  **Global Stability:** Ensure the entire application is stable, with all key features working correctly.
 
-**User's preferred language**: French
+**User's preferred language**: French. The user has explicitly requested that all summaries, explanations, and progress reports be written in **French**. Technical code and comments should remain in **English**.
 
 **what currently exists?**
-The application is in a fragile, hybrid state, midway through a major architectural migration. A comprehensive 11-step audit was performed, and numerous critical bugs were fixed, significantly improving the stability of the preview environment.
-- **Authentication:** Fully migrated to Supabase Auth. A critical bug causing session instability was fixed by unifying the auth validation logic in  and the  interceptor.
-- **Database Schema:** SQL scripts to create the complete PostgreSQL schema in Supabase have been generated. The user has successfully executed the Row Level Security (RLS) policy scripts.
-- **Data Migration:** A Python script () has been created to move data from MongoDB to Supabase. An initial run failed because it targeted the wrong MongoDB database.
-- **Frontend:** The frontend has been stabilized. Admin pages and the Finances page, which were previously broken, now work correctly in the preview environment. The Abonnement (Billing) page has been fixed and renamed.
+The application's architecture has been fully migrated from a React/FastAPI/MongoDB stack to a serverless React/Supabase model. The legacy FastAPI backend has been decommissioned and replaced with a minimal  that exclusively handles email sending via a Resend integration. Key features like client-side PDF generation (), CSV exports, and a signup flow with OTP verification have been implemented. However, the user has identified critical bugs in core functionalities (Admin permissions, CRUD, Catalog, Emails) that render the app unstable for production use.
 
 **Last working item**:
-- **Last item agent was working:** The agent was attempting to migrate data from MongoDB to Supabase using the  script. The script failed because it was configured to read from an empty database () instead of the correct database () which contains the actual user data.
-- **Status:** IN PROGRESS
+- **Last item agent was working:** The agent was at the very beginning of diagnosing a comprehensive list of critical bugs reported by the user. The agent acknowledged the user's request and was about to start investigating the issues.
+- **Status:** NOT STARTED
 - **Agent Testing Done:** N
-- **Which testing method agent to use?** The agent must first use  to modify the Python migration script to target , then re-run the script. No other testing is needed for this specific step.
+- **Which testing method agent to use?**
+    - **RLS/Permissions:** Modify SQL RLS policies, then manually test by logging in as a Super Admin and verifying access to other users' data in the UI.
+    - **CRUD/Catalog:** Use  with  to test Supabase API calls directly, or fix the frontend code and test via the UI with screenshots.
+    - **Email:** Use  to hit the  endpoints in  and check server logs for Resend API call success or failure.
+    - **Final Validation:** After all individual fixes are implemented, run the  for a full regression test of the application.
 - **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
-- **Issue 1: Data migration script is targeting the wrong database (P0 - HIGHEST)**
+- **Issue 1: Super Admin Permissions Broken (P0 - HIGHEST)**
+- **Issue 2: CRUD Operations Not Working (P0 - HIGHEST)**
+- **Issue 3: Catalog / Predefined Items Feature is Broken (P1)**
+- **Issue 4: Email Sending is Failing (P1)**
 
 **Issues Detail:**
-- **Issue 1:**
-    - **Description:** The data migration script at  is hardcoded or configured to connect to the  database in MongoDB, which is empty. The user's actual data resides in the . The migration cannot proceed until the script is corrected.
-    - **Attempted fixes:** The first run of the script failed, revealing the issue.
+- **Issue 1: Super Admin Permissions Broken**
+    - **Description:** Users with the  role are still restricted by Row Level Security (RLS) and cannot see data belonging to other users. They should have full access to all tables.
     - **Next debug checklist:**
-        1.  View the file .
-        2.  Identify the line where the MongoDB database name is specified.
-        3.  Use  to change  (or the current value) to .
-        4.  Re-run the script: ❌ Variables d'environnement manquantes: MONGO_URL, SUPABASE_URL, SUPABASE_SERVICE_KEY
-
-Configurez-les avec:
-  export MONGO_URL='mongodb://...'
-  export SUPABASE_URL='https://xxx.supabase.co'
-  export SUPABASE_SERVICE_KEY='eyJhbG...'.
-        5.  Verify the script's output to confirm that it is now migrating documents from the correct collections.
-    - **Why fix this issue and what will be achieved with the fix?** This is the primary blocker for the entire migration. Fixing it will move all legacy data into the new Supabase architecture, enabling the project to decommission MongoDB and FastAPI.
-    - **Status:** IN PROGRESS
+        1. View the RLS policy files, likely .
+        2. For each relevant table (e.g., , , , ), modify the  and  policies to include a condition that bypasses the check if the user's role is . Example: .
+        3. Apply the updated SQL policies to the Supabase database.
+        4. Test by logging in as  and verifying that data from other companies/users is visible.
+    - **Why fix this issue and what will be achieved with the fix?** This is critical for application administration and management. It will allow Super Admins to manage the entire platform as intended.
+    - **Status:** NOT STARTED
     - **Is recurring issue?** N
-    - **Should Test frontend/backend/both after fix?** Backend (by verifying script output).
-    - **Blocked on other issue:** None. This is the main blocker.
+    - **Should Test frontend/backend/both after fix?** Backend (database policies) and Frontend (UI verification).
+    - **Blocked on other issue:** None.
+
+- **Issue 2: CRUD Operations Not Working**
+    - **Description:** Users are unable to create clients, quotes, or invoices. Saving forms is failing.
+    - **Next debug checklist:**
+        1. Review the Supabase RLS policies for  permissions on the , , and  tables. Ensure they are not too restrictive.
+        2. Examine the frontend service functions in  that handle creating these items. Check the data payload being sent to Supabase.
+        3. Check the browser's developer console for any specific errors when attempting to save a new item.
+        4. Fix any discrepancies between the frontend code, the RLS policies, and the database schema.
+    - **Why fix this issue and what will be achieved with the fix?** This is a core functionality of the application. Without it, the app is unusable.
+    - **Status:** NOT STARTED
+    - **Is recurring issue?** N
+    - **Should Test frontend/backend/both after fix?** Both.
+    - **Blocked on other issue:** None.
+
+- **Issue 3: Catalog / Predefined Items Feature is Broken**
+    - **Description:** The predefined items catalog is not loading or displaying correctly in the UI.
+    - **Next debug checklist:**
+        1. Inspect the queries used to load categories and items in .
+        2. Verify the table names (, ) and their relationships in the Supabase schema.
+        3. Check the UI component responsible for displaying the catalog, likely , to ensure it's processing the data correctly.
+    - **Why fix this issue and what will be achieved with the fix?** This feature is essential for users to quickly create quotes and invoices.
+    - **Status:** NOT STARTED
+    - **Is recurring issue?** N
+    - **Should Test frontend/backend/both after fix?** Frontend.
+    - **Blocked on other issue:** None.
+
+- **Issue 4: Email Sending is Failing**
+    - **Description:** All transactional emails sent via the Resend integration are failing.
+    - **Next debug checklist:**
+        1. Verify that the  environment variable is correctly set and accessible by the backend.
+        2. Check the backend service code in . Ensure the  client is initialized correctly.
+        3. Inspect the logs for the backend service (api/auth/impersonation-status HTTP/1.1" 200 OK
+INFO:     10.64.129.83:58126 - "GET /api/trial/status HTTP/1.1" 500 Internal Server Error
+INFO:     10.64.129.83:37938 - "GET /api/dashboard HTTP/1.1" 200 OK
+INFO:     10.64.131.136:37048 - "GET /api/saas/usage HTTP/1.1" 404 Not Found
+INFO:     10.64.131.136:37050 - "GET /api/profile/completion HTTP/1.1" 200 OK
+INFO:     10.64.129.83:56178 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     10.227.0.2:51778 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     10.227.0.2:51778 - "GET /api/email/status HTTP/1.1" 200 OK
+INFO:     10.227.0.2:38270 - "GET /api/email/status HTTP/1.1" 200 OK
+INFO:     10.227.8.130:58982 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     10.227.8.130:58982 - "GET /api/email/status HTTP/1.1" 200 OK
+INFO:     10.227.0.2:47844 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     10.227.0.2:47844 - "GET /api/email/status HTTP/1.1" 200 OK
+INFO:     10.227.0.2:47844 - "POST /api/email/invoice HTTP/1.1" 401 Unauthorized
+INFO:     10.227.8.130:41790 - "POST /api/email/reminder HTTP/1.1" 401 Unauthorized
+INFO:     10.227.8.130:41790 - "POST /api/email/payment-confirmation HTTP/1.1" 401 Unauthorized
+INFO:     10.227.0.2:47844 - "POST /api/email/check-reminders HTTP/1.1" 401 Unauthorized
+INFO:     10.227.8.130:41790 - "POST /api/email/welcome HTTP/1.1" 500 Internal Server Error
+INFO:     10.227.8.130:41790 - "POST /api/email/otp HTTP/1.1" 500 Internal Server Error
+INFO:     10.227.8.130:41790 - "POST /api/email/invoice HTTP/1.1" 422 Unprocessable Entity
+INFO:     10.227.0.2:47844 - "POST /api/email/otp HTTP/1.1" 422 Unprocessable Entity) for any errors from the Resend API when an email is triggered.
+        4. Confirm the  address () is authorized in the user's Resend account.
+        5. Trigger an email send using  against one of the email endpoints (e.g., ) and observe the live log output.
+    - **Why fix this issue and what will be achieved with the fix?** Transactional emails are critical for user communication, including signup, verification, and invoicing.
+    - **Status:** NOT STARTED
+    - **Is recurring issue?** N
+    - **Should Test frontend/backend/both after fix?** Backend.
+    - **Blocked on other issue:** None.
 
 **In progress Task List**:
-- **Task 1: Complete the full migration to a Supabase-only backend.**
-
-**Task Detail:**
-- **Task 1:**
-    - **Where to resume:** Resume at fixing and re-running the data migration script as described in Issue 1 above.
-    - **What will be achieved with this?** A complete, simplified, and production-ready architecture running entirely on Vercel and Supabase, which will resolve the user's production white screen issue permanently.
-    - **Status:** IN PROGRESS
-    - **Should Test frontend/backend/both after fix?** Both. A full regression test will be required after the migration is complete.
-    - **Blocked on something:** Blocked on completing the data migration (Issue 1).
+- **Task 1: Stabilize Production Application (P0)**
+    - **Where to resume:** Start by fixing Issue 1: Super Admin Permissions Broken.
+    - **What will be achieved with this?** A stable, production-ready SaaS application where all core features (Admin, CRUD, Catalog, Email) work as expected for all user roles.
+    - **Status:** NOT STARTED
+    - **Should Test frontend/backend/both after fix?** Both.
+    - **Blocked on something:** None.
 
 **Upcoming and Future Tasks**
 *   **Upcoming Tasks:**
-    *   **P0: Switch Frontend to Supabase-Only Mode:** After the data migration is confirmed successful, modify  to remove the /FastAPI logic and exclusively use the Supabase client for all data fetching.
-    *   **P1: Decommission Legacy Backend:** Once the frontend is fully switched to Supabase, delete , remove FastAPI and related dependencies from , and clean up any other obsolete files.
-    *   **P2: Full Regression Testing:** After decommissioning the old backend, perform a comprehensive test of the entire application (as a super admin and a regular trial user) to ensure all functionalities work as expected in the Supabase-only environment.
-    *   **P3: Clean Up Test User Accounts:** The audit identified 53 user accounts. Before launch, these should be reviewed and non-essential test accounts should be deleted.
+    *   **P1: Implement Recurring Invoices:** Allow users to set up invoices that are generated and sent automatically on a schedule.
+    -   **P1: Integrate Stripe:** Implement Stripe for handling subscriptions and payments.
 *   **Future Tasks:**
-    *   Implement Recurring Invoices.
     *   Integrate AI PDF Analysis with Gemini.
-    *   Connect the Work Library to the quote creation form.
-    *   Implement an email system for user verification and reminders.
+    *   Connect the Work Library more deeply into the quote creation form.
+    *   Implement an email system for user verification and reminders (This was partially implemented with Resend but needs to be fully verified and potentially expanded).
 
 **Completed work in this session**
-- **Audit:** Performed a complete 11-step pre-launch audit, identifying critical architectural flaws, security recommendations, and functional bugs.
-- **Bug Fix:** Repaired a critical session instability bug by unifying authentication logic across the backend () and frontend () to correctly use Supabase Auth.
-- **Bug Fix:** Fixed the Admin pages (Métriques SaaS, Analytics Utilisateurs) by replacing legacy  calls with the modern  instance.
-- **Bug Fix:** Repaired the Finances page by implementing a new MongoDB-backed endpoint () in  as a temporary fix pending full migration.
-- **Bug Fix:** Fixed and renamed the Abonnement (Billing) page, updating all related routes and redirects.
-- **Migration Prep:** Created a complete set of SQL migration scripts for Supabase (schema, RLS policies, indexes).
-- **Migration Prep:** Created the Python script to migrate data from MongoDB to Supabase.
-- **Migration Execution:** Successfully guided the user to apply all RLS policies to the Supabase database.
+- **Full Supabase Migration:** Successfully decommissioned the legacy FastAPI/MongoDB backend and transitioned the application to a Supabase-only architecture.
+- **Frontend Refactoring:** Rewrote the entire data access layer () to use  instead of , removing the dependency on the old backend.
+- **Data Migration & Bug Fixes:** Migrated all data from MongoDB to Supabase and fixed related data mapping bugs (date formats, price fields).
+- **Feature: PDF & CSV Generation:** Implemented client-side PDF generation for documents and CSV exports for data tables.
+- **Feature: OTP Signup:** Replaced the email link verification with a more modern OTP (6-digit code) system during user registration.
+- **Feature: Resend Email Integration:** Integrated Resend and created a minimal backend service in  to handle all transactional emails.
+- **Admin: User Cleanup:** Identified and deleted 52 obsolete test accounts from the database.
+- **Admin: Auth Fix:** Resolved a critical login issue for the  account by synchronizing it with Supabase Auth.
 
 **Earlier issues found/mentioned but not fixed**
-- The full MongoDB to PostgreSQL migration is the main outstanding task, which is currently in progress.
+All known issues are captured in the All Pending/In progress Issue list section above.
 
 **Known issue recurrence from previous fork**
-- **White Screen on Production:** The previous fork struggled with a white screen on the user's Vercel deployment. This session identified the root cause: the production environment was missing the FastAPI/MongoDB backend that the application code relied on. The current migration to a Supabase-only architecture is the definitive solution to this recurring problem.
+- The primary recurring issue of a white screen on production was definitively solved by migrating the architecture to a Vercel/Supabase-only stack. The current issues are new bugs introduced or uncovered post-migration.
 
 **Code Architecture**
-The project is transitioning from a hybrid architecture to a serverless one.
-
-**Current (Hybrid) Architecture:**
-
-
-**Target (Supabase-Only) Architecture:**
 
 
 **Key Technical Concepts**
-- **Architectural Migration:** Moving from a traditional three-tier architecture (React -> FastAPI -> MongoDB) to a two-tier serverless architecture (React -> Supabase).
-- **Supabase:** Used as a comprehensive Backend-as-a-Service (BaaS) provider for Auth, PostgreSQL Database, and Row Level Security (RLS).
-- **Data Migration:** Using a custom Python script with  and  to transfer data between the two database systems.
+- **Serverless Architecture:** React frontend connects directly to Supabase for data/auth. A minimal backend exists only as a proxy for the Resend email API.
+- **Supabase:** Used for PostgreSQL Database, Authentication, and Row Level Security (RLS).
+- **Resend:** Third-party service for sending transactional emails.
+- **jsPDF:** Client-side JavaScript library for generating PDF documents.
 
 **key DB schema**
-The target Supabase schema includes the following key tables:
-- **users:** {id (uuid), email, role, company_id, trial_started_at, status}
+- **users:** {id (uuid), email, role, company_id}
 - **companies:** {id (uuid), name, owner_id}
-- **clients:** {id (uuid), company_id, name, email, address}
-- **quotes:** {id (uuid), company_id, client_id, total, status, quote_number}
-- **invoices:** {id (uuid), company_id, client_id, total, status, invoice_number}
-- **subscriptions:** {id (uuid), company_id, plan, status, stripe_customer_id}
+- **clients:** {id (uuid), company_id, name, email}
+- **quotes:** {id (uuid), company_id, client_id, total, status, quote_date, items (jsonb)}
+- **invoices:** {id (uuid), company_id, client_id, total, status, invoice_date, due_date, items (jsonb), reminder_count, last_reminder_at}
+- **predefined_items:** {id, company_id, description, default_price, category_id}
+- **categories:** {id, company_id, name}
 
 **changes in tech stack**
-- **Backend:** Actively migrating from **FastAPI** to **Supabase** (direct client calls and potentially Edge Functions).
-- **Database:** Migrating from **MongoDB** to **PostgreSQL** (hosted on Supabase).
+- The application now uses **Resend** for transactional emails, proxied through a minimal FastAPI server.
 
 **All files of reference**
-- : **(NEEDS FIX)** The key script for the data migration.
-- : Folder containing all SQL scripts for creating the Supabase schema and RLS policies.
-- : The central API wrapper, modified to support a future Supabase-only mode.
-- : Was modified to correctly use Supabase Auth for new routes.
-- : The legacy monolith that is the target for complete removal.
+- : **(NEEDS FIX)** For Super Admin permissions.
+- : **(NEEDS FIX)** Likely contains issues related to CRUD and Catalog queries.
+- : **(NEEDS FIX)** The Resend email service that is reportedly failing.
+- , , : UI components where CRUD operations are failing.
+- : UI component for the broken catalog feature.
 
 **Areas that need refactoring**:
-- **:** This 7000+ line file is the primary source of technical debt and is slated for complete removal once the migration to Supabase is finished.
+- The user has strictly forbidden refactoring. Only minimal, targeted fixes are allowed to ensure stability.
 
 **key api endpoints**
-The application currently relies on 160+ legacy API endpoints served by  (e.g., , , , ). The goal is to eliminate all of these and replace them with direct calls to Supabase using the  client library.
+- All data-related endpoints are now direct calls to Supabase via .
+- The only active backend API endpoints are for email, served from :
+  - 
+  - 
+  - 
+  - 
+  - 
 
 **Critical Info for New Agent**
-- **The #1 priority is the Supabase-only migration.** The user has explicitly chosen this path to resolve their production environment issues permanently. Do not propose deploying the FastAPI backend.
-- **The immediate next step is to fix the data migration script.** You must edit  to point to  instead of  and re-run it.
-- **All RLS policies have been successfully applied.** You do not need to re-run the SQL for RLS.
-- Once the data migration is complete, the frontend code in  must be switched to Supabase-only mode, and then the old  and MongoDB dependencies can be removed.
+- **Adhere to Strict Rules:** The user's last message () outlines strict development rules: no refactoring, minimal changes, and thorough testing. Stability is the top priority.
+- **Priorities are Clear:** Fix the four major issues in order: 1. Super Admin RLS, 2. CRUD, 3. Catalog, 4. Emails.
+- **Architecture is Final:** Do not modify the React + Supabase + Resend architecture.
+- **Communicate in French:** All user-facing explanations, summaries, and plans must be in French.
 
 **documents and test reports created in this job**
 - 
+-  (Used for migration, now obsolete)
 - 
 - 
-- 
-- 
--  (Updated with audit findings and migration plan)
+-  (Contains HTML email templates)
+- , , , , 
 
 **Last 10 User Messages and any pending HUMAN messages**
-- **LATEST:** User confirms all 4 RLS script blocks (Users, Clients, Quotes, Invoices) ran successfully. (COMPLETED)
-- User requests to continue with the remaining RLS blocks. (IN PROGRESS)
-- User provides a blurry screenshot of their Supabase tables. (ADDRESSED)
-- User reports an error () when running the RLS script. (ADDRESSED)
-- User reports an error () when running the RLS script. (ADDRESSED)
-- User reports an error related to  vs  type mismatch in RLS policies. (ADDRESSED)
-- User provides a screenshot of the first SQL error they encountered. (ADDRESSED)
-- User asks for guidance on the next steps for the migration after Phase 1 was declared complete by the agent. (IN PROGRESS)
-- User confirms the final target architecture is Vercel + Supabase only and asks the agent to proceed with the migration. (IN PROGRESS)
-- User confirms they want the agent to fix all bugs identified in the audit. (IN PROGRESS)
+1.  **LATEST:** User provides a detailed, structured list of 4 critical issues (Super Admin permissions, CRUD, Catalog, Emails) and sets strict rules for development, emphasizing stability over new features. (PENDING)
+2.  User asks to configure the from email address for Resend. (ADDRESSED - already configured).
+3.  User provides a list of next features to work on (emails, recurring invoices, etc.). (SUPERSEDED by the bug fix request).
+4.  User confirms they want to proceed with the next steps (recurring invoices, etc.). (SUPERSEDED by the bug fix request).
+5.  User reports being unable to log in to the production site. (ADDRESSED - agent tested and confirmed both accounts work).
+6.  User confirms they want to proceed with the next steps after the OTP implementation. (SUPERSEDED).
+7.  User requests to continuez (continue). (ADDRESSED).
+8.  User requests to replace the email confirmation link with an OTP (verification code) system. (COMPLETED).
+9.  User reports the  account is not working. (COMPLETED - agent fixed it).
+10. User re-iterates priorities after the migration: PDF generation, CSV export, and cleaning test accounts. (COMPLETED).
 
 **Project Health Check:**
-- **Broken:** The application is in a highly transitional and fragile state. While the preview environment is mostly functional due to numerous bug fixes, the overall architecture is not production-ready and does not match the user's target. The migration is the only path forward.
-- **Mocked:** None.
+- **Broken:** The application is unstable and not production-ready. Critical, user-facing functionalities such as creating documents (CRUD), Super Admin access, catalog management, and email notifications are confirmed to be broken.
 
 **3rd Party Integrations**
-- **Supabase:** Core integration for Auth and as the target PostgreSQL database.
-- **MongoDB:** Legacy database, currently being migrated away from.
-- **Stripe:** Exists in the codebase but is not actively used or integrated into the subscription flow.
-- **Gemini:** A backend service for AI analysis exists but is not connected to any UI.
+- **Supabase:** Core service for PostgreSQL database, authentication (including OTP), and Row Level Security.
+- **Resend:** Used for all transactional emails. An API key () is required.
+- **Stripe:** Exists in the codebase but is not actively implemented.
+- **Gemini:** Mentioned for future PDF analysis but not implemented.
 
 **Testing status**
-- **Testing agent used after significant changes:** NO (But a comprehensive manual audit was performed by the agent).
+- **Testing agent used after significant changes:** YES, but it did not catch the issues reported by the user, indicating the tests may have been incomplete or the issues are related to permissions/environment specifics.
 - **Troubleshoot agent used after agent stuck in loop:** NO
 - **Test files created:** None.
-- **Known regressions:** None from this session; many bugs were fixed.
+- **Known regressions:** CRUD, Admin Permissions, Catalog, and Email sending have all regressed or were not fully functional after the last set of changes.
 
 **Credentials to test flow:**
-- **Super Admin:**  / 
-- **Trial User:**  / 
+- **Super Admin 1:**  /  (has existing data)
+- **Super Admin 2:**  /  (newly created, no data)
 
 **What agent forgot to execute**
-The agent correctly identified the architectural problem and the need for migration. The only oversight was not confirming the correct MongoDB database name () before running the migration script, leading to a failed first attempt. This is a minor discovery issue, not a strategic error.</analysis>
+The previous agent implemented several major features (OTP, Resend integration) and declared success based on automated tests. However, it failed to perform a comprehensive end-to-end manual verification from a user's perspective. This led to multiple critical functionalities being broken in the final deliverable, which the user had to discover and report. The agent did not sufficiently test the RLS policies for different roles () or the full CRUD lifecycle after the major architectural changes.</analysis>

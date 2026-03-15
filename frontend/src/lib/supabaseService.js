@@ -233,7 +233,7 @@ export const quotesService = {
                 counter_type: 'quote',
                 year: year,
                 current_value: nextValue
-            });
+            }, { onConflict: 'user_id,counter_type,year' });
         
         return `DEV-${year}-${String(nextValue).padStart(4, '0')}`;
     },
@@ -366,7 +366,7 @@ export const invoicesService = {
                 counter_type: 'invoice',
                 year: year,
                 current_value: nextValue
-            });
+            }, { onConflict: 'user_id,counter_type,year' });
         
         return `FAC-${year}-${String(nextValue).padStart(4, '0')}`;
     },

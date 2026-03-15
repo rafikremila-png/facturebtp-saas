@@ -12,7 +12,7 @@ import resend
 logger = logging.getLogger(__name__)
 
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
-SENDER_EMAIL = "BTP Facture <facturation@facturebtp.fr>"
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'BTP Facture <facturation@facturebtp.fr>')
 
 
 def _init():

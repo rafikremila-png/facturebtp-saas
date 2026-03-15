@@ -531,6 +531,7 @@ const apiProxy = {
             const { data } = await supabase.from('predefined_items').select('*').order('category');
             const items = (data || []).map(item => ({
                 ...item,
+                name: item.description || '',
                 unit_price: item.default_price || 0,
                 vat_rate: item.default_vat_rate || 20,
             }));
@@ -538,7 +539,7 @@ const apiProxy = {
         }
         if (url === 'work-items/categories') {
             const cats = await predefinedItemsService.getCategories();
-            return { data: cats };
+            return { data: { categories: cats } };
         }
         if (url === 'work-items/units') {
             return { data: ['m²', 'm', 'ml', 'u', 'forfait', 'kg', 'L', 'h', 'lot'] };
@@ -592,14 +593,22 @@ const apiProxy = {
         }
         // Work items
         if (url === 'work-items') {
-            return createPredefinedItem(data);
+            // Map UI field names to DB column names
+            const dbData = {
+                description: data.name || data.description || '',
+                category: data.category || 'autres',
+                unit: data.unit || 'u',
+                default_price: data.unit_price ?? data.default_price ?? 0,
+                default_vat_rate: data.vat_rate ?? data.default_vat_rate ?? 20,
+            };
+            return createPredefinedItem(dbData);
         }
         if (url.match(/^work-items\/[^/]+\/duplicate$/)) {
             const itemId = url.split('/')[1];
             const { data: item } = await supabase.from('predefined_items').select('*').eq('id', itemId).single();
             if (item) {
-                const { id, ...rest } = item;
-                return createPredefinedItem(rest);
+                const { id, created_at, updated_at, ...rest } = item;
+                return createPredefinedItem({ ...rest, user_id: undefined });
             }
             return { data: null };
         }
@@ -639,7 +648,15 @@ const apiProxy = {
         // Work items
         if (url.match(/^work-items\/[^/]+$/)) {
             const id = url.split('/')[1];
-            return updatePredefinedItem(id, data);
+            // Map UI field names to DB column names
+            const dbData = {
+                description: data.name || data.description || '',
+                category: data.category || 'autres',
+                unit: data.unit || 'u',
+                default_price: data.unit_price ?? data.default_price ?? 0,
+                default_vat_rate: data.vat_rate ?? data.default_vat_rate ?? 20,
+            };
+            return updatePredefinedItem(id, dbData);
         }
         // Settings
         if (url === 'settings') {
