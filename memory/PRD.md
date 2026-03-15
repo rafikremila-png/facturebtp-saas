@@ -1,61 +1,52 @@
-# BTP Facture - PRD
+# BTP Facture - PRD (Product Requirements Document)
+
+## Problem Statement
+Application SaaS de facturation pour le secteur BTP (Bâtiment et Travaux Publics). Permet aux artisans et entreprises de créer des devis, factures, gérer les clients et suivre les paiements.
 
 ## Architecture
-```
-Vercel (React) + Supabase (Auth + PostgreSQL) + FastAPI (Email API uniquement)
-```
+- **Frontend:** React + Supabase JS + Shadcn/UI + TailwindCSS
+- **Backend:** FastAPI minimal (email only via Resend)
+- **Database:** Supabase PostgreSQL with RLS
+- **Auth:** Supabase Auth (email/password + OTP)
+- **Emails:** Resend API (transactional emails)
+- **PDF:** Client-side jsPDF generation
+- **CSV:** Client-side export
 
-## Utilisateurs
-- **Super Admin**: rafik.remila@gmail.com
-- **Admin**: admin@btpfacture.com / Admin123!
+## Users
+- **Super Admin:** rafik.remila@gmail.com, admin@btpfacture.com (role: super_admin)
+- Super Admins bypass all RLS policies via `is_super_admin()` function
 
-## Fonctionnalités Implémentées
+## Core Features (Implemented)
+- User authentication (login/signup with OTP verification)
+- Client management (CRUD)
+- Quote management (CRUD, PDF generation, sharing)
+- Invoice management (CRUD, PDF generation, payment tracking)
+- Work Library (predefined items catalog - 67+ BTP items)
+- Dashboard with financial stats
+- Settings (company info, legal, document appearance)
+- CSV export for clients/quotes/invoices
+- Automatic payment reminders (background scheduler)
+- Share links for quotes/invoices
+- Trial/subscription system (limits on free plan)
 
-### Authentification
-- Login email/mot de passe (Supabase Auth)
-- Inscription avec vérification OTP 6 chiffres
-- Gestion d'erreurs complète
+## Completed Fixes (March 2026)
+1. **RLS Super Admin bypass:** Created `is_super_admin()` function, updated 62 RLS policies
+2. **CRUD Operations:** Added `gen_random_uuid()::text` defaults to clients/quotes/invoices id columns
+3. **Counters upsert:** Added `onConflict: 'user_id,counter_type,year'` to quote/invoice number generation
+4. **Work Library mapping:** Fixed field mapping (name↔description, unit_price↔default_price) in api.js proxy
+5. **Email sender:** Fixed to read SENDER_EMAIL from environment variable
 
-### Core (Supabase direct)
-- Dashboard, CRUD Clients/Devis/Factures
-- Paramètres entreprise, Bibliothèque d'ouvrages
-- Finances, Abonnements
+## Known Limitations
+- **Email:** RESEND_API_KEY is a test placeholder (`re_123_test`). User needs to provide a real Resend key for production email sending.
+- **Stripe:** Integration exists in codebase but not actively implemented
+- **AI PDF Analysis:** Not yet implemented
 
-### Documents
-- PDF (jsPDF côté client), CSV export
+## Upcoming Tasks (P1)
+- Implement recurring invoices
+- Integrate Stripe for payments/subscriptions
+- Set up real Resend API key for production emails
 
-### Email (Resend)
-- Email de bienvenue à l'inscription
-- Code OTP par email
-- Envoi de facture au client (avec lien de consultation)
-- Rappel de paiement (manuel via bouton "Rappel")
-- Rappels automatiques : J+7, J+14, J+30 (scheduler backend)
-- Notification de paiement reçu
-- Templates HTML professionnels
-- **RESEND_API_KEY** : clé de test configurée, à remplacer par vraie clé en production
-
-### Stubs restants
-- IA Gemini, Stripe
-
-## Fichiers Clés
-- `/app/backend/server.py` - API email (POST /api/email/*)
-- `/app/backend/email_service.py` - Service Resend
-- `/app/backend/email_templates.py` - Templates HTML
-- `/app/frontend/src/lib/api.js` - Couche API
-- `/app/frontend/src/pages/InvoiceViewPage.jsx` - Boutons email/rappel
-
-## Historique
-- 13 Mars 2026: Migration Supabase-only
-- 13 Mars 2026: PDF + CSV + nettoyage comptes + OTP
-- 15 Mars 2026: Intégration Resend (6 flux email + rappels auto)
-
-## Backlog
-- **P1**: Factures récurrentes
-- **P1**: Intégration Stripe abonnements
-- **P2**: Analyse PDF avec Gemini IA
-- **P2**: Bibliothèque travaux → formulaire devis
-
-## Configuration Production
-- `RESEND_API_KEY` : Clé API Resend (production)
-- Domaine `facturebtp.fr` doit être vérifié dans Resend Dashboard
-- Template email Supabase : ajouter `{{ .Token }}` pour le code OTP
+## Future Tasks (P2)
+- AI PDF analysis with Gemini
+- Deeper Work Library integration into quote creation
+- Multi-user company accounts
