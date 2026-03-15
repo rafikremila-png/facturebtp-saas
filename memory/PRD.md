@@ -1,59 +1,61 @@
-# BTP Facture - PRD (Product Requirements Document)
-
-## Problème Initial
-Application de gestion de devis et factures pour les professionnels du BTP.
+# BTP Facture - PRD
 
 ## Architecture
 ```
-Vercel (React frontend) + Supabase (Auth + PostgreSQL + Storage)
+Vercel (React) + Supabase (Auth + PostgreSQL) + FastAPI (Email API uniquement)
 ```
 
 ## Utilisateurs
 - **Super Admin**: rafik.remila@gmail.com
-- **Admin**: admin@btpfacture.com
+- **Admin**: admin@btpfacture.com / Admin123!
 
 ## Fonctionnalités Implémentées
 
 ### Authentification
 - Login email/mot de passe (Supabase Auth)
-- Inscription avec vérification OTP 6 chiffres par email
-- Formulaire OTP avec auto-focus, paste, renvoi de code
-- Gestion d'erreurs (email invalide, rate limit, etc.)
+- Inscription avec vérification OTP 6 chiffres
+- Gestion d'erreurs complète
 
-### Core (100% Supabase)
-- Tableau de bord avec statistiques
-- CRUD Clients, Devis, Factures
-- Paramètres entreprise
-- Bibliothèque d'ouvrages (67 articles)
-- Page Finances avec rapports
-- Gestion abonnements
+### Core (Supabase direct)
+- Dashboard, CRUD Clients/Devis/Factures
+- Paramètres entreprise, Bibliothèque d'ouvrages
+- Finances, Abonnements
 
 ### Documents
-- Génération PDF (jsPDF côté client)
-- Export CSV (clients, devis, factures)
+- PDF (jsPDF côté client), CSV export
 
-### Stubs
-- Envoi d'emails, IA Gemini, Stripe
+### Email (Resend)
+- Email de bienvenue à l'inscription
+- Code OTP par email
+- Envoi de facture au client (avec lien de consultation)
+- Rappel de paiement (manuel via bouton "Rappel")
+- Rappels automatiques : J+7, J+14, J+30 (scheduler backend)
+- Notification de paiement reçu
+- Templates HTML professionnels
+- **RESEND_API_KEY** : clé de test configurée, à remplacer par vraie clé en production
+
+### Stubs restants
+- IA Gemini, Stripe
 
 ## Fichiers Clés
-- `/app/frontend/src/pages/LoginPage.jsx` - Login + inscription + OTP
-- `/app/frontend/src/context/AuthContext.js` - Auth (login, register, verifyOtp, resendVerification)
-- `/app/frontend/src/lib/api.js` - Couche API Supabase
-- `/app/frontend/src/lib/supabaseService.js` - Requêtes Supabase
-- `/app/frontend/src/lib/pdfGenerator.js` - PDF jsPDF
-- `/app/frontend/src/lib/csvExport.js` - Export CSV
+- `/app/backend/server.py` - API email (POST /api/email/*)
+- `/app/backend/email_service.py` - Service Resend
+- `/app/backend/email_templates.py` - Templates HTML
+- `/app/frontend/src/lib/api.js` - Couche API
+- `/app/frontend/src/pages/InvoiceViewPage.jsx` - Boutons email/rappel
 
 ## Historique
-- 13 Mars 2026: Migration MongoDB → Supabase
-- 13 Mars 2026: PDF + CSV + nettoyage comptes
-- 13 Mars 2026: Système OTP remplace confirmation par lien
+- 13 Mars 2026: Migration Supabase-only
+- 13 Mars 2026: PDF + CSV + nettoyage comptes + OTP
+- 15 Mars 2026: Intégration Resend (6 flux email + rappels auto)
 
 ## Backlog
 - **P1**: Factures récurrentes
-- **P1**: Système d'email (notifications, rappels)
-- **P2**: Intégration Stripe abonnements
+- **P1**: Intégration Stripe abonnements
 - **P2**: Analyse PDF avec Gemini IA
 - **P2**: Bibliothèque travaux → formulaire devis
 
-## Note importante
-Pour que le code OTP à 6 chiffres s'affiche dans l'email de confirmation Supabase, vérifiez que le template email dans Supabase Dashboard (Authentication > Email Templates > Confirm signup) inclut `{{ .Token }}`.
+## Configuration Production
+- `RESEND_API_KEY` : Clé API Resend (production)
+- Domaine `facturebtp.fr` doit être vérifié dans Resend Dashboard
+- Template email Supabase : ajouter `{{ .Token }}` pour le code OTP
