@@ -120,7 +120,7 @@ export default function DashboardPage() {
     const statCards = [
         {
             title: "Chiffre d'affaires",
-            value: `${stats?.total_turnover?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €`,
+            value: formatCurrency(stats?.total_turnover),
             icon: Euro,
             color: "bg-green-500",
             description: "Total factures payées"
@@ -130,7 +130,7 @@ export default function DashboardPage() {
             value: stats?.unpaid_invoices_count || 0,
             icon: AlertCircle,
             color: "bg-red-500",
-            description: `${stats?.unpaid_invoices_amount?.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} € en attente`
+            description: `${formatCurrency(stats?.unpaid_invoices_amount)} en attente`
         },
         {
             title: "Devis en attente",
