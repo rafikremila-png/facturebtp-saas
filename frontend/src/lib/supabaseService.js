@@ -438,24 +438,49 @@ export const trialService = {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return null;
         
-        const { data: profile } = await supabase
+        const { data: profile, error } = await supabase
             .from('users')
             .select('*')
             .eq('id', user.id)
             .single();
         
-        if (!profile) return null;
+        // Si pas de profil, retourner des valeurs par défaut pour un nouvel utilisateur en trial
+        if (!profile || error) {
+            console.log('[trialService] Profil non trouvé, utilisation des valeurs par défaut trial');
+            const defaultTrialEnds = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+            return {
+                plan: 'trial',
+                status: 'trial',
+                is_trial: true,
+                trial_expired: false,
+                trial_ends_at: defaultTrialEnds.toISOString(),
+                trial_days_remaining: 7,
+                days_remaining: 7,
+                quote_limit: 5,
+                invoice_limit: 5,
+                quotes_count: 0,
+                invoices_count: 0,
+                quotes_used: 0,
+                invoices_used: 0,
+                user_role: 'user',
+                is_super_admin: false,
+                subscription_active: false,
+            };
+        }
         
         const now = new Date();
-        const trialEnds = new Date(profile.trial_ends_at);
+        const trialEnds = profile.trial_ends_at ? new Date(profile.trial_ends_at) : new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
         const daysRemaining = Math.max(0, Math.ceil((trialEnds - now) / (1000 * 60 * 60 * 24)));
         
         const trialExpired = profile.trial_ends_at ? now > trialEnds : false;
 
+        // Déterminer is_trial: true si trial_status est 'trial' OU si pas de subscription_plan valide
+        const isTrialStatus = profile.trial_status === 'trial' || (!profile.trial_status && profile.subscription_plan === 'trial');
+
         return {
             plan: profile.subscription_plan || 'trial',
             status: profile.trial_status || 'trial',
-            is_trial: profile.trial_status === 'trial',
+            is_trial: isTrialStatus,
             trial_expired: trialExpired,
             trial_ends_at: profile.trial_ends_at,
             trial_days_remaining: daysRemaining,
