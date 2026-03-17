@@ -174,9 +174,32 @@ export const getSettings = async () => {
 };
 export const updateSettings = (data) => wrap(settingsService.update(data));
 export const uploadLogo = async (file) => {
-    const url = await settingsService.uploadLogo(file);
-    // Retourne 'logo' pour compatibilité avec SettingsPage.jsx (ligne 225)
-    return { data: { logo: url } };
+    // Use backend endpoint to bypass Storage RLS
+    const API_URL = process.env.REACT_APP_BACKEND_URL;
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+        throw new Error('Not authenticated');
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await fetch(`${API_URL}/api/settings/upload-logo`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${session.access_token}`
+        },
+        body: formData
+    });
+    
+    const result = await response.json();
+    
+    if (!result.success) {
+        throw new Error(result.error || 'Upload failed');
+    }
+    
+    return { data: { logo: result.url } };
 };
 
 // ============== PREDEFINED ITEMS ==============
