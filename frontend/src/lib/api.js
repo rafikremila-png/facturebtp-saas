@@ -170,7 +170,8 @@ export const getSettings = async () => {
 export const updateSettings = (data) => wrap(settingsService.update(data));
 export const uploadLogo = async (file) => {
     const url = await settingsService.uploadLogo(file);
-    return { data: { url } };
+    // Retourne 'logo' pour compatibilité avec SettingsPage.jsx (ligne 225)
+    return { data: { logo: url } };
 };
 
 // ============== PREDEFINED ITEMS ==============
