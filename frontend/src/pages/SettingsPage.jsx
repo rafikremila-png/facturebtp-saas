@@ -116,12 +116,16 @@ export default function SettingsPage() {
 
     const loadData = async () => {
         try {
+            console.log('[Settings] Loading data...');
             const [settingsRes, categoriesRes, kitsRes, businessTypesRes] = await Promise.all([
                 getSettings(),
                 getPredefinedCategories(),
                 getKits(),
                 getBusinessTypes()
             ]);
+            
+            console.log('[Settings] Settings response:', settingsRes);
+            console.log('[Settings] Categories response:', categoriesRes);
             
             // Set business types - handle array or object format
             if (businessTypesRes.data) {
@@ -136,27 +140,29 @@ export default function SettingsPage() {
                 }
             }
             
-            if (settingsRes.data) {
+            // Handle settings - may be null/empty for new users
+            if (settingsRes.data && Object.keys(settingsRes.data).length > 0) {
+                console.log('[Settings] Using existing settings');
                 setFormData({
                     company_name: settingsRes.data.company_name || "",
-                    address: settingsRes.data.address || "",
-                    phone: settingsRes.data.phone || "",
-                    email: settingsRes.data.email || "",
-                    siret: settingsRes.data.siret || "",
-                    vat_number: settingsRes.data.vat_number || "",
+                    address: settingsRes.data.company_address || settingsRes.data.address || "",
+                    phone: settingsRes.data.company_phone || settingsRes.data.phone || "",
+                    email: settingsRes.data.company_email || settingsRes.data.email || "",
+                    siret: settingsRes.data.company_siret || settingsRes.data.siret || "",
+                    vat_number: settingsRes.data.company_tva || settingsRes.data.vat_number || "",
                     default_vat_rates: settingsRes.data.default_vat_rates?.length > 0 
                         ? settingsRes.data.default_vat_rates 
                         : [20.0, 10.0, 5.5, 2.1],
-                    logo_base64: settingsRes.data.logo_base64 || null,
+                    logo_base64: settingsRes.data.company_logo_url || settingsRes.data.logo_base64 || null,
                     // New French legal fields
                     rcs_rm: settingsRes.data.rcs_rm || "",
                     code_ape: settingsRes.data.code_ape || "",
                     capital_social: settingsRes.data.capital_social || "",
-                    iban: settingsRes.data.iban || "",
-                    bic: settingsRes.data.bic || "",
+                    iban: settingsRes.data.bank_iban || settingsRes.data.iban || "",
+                    bic: settingsRes.data.bank_bic || settingsRes.data.bic || "",
                     is_auto_entrepreneur: settingsRes.data.is_auto_entrepreneur || false,
-                    auto_entrepreneur_mention: settingsRes.data.auto_entrepreneur_mention || "TVA non applicable, art. 293B du CGI",
-                    default_payment_delay_days: settingsRes.data.default_payment_delay_days || 30,
+                    auto_entrepreneur_mention: settingsRes.data.auto_entrepreneur_mention || settingsRes.data.legal_mentions || "TVA non applicable, art. 293B du CGI",
+                    default_payment_delay_days: settingsRes.data.default_payment_terms || settingsRes.data.default_payment_delay_days || 30,
                     late_payment_rate: settingsRes.data.late_payment_rate || 3.0,
                     // Retenue de garantie settings
                     default_retenue_garantie_enabled: settingsRes.data.default_retenue_garantie_enabled || false,
@@ -169,6 +175,9 @@ export default function SettingsPage() {
                     // Business type
                     business_type: settingsRes.data.business_type || "general"
                 });
+            } else {
+                console.log('[Settings] No settings found, using defaults');
+                // Keep default formData values - no need to change anything
             }
             
             // Categories might be either strings or objects with name property
