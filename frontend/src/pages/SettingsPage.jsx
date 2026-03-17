@@ -195,7 +195,8 @@ export default function SettingsPage() {
             await updateSettings(formData);
             toast.success("Paramètres enregistrés avec succès");
         } catch (error) {
-            toast.error("Erreur lors de l'enregistrement des paramètres");
+            console.error("Settings save error:", error);
+            toast.error(`Erreur: ${error.message || "Erreur lors de l'enregistrement"}`);
         } finally {
             setSaving(false);
         }
