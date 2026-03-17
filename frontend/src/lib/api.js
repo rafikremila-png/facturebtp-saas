@@ -165,6 +165,10 @@ export const downloadFinancialSummaryPdf = async () => {
 // ============== SETTINGS ==============
 export const getSettings = async () => {
     const data = await settingsService.get();
+    // Mapper company_logo_url vers logo_base64 pour compatibilité frontend
+    if (data && data.company_logo_url) {
+        data.logo_base64 = data.company_logo_url;
+    }
     return { data: data || {} };
 };
 export const updateSettings = (data) => wrap(settingsService.update(data));
