@@ -1,12 +1,14 @@
 """
 BTP Facture - Backend API
-Handles email sending and automatic reminders.
+Handles email sending, automatic reminders, and custom OTP signup.
 All data operations are handled by Supabase directly from the frontend.
 """
 import os
 import asyncio
 import logging
-from datetime import datetime, timezone
+import random
+import string
+from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Header
@@ -36,6 +38,30 @@ def get_supabase():
         _supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
     return _supabase
 
+# In-memory OTP store: { email: { code, expires_at, user_data } }
+_otp_store = {}
+
+def generate_otp():
+    return ''.join(random.choices(string.digits, k=6))
+
+def store_otp(email, code, user_data=None):
+    _otp_store[email.lower()] = {
+        'code': code,
+        'expires_at': datetime.now(timezone.utc) + timedelta(minutes=10),
+        'user_data': user_data,
+    }
+
+def verify_otp_code(email, code):
+    entry = _otp_store.get(email.lower())
+    if not entry:
+        return False, "Code non trouvé. Veuillez demander un nouveau code."
+    if datetime.now(timezone.utc) > entry['expires_at']:
+        del _otp_store[email.lower()]
+        return False, "Code expiré. Veuillez demander un nouveau code."
+    if entry['code'] != code:
+        return False, "Code incorrect."
+    return True, entry.get('user_data')
+
 
 # === Auth helper ===
 async def get_current_user(authorization: str = Header(None)):
@@ -64,6 +90,21 @@ class SendWelcomeRequest(BaseModel):
 class SendOtpRequest(BaseModel):
     email: EmailStr
     code: str
+
+class SignupRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: str = ''
+    phone: str = ''
+    company_name: str = ''
+    address: str = ''
+
+class VerifyOtpRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+class ResendOtpRequest(BaseModel):
+    email: EmailStr
 
 
 # === Background reminder task ===
@@ -369,6 +410,157 @@ async def api_check_reminders(authorization: str = Header(None)):
     await get_current_user(authorization)
     await check_and_send_reminders()
     return {"status": "ok", "message": "Vérification des rappels effectuée"}
+
+
+# === Custom OTP Signup endpoints ===
+
+@app.post("/api/auth/signup")
+async def api_signup(req: SignupRequest):
+    """Create user via admin API (no default Supabase email) and send custom OTP via Resend"""
+    try:
+        sb = get_supabase()
+
+        # Check if user already exists in auth
+        try:
+            existing = sb.from_('users').select('id, email').eq('email', req.email).execute()
+            if existing.data:
+                raise HTTPException(400, "Cet email est déjà utilisé.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+        # Generate OTP code
+        code = generate_otp()
+
+        # Store OTP with user data for later creation
+        store_otp(req.email, code, user_data={
+            'email': req.email,
+            'password': req.password,
+            'name': req.name,
+            'phone': req.phone,
+            'company_name': req.company_name,
+            'address': req.address,
+        })
+
+        # Send OTP via Resend
+        email_id = await email_service.send_otp(req.email, code)
+        logger.info(f"OTP sent to {req.email}: email_id={email_id}")
+
+        return {"status": "otp_sent", "email_id": email_id, "needs_verification": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Signup error: {e}")
+        raise HTTPException(500, f"Erreur lors de l'inscription: {str(e)}")
+
+
+@app.post("/api/auth/verify-otp")
+async def api_verify_otp(req: VerifyOtpRequest):
+    """Verify OTP and create the user in Supabase Auth"""
+    try:
+        # Verify OTP
+        valid, result = verify_otp_code(req.email, req.code)
+        if not valid:
+            raise HTTPException(400, result)
+
+        user_data = result
+        sb = get_supabase()
+
+        # Create user via admin API with email pre-confirmed
+        try:
+            auth_result = sb.auth.admin.create_user({
+                'email': user_data['email'],
+                'password': user_data['password'],
+                'email_confirm': True,
+                'user_metadata': {
+                    'name': user_data.get('name', ''),
+                    'phone': user_data.get('phone', ''),
+                }
+            })
+            new_user = auth_result.user
+        except Exception as e:
+            err_msg = str(e)
+            if 'already been registered' in err_msg or 'already exists' in err_msg:
+                raise HTTPException(400, "Cet email est déjà utilisé.")
+            raise
+
+        # Create user profile in public.users
+        try:
+            trial_ends = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+            sb.from_('users').insert({
+                'id': new_user.id,
+                'email': user_data['email'],
+                'name': user_data.get('name', ''),
+                'phone': user_data.get('phone', ''),
+                'role': 'user',
+                'subscription_plan': 'trial',
+                'subscription_status': 'trial_active',
+                'trial_status': 'trial',
+                'trial_started_at': datetime.now(timezone.utc).isoformat(),
+                'trial_ends_at': trial_ends,
+                'quote_limit': 5,
+                'invoice_limit': 5,
+                'email_verified': True,
+                'is_active': True,
+            }).execute()
+            logger.info(f"User profile created for {user_data['email']}")
+        except Exception as profile_err:
+            logger.error(f"Profile creation error: {profile_err}")
+
+        # Clean up OTP
+        _otp_store.pop(req.email.lower(), None)
+
+        # Sign in the user to get tokens
+        try:
+            sign_in_result = sb.auth.sign_in_with_password({
+                'email': user_data['email'],
+                'password': user_data['password'],
+            })
+            return {
+                "status": "verified",
+                "user_id": new_user.id,
+                "access_token": sign_in_result.session.access_token,
+                "refresh_token": sign_in_result.session.refresh_token,
+            }
+        except Exception as login_err:
+            logger.error(f"Auto-login error: {login_err}")
+            return {
+                "status": "verified",
+                "user_id": new_user.id,
+                "message": "Compte créé. Veuillez vous connecter."
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Verify OTP error: {e}")
+        raise HTTPException(500, f"Erreur: {str(e)}")
+
+
+@app.post("/api/auth/resend-otp")
+async def api_resend_otp(req: ResendOtpRequest):
+    """Resend OTP code"""
+    try:
+        entry = _otp_store.get(req.email.lower())
+        if not entry or not entry.get('user_data'):
+            raise HTTPException(400, "Aucune inscription en cours pour cet email. Veuillez recommencer.")
+
+        # Generate new code
+        code = generate_otp()
+        entry['code'] = code
+        entry['expires_at'] = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+        # Send via Resend
+        email_id = await email_service.send_otp(req.email, code)
+        logger.info(f"OTP resent to {req.email}: email_id={email_id}")
+
+        return {"status": "otp_sent", "email_id": email_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Resend OTP error: {e}")
+        raise HTTPException(500, str(e))
 
 
 @app.get("/api/email/status")

@@ -202,87 +202,35 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Register new user
+    // Register new user via custom backend OTP flow
     const register = async (email, password, userData = {}) => {
-        log('Register attempt:', { email });
+        log('Register attempt (custom OTP):', { email });
         
         try {
             setError(null);
             
-            let authData, authError;
-            try {
-                const result = await supabase.auth.signUp({
+            const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+            const response = await fetch(`${API_URL}/api/auth/signup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     email,
                     password,
-                    options: {
-                        data: {
-                            name: userData.name,
-                            phone: userData.phone,
-                        }
-                    }
-                });
-                authData = result.data;
-                authError = result.error;
-            } catch (sdkError) {
-                // Handle supabase-js SDK parsing failures
-                const msg = sdkError?.message || '';
-                log('SignUp SDK error:', msg);
-                if (msg.includes('body stream already read') || msg.includes('json')) {
-                    throw new Error("Adresse email invalide ou service temporairement indisponible. Veuillez réessayer.");
-                }
-                throw sdkError;
+                    name: userData.name || '',
+                    phone: userData.phone || '',
+                    company_name: userData.company_name || '',
+                    address: userData.address || '',
+                }),
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.detail || data.message || 'Erreur lors de l\'inscription');
             }
             
-            if (authError) {
-                log('Register error:', authError);
-                const code = authError.code || authError.error_code || '';
-                const msg = authError.message || '';
-                if (code === 'email_address_invalid' || msg.includes('invalid')) {
-                    throw new Error("Adresse email invalide.");
-                }
-                if (code === 'over_email_send_rate_limit' || msg.includes('rate limit')) {
-                    throw new Error("Trop de tentatives. Veuillez réessayer dans quelques minutes.");
-                }
-                if (msg.includes('User already registered') || msg.includes('already registered')) {
-                    throw new Error("Cet email est déjà utilisé.");
-                }
-                throw authError;
-            }
-            
-            log('Register successful:', { userId: authData?.user?.id });
-            
-            // Create user profile in database
-            if (authData?.user) {
-                try {
-                    await supabase
-                        .from('users')
-                        .insert({
-                            id: authData.user.id,
-                            email: email,
-                            name: userData.name || '',
-                            phone: userData.phone || '',
-                            company_name: userData.company_name || '',
-                            address: userData.address || '',
-                            role: ROLE_USER,
-                            subscription_plan: 'trial',
-                            subscription_status: 'trial_active',
-                            trial_status: 'active',
-                            quote_limit: 5,
-                            invoice_limit: 5,
-                            created_at: new Date().toISOString(),
-                            updated_at: new Date().toISOString(),
-                        });
-                    log('Profile created successfully');
-                } catch (profileError) {
-                    log('Profile creation error:', profileError);
-                }
-            }
-            
-            // Return needs_verification flag so UI knows to show OTP form
-            return {
-                ...authData,
-                needs_verification: !authData?.session,
-            };
+            log('Signup OTP sent:', { email });
+            return { needs_verification: true };
         } catch (err) {
             log('Register exception:', err.message);
             setError(err.message);
@@ -290,28 +238,42 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Verify OTP code after signup
+    // Verify OTP code after signup via custom backend
     const verifyOtp = async (email, token) => {
-        log('Verify OTP attempt:', { email });
+        log('Verify OTP attempt (custom):', { email });
         
         try {
             setError(null);
             
-            const { data, error: otpError } = await supabase.auth.verifyOtp({
-                email,
-                token,
-                type: 'signup',
+            const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+            const response = await fetch(`${API_URL}/api/auth/verify-otp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, code: token }),
             });
             
-            if (otpError) {
-                log('OTP verification error:', otpError);
-                throw otpError;
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.detail || data.message || 'Erreur de vérification');
             }
             
-            log('OTP verified successfully:', { userId: data?.user?.id });
+            log('OTP verified successfully:', data);
             
-            if (data?.user) {
-                await fetchUserProfile(data.user.id);
+            // If we received tokens, set the session
+            if (data.access_token) {
+                const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+                    access_token: data.access_token,
+                    refresh_token: data.refresh_token,
+                });
+                
+                if (sessionError) {
+                    log('Session set error:', sessionError);
+                }
+                
+                if (sessionData?.user) {
+                    await fetchUserProfile(sessionData.user.id);
+                }
             }
             
             return data;
@@ -322,21 +284,24 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Resend verification code
+    // Resend verification code via custom backend
     const resendVerification = async (email) => {
-        log('Resend verification:', { email });
+        log('Resend verification (custom):', { email });
         
         try {
             setError(null);
             
-            const { error: resendError } = await supabase.auth.resend({
-                type: 'signup',
-                email,
+            const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+            const response = await fetch(`${API_URL}/api/auth/resend-otp`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
             });
             
-            if (resendError) {
-                log('Resend error:', resendError);
-                throw resendError;
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.detail || data.message || 'Erreur lors du renvoi');
             }
             
             log('Verification resent successfully');
