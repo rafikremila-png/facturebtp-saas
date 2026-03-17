@@ -1073,8 +1073,8 @@ export default function SettingsPage() {
                                                             <div key={idx} className="flex items-center gap-3 text-sm bg-white p-2 rounded">
                                                                 <span className="flex-1">{item.description}</span>
                                                                 <span className="text-slate-500 w-16">{item.quantity} {item.unit}</span>
-                                                                <span className="font-medium w-20 text-right">{item.unit_price.toFixed(2)} €</span>
-                                                                <span className="text-slate-400 w-16 text-right">{(item.quantity * item.unit_price).toFixed(2)} €</span>
+                                                                <span className="font-medium w-20 text-right">{(item.unit_price ?? 0).toFixed(2)} €</span>
+                                                                <span className="text-slate-400 w-16 text-right">{((item.quantity ?? 0) * (item.unit_price ?? 0)).toFixed(2)} €</span>
                                                             </div>
                                                         ))}
                                                     </div>
