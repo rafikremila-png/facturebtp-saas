@@ -14,6 +14,7 @@ import {
     dashboardService,
     predefinedItemsService,
     kitsService,
+    proServicesService,
 } from '@/lib/supabaseService';
 
 // Helper: wrap a promise result in axios-style { data: result }
