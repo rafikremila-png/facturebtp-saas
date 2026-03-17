@@ -1224,7 +1224,7 @@ export default function SettingsPage() {
                                         </div>
                                         <div className="col-span-2 md:col-span-2 flex items-end gap-2">
                                             <span className="text-sm font-medium flex-1 text-right">
-                                                {(item.quantity * item.unit_price).toFixed(2)} €
+                                                {((item.quantity ?? 0) * (item.unit_price ?? 0)).toFixed(2)} €
                                             </span>
                                             <Button
                                                 type="button"
