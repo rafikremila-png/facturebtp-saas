@@ -407,6 +407,33 @@ export const settingsService = {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('User not authenticated');
         
+        // Map frontend field names to database column names
+        const fieldMapping = {
+            'address': 'company_address',
+            'phone': 'company_phone',
+            'email': 'company_email',
+            'siret': 'company_siret',
+            'vat_number': 'company_tva',
+            'iban': 'bank_iban',
+            'bic': 'bank_bic',
+            'auto_entrepreneur_mention': 'legal_mentions',
+            'default_payment_delay_days': 'default_payment_terms',
+            'logo_base64': 'company_logo_url',
+        };
+        
+        // Transform the data
+        const mappedData = {};
+        for (const [key, value] of Object.entries(settingsData)) {
+            // Skip null/undefined values and special fields
+            if (value === undefined || value === null) continue;
+            if (key === 'logo_base64' && !value) continue;
+            
+            const dbField = fieldMapping[key] || key;
+            mappedData[dbField] = value;
+        }
+        
+        console.log('[Settings] Saving data:', mappedData);
+        
         // First check if settings exist for this user
         const existing = await this.get();
         
@@ -415,25 +442,31 @@ export const settingsService = {
             // Update existing settings
             const { data, error } = await supabase
                 .from('settings')
-                .update({ ...settingsData, updated_at: new Date().toISOString() })
+                .update({ ...mappedData, updated_at: new Date().toISOString() })
                 .eq('id', existing.id)
                 .select()
                 .single();
-            if (error) throw error;
+            if (error) {
+                console.error('[Settings] Update error:', error);
+                throw error;
+            }
             result = data;
         } else {
             // Insert new settings
             const { data, error } = await supabase
                 .from('settings')
                 .insert({ 
-                    ...settingsData, 
+                    ...mappedData, 
                     user_id: user.id,
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 })
                 .select()
                 .single();
-            if (error) throw error;
+            if (error) {
+                console.error('[Settings] Insert error:', error);
+                throw error;
+            }
             result = data;
         }
         
