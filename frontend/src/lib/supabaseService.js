@@ -390,41 +390,76 @@ export const invoicesService = {
 export const settingsService = {
     async get() {
         const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return null;
+        
         const { data, error } = await supabase
             .from('settings')
             .select('*')
             .eq('user_id', user.id)
             .single();
         
+        // PGRST116 = no rows returned, not an error for us
         if (error && error.code !== 'PGRST116') throw error;
         return data;
     },
 
     async update(settingsData) {
         const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
         
-        const { data, error } = await supabase
-            .from('settings')
-            .upsert({ ...settingsData, user_id: user.id })
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        // First check if settings exist for this user
+        const existing = await this.get();
+        
+        let result;
+        if (existing?.id) {
+            // Update existing settings
+            const { data, error } = await supabase
+                .from('settings')
+                .update({ ...settingsData, updated_at: new Date().toISOString() })
+                .eq('id', existing.id)
+                .select()
+                .single();
+            if (error) throw error;
+            result = data;
+        } else {
+            // Insert new settings
+            const { data, error } = await supabase
+                .from('settings')
+                .insert({ 
+                    ...settingsData, 
+                    user_id: user.id,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+            if (error) throw error;
+            result = data;
+        }
+        
+        return result;
     },
 
     async uploadLogo(file) {
         const { data: { user } } = await supabase.auth.getUser();
-        const fileName = `logos/${user.id}/${Date.now()}_${file.name}`;
+        if (!user) throw new Error('User not authenticated');
         
-        const { data, error } = await supabase.storage
+        // Clean filename - remove special characters
+        const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const fileName = `logos/${user.id}/${Date.now()}_${cleanName}`;
+        
+        // Upload file
+        const { error: uploadError } = await supabase.storage
             .from('documents')
-            .upload(fileName, file);
-        if (error) throw error;
+            .upload(fileName, file, { upsert: true });
+        if (uploadError) throw uploadError;
         
+        // Get public URL
         const { data: { publicUrl } } = supabase.storage
             .from('documents')
             .getPublicUrl(fileName);
         
+        // Save URL to settings
         await this.update({ company_logo_url: publicUrl });
         
         return publicUrl;
