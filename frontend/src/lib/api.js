@@ -573,10 +573,10 @@ const apiProxy = {
         }
         // Services catalog
         if (url === 'services/catalog') {
-            return { data: [] };
+            return wrap(proServicesService.getCatalog());
         }
         if (url === 'services/requests/me') {
-            return { data: [] };
+            return wrap(proServicesService.getMyRequests());
         }
         // Trial
         if (url === 'trial/status') {
