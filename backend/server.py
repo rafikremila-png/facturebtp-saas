@@ -574,6 +574,83 @@ async def api_email_status():
     }
 
 
+# ============== LOGO UPLOAD (bypass Storage RLS) ==============
+from fastapi import UploadFile, File
+
+class LogoUploadResponse(BaseModel):
+    success: bool
+    url: Optional[str] = None
+    error: Optional[str] = None
+
+@app.post("/api/settings/upload-logo", response_model=LogoUploadResponse)
+async def upload_logo(file: UploadFile = File(...), authorization: str = Header(None)):
+    """Upload logo using service role to bypass Storage RLS"""
+    try:
+        if not file:
+            raise HTTPException(400, "No file provided")
+        
+        # Validate file type
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(400, "File must be an image")
+        
+        # Get user from token
+        if not authorization:
+            raise HTTPException(401, "Authorization header required")
+        
+        token = authorization.replace('Bearer ', '')
+        
+        # Verify token and get user
+        sb = get_supabase()
+        try:
+            user_response = sb.auth.get_user(token)
+            user_id = user_response.user.id
+        except Exception as e:
+            logger.error(f"Token verification failed: {e}")
+            raise HTTPException(401, "Invalid token")
+        
+        # Read file content
+        content = await file.read()
+        
+        # Clean filename
+        import re
+        clean_name = re.sub(r'[^a-zA-Z0-9.-]', '_', file.filename or 'logo.png')
+        file_path = f"logos/{user_id}/{int(datetime.now().timestamp())}_{clean_name}"
+        
+        # Upload using service role (bypasses RLS)
+        try:
+            sb.storage.from_('documents').upload(
+                file_path,
+                content,
+                {'content-type': file.content_type, 'upsert': 'true'}
+            )
+        except Exception as upload_err:
+            logger.error(f"Storage upload failed: {upload_err}")
+            raise HTTPException(500, f"Upload failed: {str(upload_err)}")
+        
+        # Get public URL
+        public_url = sb.storage.from_('documents').get_public_url(file_path)
+        
+        # Update user settings
+        try:
+            existing = sb.from_('settings').select('id').eq('user_id', user_id).single().execute()
+            if existing.data:
+                sb.from_('settings').update({'company_logo_url': public_url}).eq('id', existing.data['id']).execute()
+            else:
+                sb.from_('settings').insert({'user_id': user_id, 'company_logo_url': public_url}).execute()
+        except Exception as settings_err:
+            logger.warning(f"Settings update warning: {settings_err}")
+            # Still return success since upload worked
+        
+        logger.info(f"Logo uploaded for user {user_id}: {file_path}")
+        return LogoUploadResponse(success=True, url=public_url)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Logo upload error: {e}")
+        return LogoUploadResponse(success=False, error=str(e))
+
+
 # Catch-all for legacy endpoints
 @app.get("/api/{path:path}")
 def catch_all_get(path: str):
