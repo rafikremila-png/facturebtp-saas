@@ -191,7 +191,8 @@ export default function SettingsPage() {
             
             setKits(kitsRes.data || []);
         } catch (error) {
-            toast.error("Erreur lors du chargement des paramètres");
+            console.error('[Settings] Load error:', error);
+            toast.error(`Erreur: ${error.message || "Erreur lors du chargement"}`);
         } finally {
             setLoading(false);
         }
