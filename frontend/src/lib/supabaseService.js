@@ -756,6 +756,64 @@ export const kitsService = {
 };
 
 // Export default
+// ============== PRO SERVICES ==============
+
+export const proServicesService = {
+    async getCatalog() {
+        // Get categories
+        const { data: categories, error: catError } = await supabase
+            .from('service_categories')
+            .select('*')
+            .order('sort_order');
+        if (catError) throw catError;
+        
+        // Get all services
+        const { data: services, error: svcError } = await supabase
+            .from('services')
+            .select('*')
+            .eq('is_active', true)
+            .order('sort_order');
+        if (svcError) throw svcError;
+        
+        // Map services to categories
+        return (categories || []).map(cat => ({
+            ...cat,
+            services: (services || []).filter(s => s.category_id === cat.id)
+        }));
+    },
+    
+    async getMyRequests() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return [];
+        
+        const { data, error } = await supabase
+            .from('service_requests')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+        
+        if (error && error.code !== 'PGRST116') throw error;
+        return data || [];
+    },
+    
+    async createRequest(requestData) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+        
+        const { data, error } = await supabase
+            .from('service_requests')
+            .insert({
+                ...requestData,
+                user_id: user.id,
+                status: 'pending'
+            })
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    }
+};
+
 export default {
     supabase,
     auth: authService,
@@ -766,5 +824,6 @@ export default {
     trial: trialService,
     dashboard: dashboardService,
     predefinedItems: predefinedItemsService,
-    kits: kitsService
+    kits: kitsService,
+    proServices: proServicesService
 };
