@@ -214,16 +214,16 @@ export default function PricingPage() {
                         <Card 
                             key={plan.id}
                             className={`relative flex flex-col ${
-                                plan.highlight 
-                                    ? 'border-orange-500 border-2 shadow-xl scale-105' 
-                                    : 'border-slate-200'
+                                plan.popular 
+                                    ? 'border-orange-500 border-2 shadow-xl' 
+                                    : 'border-slate-200 shadow-lg'
                             }`}
                             data-testid={`plan-card-${plan.id}`}
                         >
-                            {plan.badge && (
+                            {plan.popular && (
                                 <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                                     <Badge className="bg-orange-600 text-white px-4 py-1">
-                                        {plan.badge}
+                                        Le plus populaire
                                     </Badge>
                                 </div>
                             )}
@@ -238,102 +238,34 @@ export default function PricingPage() {
                                 <div className="text-center mb-6">
                                     <div className="flex items-baseline justify-center gap-1">
                                         <span className="text-4xl font-bold text-slate-900">
-                                            {getMonthlyEquivalent(plan)}€
+                                            {isYearly ? Math.round(plan.price_yearly / 12) : plan.price_monthly}€
                                         </span>
                                         <span className="text-slate-500">/mois</span>
                                     </div>
                                     {isYearly && (
                                         <p className="text-sm text-slate-500 mt-1">
-                                            Facturé {getPrice(plan)}€/an
+                                            Facturé {plan.price_yearly}€/an
                                         </p>
                                     )}
-                                    {isYearly && plan.yearly_savings > 0 && (
-                                        <Badge variant="outline" className="mt-2 text-green-600 border-green-300">
-                                            Économisez {plan.yearly_savings}€
-                                        </Badge>
-                                    )}
-                                </div>
-
-                                {/* Limits */}
-                                <div className="space-y-3 mb-6">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
-                                            <FileText className="w-4 h-4 text-orange-600" />
-                                        </div>
-                                        <span className="text-slate-700">
-                                            {plan.limits.quotes_per_month === -1 
-                                                ? "Devis illimités" 
-                                                : `${plan.limits.quotes_per_month} devis/mois`
-                                            }
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
-                                            <FileText className="w-4 h-4 text-orange-600" />
-                                        </div>
-                                        <span className="text-slate-700">
-                                            {plan.limits.invoices_per_month === -1 
-                                                ? "Factures illimitées" 
-                                                : `${plan.limits.invoices_per_month} factures/mois`
-                                            }
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
-                                            <Users className="w-4 h-4 text-orange-600" />
-                                        </div>
-                                        <span className="text-slate-700">
-                                            {plan.limits.max_users === 1 
-                                                ? "1 utilisateur" 
-                                                : plan.limits.max_users >= 10 
-                                                    ? "5+ utilisateurs"
-                                                    : `${plan.limits.max_users} utilisateurs`
-                                            }
-                                        </span>
-                                    </div>
                                 </div>
 
                                 {/* Features */}
-                                <div className="border-t pt-4">
-                                    <p className="text-sm font-medium text-slate-700 mb-3">Fonctionnalités incluses :</p>
-                                    <div className="space-y-2">
-                                        {Object.entries(plan.features).map(([key, enabled]) => {
-                                            const Icon = FEATURE_ICONS[key] || Check;
-                                            const labels = {
-                                                pdf_export: "Export PDF",
-                                                full_article_library: "Bibliothèque complète",
-                                                email_support: "Support email",
-                                                automatic_reminders: "Relances automatiques",
-                                                csv_export: "Export comptable CSV",
-                                                priority_support: "Support prioritaire",
-                                                branding_customization: "Personnalisation marque",
-                                                api_access: "Accès API (bientôt)",
-                                            };
-                                            
-                                            return (
-                                                <div 
-                                                    key={key} 
-                                                    className={`flex items-center gap-2 text-sm ${
-                                                        enabled ? 'text-slate-700' : 'text-slate-400'
-                                                    }`}
-                                                >
-                                                    {enabled ? (
-                                                        <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
-                                                    ) : (
-                                                        <X className="w-4 h-4 text-slate-300 flex-shrink-0" />
-                                                    )}
-                                                    <span>{labels[key] || key}</span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                <div className="space-y-3">
+                                    {plan.features.map((feature, idx) => (
+                                        <div key={idx} className="flex items-center gap-3">
+                                            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                                                <Check className="w-4 h-4 text-green-600" />
+                                            </div>
+                                            <span className="text-slate-700">{feature}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             </CardContent>
                             
                             <CardFooter>
                                 <Button 
                                     className={`w-full ${
-                                        plan.highlight 
+                                        plan.popular 
                                             ? 'bg-orange-600 hover:bg-orange-700' 
                                             : 'bg-slate-900 hover:bg-slate-800'
                                     }`}
@@ -345,7 +277,7 @@ export default function PricingPage() {
                                     {checkoutLoading === plan.id ? (
                                         <span className="animate-pulse">Chargement...</span>
                                     ) : (
-                                        <>Démarrer maintenant</>
+                                        <>Choisir {plan.name}</>
                                     )}
                                 </Button>
                             </CardFooter>
