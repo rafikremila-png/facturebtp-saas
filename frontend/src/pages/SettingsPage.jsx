@@ -982,7 +982,7 @@ export default function SettingsPage() {
                                                 <>
                                                     <span className="flex-1 font-medium">{item.description}</span>
                                                     <span className="text-slate-500 w-16 text-center">{item.unit}</span>
-                                                    <span className="font-medium w-20 text-right">{item.default_price.toFixed(2)} €</span>
+                                                    <span className="font-medium w-20 text-right">{(item.default_price ?? 0).toFixed(2)} €</span>
                                                     <Button variant="ghost" size="icon" onClick={() => setEditingItem(item)} className="hover:bg-blue-50 hover:text-blue-600">
                                                         <Pencil className="w-4 h-4" />
                                                     </Button>
