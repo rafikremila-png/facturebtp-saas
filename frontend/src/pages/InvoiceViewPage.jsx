@@ -114,7 +114,10 @@ function InvoiceViewPage() {
         } catch { toast.error("Erreur"); }
     }
 
-    function fmt(n) { return n.toLocaleString("fr-FR", { minimumFractionDigits: 2 }) + " €"; }
+    function fmt(n) { 
+        if (n === null || n === undefined || isNaN(n)) return "0,00 €";
+        return Number(n).toLocaleString("fr-FR", { minimumFractionDigits: 2 }) + " €"; 
+    }
 
     // Retenue de garantie functions
     async function handleApplyRetenue() {
