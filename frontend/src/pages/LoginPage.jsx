@@ -163,12 +163,21 @@ export default function LoginPage() {
             setTimeout(() => navigate("/"), 1500);
         } catch (error) {
             const message = error.message || "";
-            if (message.includes("Token has expired") || message.includes("expired")) {
+            // Messages d'erreur du backend français
+            if (message.includes("expiré") || message.includes("expired")) {
                 toast.error("Code expiré. Veuillez demander un nouveau code.");
-            } else if (message.includes("invalid") || message.includes("Invalid")) {
+            } else if (message.includes("incorrect") || message.includes("invalid") || message.includes("Invalid")) {
                 toast.error("Code incorrect. Vérifiez et réessayez.");
+            } else if (message.includes("non trouvé") || message.includes("not found")) {
+                toast.error("Session expirée. Veuillez recommencer l'inscription.");
+                setStep("form");
+                setIsLogin(false);
+            } else if (message.includes("déjà utilisé") || message.includes("already")) {
+                toast.error("Cet email est déjà enregistré. Essayez de vous connecter.");
+                setStep("form");
+                setIsLogin(true);
             } else {
-                toast.error("Erreur de vérification. Veuillez réessayer.");
+                toast.error(message || "Erreur de vérification. Veuillez réessayer.");
             }
             setOtpCode("");
         } finally {
