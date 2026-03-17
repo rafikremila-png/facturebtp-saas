@@ -241,7 +241,7 @@ class TestCheckoutSession:
             headers=headers,
             json={
                 "plan_id": "pro",
-                "origin_url": "https://email-resend-2.preview.emergentagent.com"
+                "origin_url": "https://btp-invoice-debug.preview.emergentagent.com"
             }
         )
         
