@@ -161,65 +161,56 @@ export default function PricingPage() {
 
             {/* Pricing Cards */}
             <div className="max-w-7xl mx-auto px-4 pb-16">
-                {/* Trial Plan - Centered at top */}
-                {plans.filter(p => p.price_monthly === 0 || p.id === 'trial' || p.name?.toLowerCase().includes('essai')).length > 0 && (
-                    <div className="flex justify-center mb-12">
-                        {plans.filter(p => p.price_monthly === 0 || p.id === 'trial' || p.name?.toLowerCase().includes('essai')).map((plan) => (
-                            <Card 
-                                key={plan.id}
-                                className="relative flex flex-col w-full max-w-md border-slate-200"
-                                data-testid={`plan-card-${plan.id}`}
+                {/* Trial Plan - Centered alone at top */}
+                <div className="flex justify-center mb-12">
+                    <Card 
+                        className="relative flex flex-col w-full max-w-md border-slate-200 shadow-lg"
+                        data-testid="plan-card-trial"
+                    >
+                        <CardHeader className="text-center pb-2">
+                            <CardTitle className="text-2xl">{trialPlan.name}</CardTitle>
+                            <CardDescription>{trialPlan.description}</CardDescription>
+                        </CardHeader>
+                        
+                        <CardContent className="flex-1">
+                            <div className="text-center mb-6">
+                                <div className="flex items-baseline justify-center gap-1">
+                                    <span className="text-4xl font-bold text-slate-900">0€</span>
+                                    <span className="text-slate-500">/mois</span>
+                                </div>
+                                <p className="text-sm text-green-600 mt-2 font-medium">
+                                    Gratuit pendant 14 jours
+                                </p>
+                            </div>
+                            
+                            <div className="space-y-3 mb-6">
+                                {trialPlan.features.map((feature, idx) => (
+                                    <div key={idx} className="flex items-center gap-3">
+                                        <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+                                            <Check className="w-4 h-4 text-green-600" />
+                                        </div>
+                                        <span className="text-slate-700">{feature}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                        
+                        <CardFooter>
+                            <Button 
+                                className="w-full bg-slate-600 hover:bg-slate-700"
+                                onClick={() => handleSelectPlan('trial')}
+                                disabled={checkoutLoading === 'trial'}
+                                data-testid="select-plan-trial"
                             >
-                                <CardHeader className="text-center pb-2">
-                                    <CardTitle className="text-2xl">{plan.name}</CardTitle>
-                                    <CardDescription>{plan.description}</CardDescription>
-                                </CardHeader>
-                                
-                                <CardContent className="flex-1">
-                                    <div className="text-center mb-6">
-                                        <div className="flex items-baseline justify-center gap-1">
-                                            <span className="text-4xl font-bold text-slate-900">0€</span>
-                                            <span className="text-slate-500">/mois</span>
-                                        </div>
-                                        <p className="text-sm text-green-600 mt-2 font-medium">
-                                            Gratuit pendant 14 jours
-                                        </p>
-                                    </div>
-                                    
-                                    <div className="space-y-3 mb-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
-                                                <FileText className="w-4 h-4 text-orange-600" />
-                                            </div>
-                                            <span className="text-slate-700">5 devis/mois</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
-                                                <FileText className="w-4 h-4 text-orange-600" />
-                                            </div>
-                                            <span className="text-slate-700">5 factures/mois</span>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                                
-                                <CardFooter>
-                                    <Button 
-                                        className="w-full bg-slate-600 hover:bg-slate-700"
-                                        onClick={() => handleSelectPlan(plan.id)}
-                                        disabled={checkoutLoading === plan.id}
-                                        data-testid={`select-plan-${plan.id}`}
-                                    >
-                                        {checkoutLoading === plan.id ? "Chargement..." : "Commencer l'essai"}
-                                    </Button>
-                                </CardFooter>
-                            </Card>
-                        ))}
-                    </div>
-                )}
+                                {checkoutLoading === 'trial' ? "Chargement..." : "Commencer l'essai gratuit"}
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </div>
                 
-                {/* Paid Plans - Grid below */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {plans.filter(p => p.price_monthly > 0 && p.id !== 'trial' && !p.name?.toLowerCase().includes('essai')).map((plan) => (
+                {/* Paid Plans - 29€ and 49€ ONLY - Grid below */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                    {paidPlans.map((plan) => (
                         <Card 
                             key={plan.id}
                             className={`relative flex flex-col ${
