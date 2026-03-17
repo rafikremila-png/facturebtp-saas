@@ -174,7 +174,10 @@ export default function QuotesPage() {
     };
 
     const formatCurrency = (amount) => {
-        return amount.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €';
+        if (amount === null || amount === undefined || isNaN(amount)) {
+            return '0,00 €';
+        }
+        return Number(amount).toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €';
     };
 
     if (loading) {
