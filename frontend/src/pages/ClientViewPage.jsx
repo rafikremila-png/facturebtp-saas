@@ -261,22 +261,22 @@ export default function ClientViewPage() {
                                 <>
                                     <div className="flex justify-end gap-8 text-sm">
                                         <span className="text-slate-500">Total HT :</span>
-                                        <span className="font-medium w-28 text-right">{document.total_ht?.toFixed(2)} €</span>
+                                        <span className="font-medium w-28 text-right">{(document.total_ht ?? 0).toFixed(2)} €</span>
                                     </div>
                                     <div className="flex justify-end gap-8 text-sm">
                                         <span className="text-slate-500">Total TVA :</span>
-                                        <span className="font-medium w-28 text-right">{document.total_vat?.toFixed(2)} €</span>
+                                        <span className="font-medium w-28 text-right">{(document.total_vat ?? 0).toFixed(2)} €</span>
                                     </div>
                                     <div className="flex justify-end gap-8 text-lg font-bold border-t pt-2 mt-2">
                                         <span>Total TTC :</span>
-                                        <span className="text-orange-600 w-28 text-right">{document.total_ttc?.toFixed(2)} €</span>
+                                        <span className="text-orange-600 w-28 text-right">{(document.total_ttc ?? 0).toFixed(2)} €</span>
                                     </div>
                                 </>
                             ) : (
                                 <>
                                     <div className="flex justify-end gap-8 text-lg font-bold">
                                         <span>Total :</span>
-                                        <span className="text-orange-600 w-28 text-right">{document.total_ht?.toFixed(2)} €</span>
+                                        <span className="text-orange-600 w-28 text-right">{(document.total_ht ?? 0).toFixed(2)} €</span>
                                     </div>
                                     <p className="text-right text-xs text-slate-500 italic">TVA non applicable, art. 293B du CGI</p>
                                 </>
@@ -285,11 +285,11 @@ export default function ClientViewPage() {
                                 <>
                                     <div className="flex justify-end gap-8 text-sm text-green-600">
                                         <span>Montant payé :</span>
-                                        <span className="font-medium w-28 text-right">-{document.paid_amount?.toFixed(2)} €</span>
+                                        <span className="font-medium w-28 text-right">-{(document.paid_amount ?? 0).toFixed(2)} €</span>
                                     </div>
                                     <div className="flex justify-end gap-8 text-lg font-bold text-amber-600">
                                         <span>Reste à payer :</span>
-                                        <span className="w-28 text-right">{(document.total_ttc - document.paid_amount).toFixed(2)} €</span>
+                                        <span className="w-28 text-right">{((document.total_ttc ?? 0) - (document.paid_amount ?? 0)).toFixed(2)} €</span>
                                     </div>
                                 </>
                             )}
