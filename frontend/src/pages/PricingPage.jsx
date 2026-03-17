@@ -24,28 +24,42 @@ const FEATURE_ICONS = {
 };
 
 export default function PricingPage() {
-    const [plans, setPlans] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [isYearly, setIsYearly] = useState(false);
     const [checkoutLoading, setCheckoutLoading] = useState(null);
     const { user, isAuthenticated } = useAuth();
     const navigate = useNavigate();
 
-    useEffect(() => {
-        fetchPlans();
-    }, []);
-
-    const fetchPlans = async () => {
-        try {
-            const response = await axios.get(`${API}/saas/plans`);
-            setPlans(response.data);
-        } catch (error) {
-            console.error("Error fetching plans:", error);
-            toast.error("Erreur lors du chargement des plans");
-        } finally {
-            setLoading(false);
-        }
+    // Plans définis statiquement - UNIQUEMENT Essai, 29€ et 49€
+    const trialPlan = {
+        id: 'trial',
+        name: 'Essai',
+        description: 'Testez gratuitement pendant 14 jours',
+        price_monthly: 0,
+        price_yearly: 0,
+        features: ['5 devis/mois', '5 factures/mois', 'Export PDF', 'Support email']
     };
+    
+    const paidPlans = [
+        {
+            id: 'essentiel',
+            name: 'Essentiel',
+            description: 'Pour les artisans indépendants',
+            price_monthly: 29,
+            price_yearly: 290,
+            features: ['Devis illimités', 'Factures illimitées', 'Export PDF', 'Bibliothèque articles', 'Support email', 'Relances automatiques'],
+            popular: false
+        },
+        {
+            id: 'pro',
+            name: 'Pro',
+            description: 'Pour les entreprises en croissance',
+            price_monthly: 49,
+            price_yearly: 490,
+            features: ['Tout Essentiel +', 'Export CSV', 'Support prioritaire', 'Personnalisation marque', 'Accès API'],
+            popular: true
+        }
+    ];
+    // Note: Le plan Business à 99€ est supprimé selon la demande
 
     const handleSelectPlan = async (planId) => {
         if (!isAuthenticated) {
