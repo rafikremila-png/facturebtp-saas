@@ -244,10 +244,10 @@ export default function ClientViewPage() {
                                         <tr key={index} className="border-b">
                                             <td className="py-3 px-4">{item.description}</td>
                                             <td className="py-3 px-4 text-right">{item.quantity}</td>
-                                            <td className="py-3 px-4 text-right">{item.unit_price?.toFixed(2)} €</td>
+                                            <td className="py-3 px-4 text-right">{(item.unit_price ?? 0).toFixed(2)} €</td>
                                             {document.total_vat > 0 && <td className="py-3 px-4 text-right">{item.vat_rate}%</td>}
                                             <td className="py-3 px-4 text-right font-medium">
-                                                {(item.quantity * item.unit_price).toFixed(2)} €
+                                                {((item.quantity ?? 0) * (item.unit_price ?? 0)).toFixed(2)} €
                                             </td>
                                         </tr>
                                     ))}
